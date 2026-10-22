@@ -20,7 +20,7 @@ export function Tag({ tone, children }: { tone?: string; className?: string; chi
   return <span data-tone={tone}>{children}</span>
 }
 
-export function StateDot({ state }: { state?: string }): React.ReactElement {
+export function StateDot({ state }: { state?: string; size?: number }): React.ReactElement {
   return <span data-state={state} />
 }
 
@@ -41,3 +41,70 @@ export function Switch({ checked, label, disabled, onChange }: {
     />
   )
 }
+
+export function SegmentedTabs<Value extends string>({ items, value, onChange, label }: {
+  items: readonly { value: Value; label: ReactNode; id: string; panelId: string }[]
+  value: Value
+  onChange: (value: Value) => void
+  label: string
+}): React.ReactElement {
+  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number): void => {
+    let next: number | undefined
+    if (event.key === 'ArrowRight') next = (index + 1) % items.length
+    else if (event.key === 'ArrowLeft') next = (index - 1 + items.length) % items.length
+    else if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = items.length - 1
+    if (next === undefined) return
+    event.preventDefault()
+    const item = items[next]
+    if (item === undefined) return
+    onChange(item.value)
+    queueMicrotask(() => { document.getElementById(item.id)?.focus() })
+  }
+  return (
+    <div role="tablist" aria-label={label}>
+      {items.map((item, index) => (
+        <button
+          key={item.value}
+          type="button"
+          role="tab"
+          id={item.id}
+          aria-selected={value === item.value}
+          aria-controls={item.panelId}
+          tabIndex={value === item.value ? 0 : -1}
+          onClick={() => { onChange(item.value) }}
+          onKeyDown={event => { onKeyDown(event, index) }}
+        >{item.label}</button>
+      ))}
+    </div>
+  )
+}
+
+export function CodeBlock({ code }: { code: string }): React.ReactElement {
+  return <pre>{code}</pre>
+}
+
+export function PathLabel({ path }: { path: string; className?: string }): React.ReactElement {
+  return <span title={path}>{path}</span>
+}
+
+function Icon({ size = 16 }: { size?: number }): React.ReactElement {
+  return <svg data-icon="true" width={size} height={size} />
+}
+
+export const IconSearchOutlineRegular = Icon
+export const IconBrowseOutlineRegular = Icon
+export const IconCloseCircleFillRegular = Icon
+export const IconCopyOutlineRegular = Icon
+export const IconGaugeOutlineRegular = Icon
+export const IconInfoOutlineRegular = Icon
+export const IconPlayOutlineRegular = Icon
+export const IconRefreshOutlineRegular = Icon
+export const IconSlidersTwoOutlineRegular = Icon
+export const IconSparkleRegular = Icon
+export const IconTrashOutlineRegular = Icon
+export const IconWarningTriangleOutlineRegular = Icon
+export const IconChevronDownOutlineRegular = Icon
+export const IconChevronUpOutlineRegular = Icon
+export const IconPlusOutlineRegular = Icon
+export const IconCloseOutlineRegular = Icon

@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.1.2 — 2026-10-23
+
+### Added
+
+- Optional adapter manifest `groups` (`id`, localized label, description, and
+  `advanced`), plus optional per-field `group`, `advanced`, and `unit` metadata.
+  Manifests without groups still render one configuration block.
+- Grouped SearXNG settings: Connection, Search behavior, and a collapsed
+  Advanced block. Readability HTTP now has Extraction and Safety limits.
+- A responsive settings shell: hero status summary, segmented tabs, section
+  cards, stat tiles, a test console, and a sticky action bar.
+- Per-instance cards with URL/label fields, enable switch, inline test result,
+  reorder and remove actions, and a dashed Add instance row.
+- Research scope, projected content-budget meters, execution settings, and a
+  model-facing prompt card with a copy action.
+- Diagnostics tab with runtime stats, a copyable configuration path, cache
+  clearing, and a recent-error timeline.
+- New component coverage for grouped/collapsed fields, budget projection, prompt
+  copying, and the Diagnostics tab.
+
+### Changed
+
+- The settings page now uses the DSH design tokens for text, cards, borders,
+  semantic states, focus rings, and code. The previous page referenced `--dsw-*`
+  names that do not exist in DSH 0.2.1-rc.2, so hints and errors shared a color,
+  adapter cards had no visible focus ring, and the prompt preview was not
+  monospace.
+- Adapter fields are two columns at 520px content and one column below it.
+  Advanced fields start collapsed.
+- Search/Fetch test controls are now labelled test consoles; the overview shows
+  both search and fetch tests together.
+- The Advanced tab is now Diagnostics. The old name remains only for the
+  adapter-level Advanced disclosure.
+- The page reports version `0.1.2` in status metadata and default User-Agents.
+- README installation, tarball, and release-flow references are updated to
+  `0.1.2`; the v0.1.2 release checklist records the real GUI acceptance scope.
+
+### Fixed
+
+- Invalid field errors no longer share the hint color.
+- Adapter cards and disclosure summaries have a visible keyboard focus ring.
+- The prompt preview uses the DSH code font and card surface.
+- The 416px settings pane keeps all five tabs on one row and stacks fields,
+  instances, and action-bar buttons without horizontal overflow.
+- The sticky save bar now has an opaque surface and labels its dirty/saved state.
+
 ## 0.1.1 — 2026-10-22
 
 ### Changed

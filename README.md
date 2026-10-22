@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **当前版本：0.1.1（2026-10-22）。** 这是 0.1.0 之后的文档与元数据修订版：功能面不变，主 README 改为完整中文，新增英文 README。0.1.0 已完成真实 DSH、真实 SearXNG、真实模型工具回合和 Web GUI 验收；构建、测试、打包与 publint 门禁通过。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
+> **当前版本：0.1.2（2026-10-22）。** 这是 0.1.0 之后的 UI/UX 打磨版：设置页接回 DSH 设计系统，重做信息架构、实例卡、进阶折叠、研究预算与诊断页，并补上 416px 单列布局和键盘焦点。搜索、抓取、接管和凭据行为不变。0.1.0 已完成真实 DSH、真实 SearXNG、真实模型工具回合和 Web GUI 验收；构建、测试、打包与 publint 门禁通过。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
 
 ---
 
@@ -59,7 +59,7 @@ DSH 自带 `web_search` 和 `web_fetch`，但默认后端不一定适合每个�
 | 内置搜索 adapter | SearXNG：多实例、顺序/轮询、故障转移、JSON/HTML、GET/POST、Bearer/Basic、代理、缓存、分页、域名过滤 |
 | 内置抓取 adapter | Readability HTTP：复用 DSH 安全 HTTP，Readability 提取正文，失败可回退原文 |
 | 研究工具 | `web_research`：搜索、按并发抓取前 N 页、按页/总预算截断、返回来源与正文 |
-| Web 设置页 | 概览、搜索、抓取、研究、高级五个页签；内联测试、诊断、缓存清理、键盘保存 |
+| Web 设置页 | 概览、搜索、抓取、研究、诊断五个页签；分组字段、实例卡、内联测试、预算条、诊断、缓存清理、键盘保存 |
 | 凭据隔离 | 搜索 token 写入 DSH credentials，不落 YAML、不进日志、不出现在诊断文本 |
 | 接管与恢复 | 可选让内置 `web_search` / `web_fetch` 使用本插件；关闭时恢复之前的 provider |
 | 外部 adapter | 通过 `ctx.searchTools` 注册新后端；设置页自动渲染 manifest 字段 |
@@ -134,10 +134,10 @@ dsh --profile <profile>
 
 ### 方式三：离线 tarball
 
-从 [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases) 下载 `dsh-search-tools-0.1.1.tgz`，然后：
+从 [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases) 下载 `dsh-search-tools-0.1.2.tgz`，然后：
 
 ```sh
-dsh plugin --profile <profile> add ./dsh-search-tools-0.1.1.tgz
+dsh plugin --profile <profile> add ./dsh-search-tools-0.1.2.tgz
 ```
 
 tarball 与 npm 产物字节一致，适合内网或无法访问 npm 的环境。
@@ -321,7 +321,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.1 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -337,7 +337,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.1 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
     research:
       enabled: true
@@ -560,8 +560,13 @@ const myAdapter = {
     description: { en: '...', zh: '...' },
     defaults: { endpoint: 'https://search.example.com' },
     capabilities: ['json', 'probe'],
+    groups: [
+      { id: 'connection', label: { en: 'Connection', zh: '连接' } },
+      { id: 'advanced', label: { en: 'Advanced', zh: '高级' }, advanced: true },
+    ],
     fields: [
-      { kind: 'text', key: 'endpoint', label: { en: 'Endpoint', zh: '地址' } },
+      { kind: 'text', key: 'endpoint', label: { en: 'Endpoint', zh: '地址' }, group: 'connection' },
+      { kind: 'number', key: 'timeoutMs', label: { en: 'Timeout', zh: '超时' }, group: 'advanced', unit: 'ms' },
     ],
   },
   validate(rawConfig) {
@@ -582,9 +587,10 @@ const myAdapter = {
 
 - 搜索 adapter 的 `id` 必须唯一；`kind` 必须是 `search` 或 `fetch`。
 - 配置存在 `config.search.adapters.<id>`（或 `fetch.adapters.<id>`），adapter 自己 normalize/validate。
-- `fields` 支持 `text`、`url`、`password`、`number`、`boolean`、`select`、`tags`、`instances`。
-- 需要密钥时用 `secretRefs` 声明引用，值走 DSH credentials，不要写进 manifest defaults。
-- 新增 adapter 不需要改设置页代码；页面按 manifest 渲染。
+- `fields` 支持 `text`、`url`、`password`、`number`、`boolean`、`select`、`tags`、`instances`；可选 `group`、`advanced`、`unit` 只影响展示，不改变配置结构。
+- `groups` 可选；不声明时页面渲染单个 Configuration 分组。字段的 `group` 不存在时回退到第一个分组，`advanced: true` 的字段自动进入折叠区。
+- 需要密钥时用 `secretRefs` 声明引用，值走 DSH credentials，不要写进 manifest defaults；secret 也可声明 `group` / `advanced`。
+- 新增 adapter 不需要改设置页代码；页面按 manifest 渲染，声明 groups 后自动获得分组与折叠。
 - v0.1.x 不支持 adapter 自带完全自定义的设置 UI；如有需要，可以未来注册自己的 `settings.section`，但那就不再是统一页面的一部分。
 - 外部 adapter 的本地化目前以 manifest 的 `label` / `description` 原文为准；内置 adapter 由插件字典提供中英文。
 
@@ -642,7 +648,7 @@ Readability 运行在 Host 内。`jsdom` 的 `tr46` 依赖会调用 `createRequi
 
 发布前确认：
 
-- `package.json` 版本是 `0.1.1`；
+- `package.json` 版本是 `0.1.2`；
 - `CHANGELOG.md` 有对应条目；
 - `pnpm release` 全绿；
 - 工作区干净；
@@ -659,7 +665,7 @@ pnpm pack --pack-destination dist
 打 tag 并推送：
 
 ```sh
-git tag -a v0.1.1 -m "dsh-search-tools v0.1.1"
+git tag -a v0.1.2 -m "dsh-search-tools v0.1.2"
 git push origin main --follow-tags
 ```
 
@@ -676,7 +682,7 @@ git push origin main --follow-tags
 npm publish --provenance --access public
 ```
 
-发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、搜索测试、抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.1 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.1.md)。
+发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、搜索测试、抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.2 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.2.md)。
 
 ## 故障排查
 

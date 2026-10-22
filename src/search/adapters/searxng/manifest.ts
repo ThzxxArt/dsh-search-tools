@@ -1,6 +1,6 @@
 /** SearXNG adapter manifest: the settings page renders this without SearXNG code. */
 
-import type { AdapterManifest, JsonObject } from '../../../core/types.ts'
+import type { AdapterField, AdapterManifest, JsonObject } from '../../../core/types.ts'
 import { lt } from '../../../shared/localized.ts'
 import { DEFAULT_SEARXNG_CONFIG } from './schema.ts'
 
@@ -12,6 +12,24 @@ export const searxngManifest: AdapterManifest = {
     'Connect your own SearXNG instances with failover, JSON/HTML parsing, and authentication.',
     '连接你自己的 SearXNG 实例，支持多实例故障转移、JSON/HTML 解析和认证。',
   ),
+  groups: [
+    {
+      id: 'connection',
+      label: lt('Connection', '连接'),
+      description: lt('Choose the backend and the instances it searches.', '选择后端，以及它要搜索的实例。'),
+    },
+    {
+      id: 'behavior',
+      label: lt('Search behavior', '搜索行为'),
+      description: lt('What to search, how many results, and how to balance instances.', '搜索什么、返回多少，以及如何在实例间分配。'),
+    },
+    {
+      id: 'advanced',
+      label: lt('Advanced', '高级'),
+      description: lt('Transport, timeouts, cache, proxy, and domain filters.', '传输、超时、缓存、代理和域名过滤。'),
+      advanced: true,
+    },
+  ],
   defaults: DEFAULT_SEARXNG_CONFIG as unknown as JsonObject,
   capabilities: ['json', 'html', 'probe', 'cache', 'pagination'],
   secretRefs: [
@@ -21,6 +39,7 @@ export const searxngManifest: AdapterManifest = {
       label: lt('Bearer token', 'Bearer Token'),
       description: lt('Stored in DSH credentials, never in YAML.', '只写入 DSH 凭据存储，不写入 YAML。'),
       authType: 'bearer',
+      group: 'connection',
     },
     {
       key: 'auth.basic',
@@ -28,9 +47,10 @@ export const searxngManifest: AdapterManifest = {
       label: lt('Basic username:password', 'Basic 用户名:密码'),
       description: lt('Format: username:password. Stored in DSH credentials only.', '格式为 username:password，只写入 DSH 凭据存储。'),
       authType: 'basic',
+      group: 'connection',
     },
   ],
-  fields: [
+  fields: ([
     { kind: 'boolean', key: 'enabled', label: lt('Enable SearXNG', '启用 SearXNG'), default: true },
     {
       kind: 'instances',
@@ -205,5 +225,25 @@ export const searxngManifest: AdapterManifest = {
       label: lt('Exclude domains', '排除域名'),
       placeholder: 'spam.example',
     },
-  ],
+  ] satisfies readonly AdapterField[]).map((field): AdapterField => {
+    const unit = searxngUnit(field.key)
+    return { ...field, group: searxngGroup(field.key), ...(unit === undefined ? {} : { unit }) }
+  }),
+}
+
+function searxngGroup(key: string): string {
+  if (key === 'enabled' || key === 'instances' || key === 'auth.type') return 'connection'
+  if (key === 'engines'
+    || key === 'categories'
+    || key === 'language'
+    || key === 'safesearch'
+    || key === 'timeRange'
+    || key === 'pages'
+    || key === 'maxResults'
+    || key === 'strategy') return 'behavior'
+  return 'advanced'
+}
+
+function searxngUnit(key: string): string | undefined {
+  return key === 'requestTimeoutMs' || key === 'deadlineMs' || key === 'cacheTtlMs' ? 'ms' : undefined
 }

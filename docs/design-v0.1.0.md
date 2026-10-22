@@ -2,7 +2,7 @@
 
 > 状态：**v3 方案已确认，工程骨架已开工（2026-10-22）**
 >
-> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。provider picker 已改为卡片式并提供刷新，研究页已加入模型工具提示预览。剩余是发布收尾与更多 adapter。架构速查见 [architecture.md](architecture.md)。
+> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。0.1.2 已完成设置页 UI/UX 修订（设计 token、分组、实例卡、研究预算、诊断页、416px 布局），详见附录 E。架构速查见 [architecture.md](architecture.md)。
 >
 > 目标仓库：`https://github.com/ThzxxArt/dsh-search-tools`
 >
@@ -1635,3 +1635,44 @@ export function apply(ctx: Context): void {
 | 抓取 | 手写 readable-http | fetch adapter 框架 + readable-http |
 | 测试 | SearXNG 单测 | + fixture adapter 扩展性测试 |
 | 工期 | 约 24 人日 | 约 25 人日（架构替代部分手写表单） |
+
+---
+
+## 附录 E：0.1.2 UI/UX 修订
+
+0.1.2 只改设置页的呈现和信息架构，不改 provider id、配置结构、接管、凭据、搜索/抓取/研究语义。
+
+### E.1 设计系统修复
+
+旧页面引用的 10 个 `--dsw-*` 名称在 DSH 0.2.1-rc.2 中不存在，导致提示与错误同色、adapter 卡无焦点环、prompt 预览不是等宽字体。0.1.2 改用：
+
+- 文本：`--dsw-alias-label-primary/secondary/tertiary`
+- 表面：`--dsw-alias-settings-card-fill` / `--dsw-alias-bg-layer-3`
+- 描边：`--dsw-alias-border-l2/l4`
+- 语义：`--dsw-alias-state-error-primary` / `warn` / `success` / `business`
+- 代码：`--ds-font-family-code`
+- 焦点：`--dsw-focus-ring-width` / `--dsw-focus-ring-color`
+
+所有组件共用 `dshst-page` 的本地语义变量，禁止再直接写已失效的 token。
+
+### E.2 信息架构
+
+- 顶部 hero 显示搜索、抓取、研究三个状态；不再在标题旁重复一个状态 tag。
+- 五个等宽 tab：Overview / Search / Fetch / Research / Diagnostics。
+- Search 分为 Connection、Search behavior、Advanced（默认折叠）；实例改为 sub-card。
+- Fetch 分为 Extraction、Safety limits；测试预览保留在同一页。
+- Research 分为 Research scope、Content budget（含预算条）、Execution、Model-facing prompt。
+- 原 Advanced 改为 Diagnostics；只放运行时事实、配置路径、错误和清理动作。
+- 底部操作条 sticky，并用不透明表面避免长表单内容透出；页面底部留出滚动余量。
+
+### E.3 响应式与无障碍
+
+- 页面是 CSS container；520px 以上字段两列，416px 单列，实例字段在 520px 以上才两列。
+- 416px 下五个 tab 仍是一行，action bar 按钮换行而不是溢出。
+- `:focus-visible` 覆盖 adapter 卡、tab、字段、summary、实例按钮和 action bar 按钮。
+- 错误/hint 使用不同语义 token；错误有 `role="alert"` 与 `aria-invalid`。
+- 测试和实例操作有可区分的 accessible name；开关同时显示 On/Off 文本。
+
+### E.4 Manifest 扩展
+
+`groups`、`field.group`、`field.advanced`、`field.unit`、`secret.group` 都是可选展示元数据。无 groups 的外部 adapter 仍按一个 Configuration 块渲染；未知 group 回退到第一个组；`advanced` 字段自动进入折叠区。校验和存储结构完全不变。

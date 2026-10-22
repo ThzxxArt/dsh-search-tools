@@ -175,10 +175,38 @@ does not yet copy the prompt to the clipboard.
 - Publication steps and post-publish smoke tests live in
   `docs/release-v0.1.0.md`.
 
+## 0.1.2 UI/UX verification (2026-10-23)
+
+Environment: real DSH `0.2.1-rc.2`, profile `m0web`, packaged
+`dsh-search-tools@0.1.2` installed from the local tarball, Chromium via
+Playwright, real SearXNG instance `https://hk.search.metona.cn`.
+
+| Check | Evidence |
+|---|---|
+| Design tokens | The page no longer uses the 10 missing `--dsw-*` names. Light hint `#81858c`, error `#ec1313`; dark card `#2c2c2e`, action bar `#2c2c2e`, hint `#adb2b8`. |
+| 1440px / 564px content | Five tabs rendered at 110px each on one row; no page/card horizontal overflow. Page heights: Overview 860, Search 1939, Fetch 1271, Research 1557, Diagnostics 739. |
+| 700px / 416px content | Five tabs at 81px each on one row; no page/options horizontal overflow on any tab. Action bar 83px high; both actions fit within 412px. |
+| Hero | Status chips wrap below the title at narrow widths; the status block stays inside the hero (564px: right 949 < hero right 1094; 416px: right 633 < hero right 650). |
+| Search groups | Connection and Search behavior are visible; Advanced is a closed disclosure with 11 fields. Opening it shows Request method and the remaining transport/cache fields. |
+| Error semantics | An empty enabled instance produces a red field error (`rgb(236, 19, 19)`), a red summary notice, `aria-invalid="true"`, and a disabled Save button. Hints stay tertiary. Search errors are not repeated on the Fetch tab; the action bar still reports invalid state and Save stays disabled. |
+| Focus | Adapter card focus ring `rgb(65, 118, 230) solid 2px`; focused instance input border `rgb(65, 118, 230)`; Advanced summary gets the same 2px ring under keyboard navigation. |
+| Instance layout | Instance card URL and label are full-width at 416px; test/reorder/delete actions wrap below. No input overflow. |
+| Research | Research scope, Content budget, and Execution use a two-column field grid at 564px and one column at 416px. Budget shows 30% per-page share and `36,000 / 40,000 chars`. Prompt uses the DSH code font, `word-break: normal`, and scrolls inside 360px. |
+| Prompt copy | Clicking Copy prompt writes the model-facing prompt to the clipboard and changes the button to Copied. |
+| Live console | Search test passed in 2681ms with 10 structured sources and engine notes; fetch preview passed in 156ms with HTTP 200, HTML, 577 chars. |
+| Locales | English and Simplified Chinese both render; Chinese tabs are 概览 / 搜索 / 抓取 / 研究 / 诊断, groups 连接 / 搜索行为. |
+| Browser errors | No page errors or console errors during the measured flows. |
+
+Not covered: physical touch devices, screen readers, non-Chromium engines, and a
+fresh-profile install from the public npm registry (the package was installed
+from the local tarball). The Search and Research pages remain long at 416px
+because all required fields and instance/credential editors stay visible; the
+earlier 1,000px Search-height target was not met without hiding controls.
+
 ## Remaining
 
-- Publish `0.1.0`: configure the repository remote, push the `v0.1.0` tag, and
-  provide npm credentials or the release-workflow `NPM_TOKEN`.
+- Publish `0.1.2` after review: push the tag, let the release workflow publish,
+  and install from the public registry in a fresh profile.
 - Additional adapter packages beyond SearXNG / Readability HTTP.
 - Autonomous tool-selection evaluation; the real-model run named the tool under
   test.

@@ -24,7 +24,7 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.0',
+  version: '0.1.2',
   configPath: '/tmp/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0 },
   fetch: { enabled: true, registered: true, adapter: 'readable-http' },
@@ -264,7 +264,7 @@ describe('SettingsPage', () => {
     const { web } = renderPage()
     await screen.findByRole('heading', { name: 'Search Tools' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Take over built-in search' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Take over built-in search' }))
     await waitFor(() => expect(web.mutate).toHaveBeenCalled())
 
     expect(previewSearch).toHaveBeenCalledWith('searxng', 'DeepSeek Harness', expect.any(Object))
@@ -279,7 +279,7 @@ describe('SettingsPage', () => {
     })
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Search' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Test' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Test Enter a query' }))
 
     expect(await screen.findByText('Search notes')).toBeInTheDocument()
     expect(screen.getByText('google: Suspended: access denied')).toBeInTheDocument()
@@ -375,7 +375,7 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Search' }))
     await screen.findByText('Instances')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Test' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Test Enter a query' }))
     await waitFor(() => expect(previewSearch).toHaveBeenCalled())
     expect(await screen.findByRole('link', { name: 'Example' })).toHaveAttribute('href', 'https://example.com/a')
     expect(screen.getByText('Test passed')).toBeInTheDocument()
@@ -385,7 +385,7 @@ describe('SettingsPage', () => {
   it('renders fetch preview metadata and content', async () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: /^Fetch$/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^Test$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Test Enter a URL' }))
     expect(await screen.findByText(/HTTP 200/)).toBeInTheDocument()
     expect(screen.getByText('ok')).toBeInTheDocument()
   })
@@ -397,7 +397,7 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add instance' }))
 
     fireEvent.click(screen.getByRole('tab', { name: /^Fetch$/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^Test$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Test Enter a URL' }))
     await waitFor(() => expect(previewFetch).toHaveBeenCalled())
     expect(await screen.findByText('Test passed')).toBeInTheDocument()
   })
@@ -413,14 +413,67 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(form.mutate).toHaveBeenCalled())
   })
 
-  it('copies a credential-free diagnostics summary from Advanced', async () => {
+  it('copies a credential-free diagnostics summary from Diagnostics', async () => {
     const writeText = vi.fn(async (_text: string) => undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
     renderPage()
-    fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.0')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.2')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
+  })
+
+  it('copies only the configuration path from the path action', async () => {
+    const writeText = vi.fn(async (_text: string) => undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy configuration path' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('/tmp/cordis.patch.yml'))
+  })
+
+  it('groups adapter fields and keeps advanced settings collapsed', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+
+    expect(await screen.findByRole('heading', { name: 'Connection' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Search behavior' })).toBeInTheDocument()
+    const advanced = screen.getByTestId('adapter-group-advanced')
+    expect(advanced.tagName).toBe('DETAILS')
+    expect(advanced).not.toHaveAttribute('open')
+    expect(advanced).toHaveTextContent('11 fields')
+
+    fireEvent.click(within(advanced).getByText('Advanced'))
+    expect(advanced).toHaveAttribute('open')
+    expect(within(advanced).getByLabelText('Request method')).toBeInTheDocument()
+  })
+
+  it('shows the projected research budget and copies the model-facing prompt', async () => {
+    const writeText = vi.fn(async (_text: string) => undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Research' }))
+
+    expect(await screen.findByText('36,000 / 40,000 chars')).toBeInTheDocument()
+    expect(screen.getByText('30% of total')).toBeInTheDocument()
+    expect(screen.getByText('4,000 chars remaining')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Search the web, fetch the top results')))
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+  })
+
+  it('keeps search validation out of the fetch tab while blocking save', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    await screen.findByText('Instances')
+    fireEvent.click(screen.getByRole('button', { name: 'Add instance' }))
+    expect((await screen.findAllByText('An enabled instance needs a URL.')).length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Fetch' }))
+    expect(screen.queryByText('An enabled instance needs a URL.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save and apply' })).toBeDisabled()
+    expect(screen.getByText(/Some fields are invalid; fix them before saving\./)).toBeInTheDocument()
   })
 
   it('exposes tab semantics and arrow-key navigation', async () => {

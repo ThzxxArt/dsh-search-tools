@@ -1,6 +1,6 @@
 /** Readable HTTP fetch adapter manifest. */
 
-import type { AdapterManifest, JsonObject } from '../../../core/types.ts'
+import type { AdapterField, AdapterManifest, JsonObject } from '../../../core/types.ts'
 import { lt } from '../../../shared/localized.ts'
 import { DEFAULT_READABLE_HTTP_CONFIG } from './schema.ts'
 
@@ -12,9 +12,21 @@ export const readableHttpManifest: AdapterManifest = {
     'Reuse DSH safe HTTP retrieval, then extract the article body with Readability; fall back to the raw page on failure.',
     '复用 DSH 的安全 HTTP 抓取，再用 Readability 提取正文；失败时回退原始内容。',
   ),
+  groups: [
+    {
+      id: 'extraction',
+      label: lt('Extraction', '正文提取'),
+      description: lt('How the readable body is detected and what happens when it is missing.', '正文如何识别，以及提取失败时如何处理。'),
+    },
+    {
+      id: 'limits',
+      label: lt('Safety limits', '安全上限'),
+      description: lt('Response, decode, timeout, redirect, and identity limits.', '响应、解码、超时、重定向和身份限制。'),
+    },
+  ],
   defaults: DEFAULT_READABLE_HTTP_CONFIG as unknown as JsonObject,
   capabilities: ['readability', 'probe'],
-  fields: [
+  fields: ([
     { kind: 'boolean', key: 'enabled', label: lt('Enable body extraction', '启用正文提取'), default: true },
     { kind: 'boolean', key: 'readability', label: lt('Use Readability', '使用 Readability'), default: true },
     {
@@ -78,5 +90,21 @@ export const readableHttpManifest: AdapterManifest = {
       label: lt('Fall back to the raw page on failure', '提取失败时回退原文'),
       default: true,
     },
-  ],
+  ] satisfies readonly AdapterField[]).map((field): AdapterField => {
+    const unit = field.key === 'minArticleChars' || field.key === 'maxArticleChars' || field.key === 'maxBodyChars'
+      ? 'chars'
+      : field.key === 'maxResponseBytes'
+        ? 'bytes'
+        : field.key === 'timeoutMs'
+          ? 'ms'
+          : undefined
+    const group = field.key === 'enabled'
+      || field.key === 'readability'
+      || field.key === 'minArticleChars'
+      || field.key === 'maxArticleChars'
+      || field.key === 'failOpen'
+      ? 'extraction'
+      : 'limits'
+    return { ...field, group, ...(unit === undefined ? {} : { unit }) }
+  }),
 }

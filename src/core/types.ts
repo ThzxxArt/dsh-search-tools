@@ -85,6 +85,12 @@ export interface FieldBase {
   label: LocalizedText
   description?: LocalizedText
   required?: boolean
+  /** Group id declared by `AdapterManifest.groups`; unknown ids fall back visibly. */
+  group?: string
+  /** Hide a field behind the page's advanced disclosure when it has no advanced group. */
+  advanced?: boolean
+  /** Short unit shown inside the control, for example `ms`, `chars`, or `bytes`. */
+  unit?: string
 }
 
 export interface TextField extends FieldBase {
@@ -127,12 +133,22 @@ export interface InstancesField extends FieldBase {
 
 export type AdapterCapability = 'json' | 'html' | 'probe' | 'cache' | 'pagination' | 'readability'
 
+/** One labeled block of adapter fields; `advanced` blocks start collapsed. */
+export interface AdapterGroup {
+  id: string
+  label: LocalizedText
+  description?: LocalizedText
+  advanced?: boolean
+}
+
 /** Everything the settings page needs to render and validate an adapter. */
 export interface AdapterManifest {
   kind: 'search' | 'fetch'
   id: string
   label: LocalizedText
   description: LocalizedText
+  /** Optional field grouping; a manifest without groups renders one Configuration block. */
+  groups?: readonly AdapterGroup[]
   fields: readonly AdapterField[]
   defaults: JsonObject
   capabilities?: readonly AdapterCapability[]
@@ -143,6 +159,8 @@ export interface AdapterManifest {
     label: LocalizedText
     description?: LocalizedText
     authType?: 'bearer' | 'basic'
+    group?: string
+    advanced?: boolean
   }[]
 }
 

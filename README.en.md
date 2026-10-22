@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Current version: 0.1.1 (2026-10-22).** This is a documentation and metadata refresh after 0.1.0. The feature surface is unchanged; the primary README is now complete Simplified Chinese and this file is the English counterpart. 0.1.0 was verified against a real DSH instance, a real SearXNG instance, real model tool turns, and the Web GUI; build, test, pack, and publint gates pass. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
+> **Current version: 0.1.2 (2026-10-22).** This is the UI/UX polish release after 0.1.0: the settings page now uses the DSH design system, with a rebuilt information architecture, instance cards, collapsed advanced settings, research budgets, and diagnostics, plus a 416px single-column layout and keyboard focus. Search, fetch, takeover, and credential behavior are unchanged. 0.1.0 was verified against a real DSH instance, a real SearXNG instance, real model tool turns, and the Web GUI; build, test, pack, and publint gates pass. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
 
 ---
 
@@ -59,7 +59,7 @@ It does **not** provide a public search API, bypass logins or paywalls, execute 
 | Built-in search adapter | SearXNG: multiple instances, ordered/round-robin, failover, JSON/HTML, GET/POST, Bearer/Basic auth, proxy, cache, pagination, domain filters |
 | Built-in fetch adapter | Readability HTTP: reuses DSH safe HTTP, extracts article text with Readability, can fall back to raw content |
 | Research tool | `web_research`: search, fetch top N concurrently, per-page/total clipping, sources + readable content |
-| Web settings page | Overview, Search, Fetch, Research, Advanced; inline tests, diagnostics, cache clear, keyboard save |
+| Web settings page | Overview, Search, Fetch, Research, Diagnostics; grouped fields, instance cards, inline tests, budget meters, diagnostics, cache clear, keyboard save |
 | Credential isolation | Search tokens go to DSH credentials, never YAML, logs, or diagnostic text |
 | Takeover and restore | Optionally route built-in `web_search` / `web_fetch` through this plugin; restore the previous provider when disabled |
 | External adapters | Register backends through `ctx.searchTools`; the settings page renders manifest fields generically |
@@ -134,10 +134,10 @@ dsh --profile <profile>
 
 ### Option 3: Offline tarball
 
-Download `dsh-search-tools-0.1.1.tgz` from [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases), then:
+Download `dsh-search-tools-0.1.2.tgz` from [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases), then:
 
 ```sh
-dsh plugin --profile <profile> add ./dsh-search-tools-0.1.1.tgz
+dsh plugin --profile <profile> add ./dsh-search-tools-0.1.2.tgz
 ```
 
 The tarball is byte-identical to the npm artifact and works on isolated networks.
@@ -321,7 +321,7 @@ The shape is roughly:
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.1 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -337,7 +337,7 @@ The shape is roughly:
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.1 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
     research:
       enabled: true
@@ -556,8 +556,13 @@ const myAdapter = {
     description: { en: '...', zh: '...' },
     defaults: { endpoint: 'https://search.example.com' },
     capabilities: ['json', 'probe'],
+    groups: [
+      { id: 'connection', label: { en: 'Connection', zh: '连接' } },
+      { id: 'advanced', label: { en: 'Advanced', zh: '高级' }, advanced: true },
+    ],
     fields: [
-      { kind: 'text', key: 'endpoint', label: { en: 'Endpoint', zh: '地址' } },
+      { kind: 'text', key: 'endpoint', label: { en: 'Endpoint', zh: '地址' }, group: 'connection' },
+      { kind: 'number', key: 'timeoutMs', label: { en: 'Timeout', zh: '超时' }, group: 'advanced', unit: 'ms' },
     ],
   },
   validate(rawConfig) {
@@ -578,9 +583,10 @@ Conventions:
 
 - Search adapter `id` values must be unique; `kind` is `search` or `fetch`.
 - Config lives under `config.search.adapters.<id>` (or `fetch.adapters.<id>`); the adapter normalizes and validates it.
-- `fields` supports `text`, `url`, `password`, `number`, `boolean`, `select`, `tags`, and `instances`.
-- Declare secrets with `secretRefs`; values go through DSH credentials and must not be in manifest defaults.
-- New adapters do not require settings-page code; the page renders manifest fields.
+- `fields` supports `text`, `url`, `password`, `number`, `boolean`, `select`, `tags`, and `instances`; optional `group`, `advanced`, and `unit` affect presentation only, not the stored config shape.
+- `groups` is optional; without it the page renders one Configuration block. An unknown field `group` falls back to the first group, and `advanced: true` fields go into a disclosure.
+- Declare secrets with `secretRefs`; values go through DSH credentials and must not be in manifest defaults. Secrets may also declare `group` / `advanced`.
+- New adapters do not require settings-page code; the page renders manifest fields and automatically groups/collapses declared groups.
 - v0.1.x does not support a fully custom adapter settings UI. An adapter can register its own `settings.section` in the future, but that is outside the unified page.
 - External adapter localization currently uses the manifest's `label` / `description` text; built-in adapters have `zh` / `en` dictionaries.
 
@@ -638,7 +644,7 @@ Readability runs inside the Host. `jsdom`'s `tr46` dependency calls `createRequi
 
 Before releasing:
 
-- `package.json` version is `0.1.1`;
+- `package.json` version is `0.1.2`;
 - `CHANGELOG.md` has the matching entry;
 - `pnpm release` passes;
 - the worktree is clean;
@@ -655,7 +661,7 @@ pnpm pack --pack-destination dist
 Tag and push:
 
 ```sh
-git tag -a v0.1.1 -m "dsh-search-tools v0.1.1"
+git tag -a v0.1.2 -m "dsh-search-tools v0.1.2"
 git push origin main --follow-tags
 ```
 
@@ -672,7 +678,7 @@ Manual publish:
 npm publish --provenance --access public
 ```
 
-After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run search and fetch tests, and make one `web_research` call. See the [v0.1.1 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.1.md).
+After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run search and fetch tests, and make one `web_research` call. See the [v0.1.2 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.2.md).
 
 ## Troubleshooting
 

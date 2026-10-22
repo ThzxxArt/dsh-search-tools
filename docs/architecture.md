@@ -54,15 +54,20 @@ owns its defaults and validation.
 Each adapter declares `AdapterManifest`:
 
 - `id`, `label`, `description`
+- `groups` (optional: `id`, localized `label`, optional `description`, and
+  `advanced`)
 - `fields` (`text`, `url`, `password`, `number`, `boolean`, `select`, `tags`,
-  `instances`)
+  `instances`) with optional `group`, `advanced`, and `unit`
 - `defaults`
-- `secretRefs`
+- `secretRefs` with optional `group` / `advanced`
 - `capabilities`
 
 The Settings page fetches `/api/dsh-search-tools/adapters`, renders the selected
 adapter's fields, and stores values in `adapters.<id>`. No page code changes when
-a new adapter is registered.
+a new adapter is registered. A manifest that does not declare groups falls back
+to one configuration block; fields marked `advanced` without an advanced group
+are placed in a generated disclosure. Group metadata is presentation-only and
+does not change validation or the stored config shape.
 
 External adapters can ship their own Client UI later; the host contract does not
 require it. Whether takeover requires a non-empty instance list is decided from

@@ -62,7 +62,7 @@ export const DEFAULT_SEARXNG_CONFIG: SearxngConfig = {
   retries: 1,
   cacheTtlMs: 300_000,
   cacheMaxEntries: 200,
-  userAgent: 'dsh-search-tools/0.1.1 (+https://github.com/ThzxxArt/dsh-search-tools)',
+  userAgent: 'dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)',
   proxy: '',
   includeDomains: [],
   excludeDomains: [],
