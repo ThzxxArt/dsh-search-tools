@@ -24,7 +24,19 @@ jobs:
       - run: pnpm install --frozen-lockfile --registry=https://registry.npmjs.org
       - run: pnpm release
       - run: pnpm pack --pack-destination dist
+      - name: Check whether this version is already on npm
+        id: npm-version
+        run: |
+          package=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$package@$version" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$package@$version is already published; skipping npm publish."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
       - run: npm publish --provenance --access public
+        if: steps.npm-version.outputs.published != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - uses: softprops/action-gh-release@v2
