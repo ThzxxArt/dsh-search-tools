@@ -26,6 +26,15 @@ describe('SearXNG JSON parser', () => {
     expect(result.sources).toHaveLength(1)
     expect(result.sources[0]?.title).toBe('A')
   })
+
+  it('surfaces unresponsive engines without failing an empty result', () => {
+    const result = parseSearxngJson({
+      results: [],
+      unresponsive_engines: [['google', 'Suspended: access denied'], ['duckduckgo', 'CAPTCHA']],
+    }, 'https://searx.example.com')
+    expect(result.sources).toHaveLength(0)
+    expect(result.notes).toEqual(['google: Suspended: access denied', 'duckduckgo: CAPTCHA'])
+  })
 })
 
 describe('SearXNG HTML parser', () => {

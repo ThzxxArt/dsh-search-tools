@@ -32,6 +32,8 @@ export interface SearchResult {
   content?: string
   sources: readonly SearchSource[]
   truncated: boolean
+  /** Adapter diagnostics (for example unresponsive SearXNG engines) shown in the settings preview. */
+  notes?: readonly string[]
 }
 
 export interface FetchRequest {

@@ -165,6 +165,21 @@ describe('SettingsPage', () => {
     expect(JSON.stringify(web.mutate.mock.calls)).toContain('dsh-search-tools')
   })
 
+  it('surfaces unresponsive-engine notes in the search preview', async () => {
+    vi.mocked(previewSearch).mockResolvedValue({
+      ok: true,
+      sources: [],
+      notes: ['google: Suspended: access denied', 'duckduckgo: CAPTCHA'],
+    })
+    renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: 'Search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }))
+
+    expect(await screen.findByText('Search notes')).toBeInTheDocument()
+    expect(screen.getByText('google: Suspended: access denied')).toBeInTheDocument()
+    expect(screen.getByText('duckduckgo: CAPTCHA')).toBeInTheDocument()
+  })
+
   it('requires an enabled instance for the active instance-based adapter', async () => {
     renderPage({ searchProvider: 'dsh-search-tools', fetchProvider: '' })
     expect((await screen.findAllByText(/Cannot save without an enabled instance while takeover is active/)).length).toBeGreaterThan(0)

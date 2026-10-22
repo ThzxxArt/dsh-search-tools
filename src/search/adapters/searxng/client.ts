@@ -325,8 +325,10 @@ function mergePages(
 ): SearchResult {
   const seen = new Map<string, SearchResult['sources'][number]>()
   const answers: string[] = []
+  const notes: string[] = []
   for (const page of pages) {
     if (page.content !== undefined) answers.push(page.content)
+    if (page.notes !== undefined) notes.push(...page.notes)
     for (const source of page.sources) {
       if (!seen.has(source.url)) seen.set(source.url, source)
     }
@@ -336,6 +338,7 @@ function mergePages(
     ...(answers.length > 0 ? { content: [...new Set(answers)].join('\n\n') } : {}),
     sources: sources.slice(0, limit),
     truncated: sources.length > limit,
+    ...(notes.length > 0 ? { notes: [...new Set(notes)].slice(0, 8) } : {}),
   }
 }
 

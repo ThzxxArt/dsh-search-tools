@@ -65,6 +65,7 @@ export interface PreviewState {
   ok: boolean
   elapsedMs?: number
   sources?: Array<{ url: string; title?: string; snippet?: string }>
+  notes?: string[]
   url?: string
   statusCode?: number
   bodyKind?: 'html' | 'text'
@@ -323,6 +324,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
         kind: 'search',
         ok: true,
         sources: (result.sources ?? []).filter(source => isHttpUrl(source.url)),
+        ...(result.notes === undefined ? {} : { notes: result.notes.filter(note => note.length > 0).slice(0, 8) }),
         ...(result.elapsedMs === undefined ? {} : { elapsedMs: result.elapsedMs }),
       })
       return true
@@ -788,6 +790,14 @@ function PreviewPanel({ preview, t }: { preview: PreviewState | undefined; t: Tr
           {preview.content === undefined ? null : <pre className="dshst-pre">{preview.content}</pre>}
         </div>
       )}
+      {preview.kind === 'search' && (preview.notes?.length ?? 0) > 0 ? (
+        <div>
+          <p className="dshst-hint">{t('searchNotes')}</p>
+          <ul className="dshst-hint">
+            {(preview.notes ?? []).map(note => <li key={note}>{note}</li>)}
+          </ul>
+        </div>
+      ) : null}
     </section>
   )
 }

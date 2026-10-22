@@ -41,7 +41,7 @@ Web URL: `http://127.0.0.1:3091` (separate from the running GUI at `dsh.metona.c
 
 ## Component tests (2026-10-22)
 
-`pnpm test` now runs 51 tests across 12 files. The browser-facing additions:
+`pnpm test` now runs 53 tests across 12 files. The browser-facing additions:
 
 | File | Coverage |
 |---|---|
@@ -97,7 +97,25 @@ The activation hint sits in a slot outside the settings theme scope, so its CSS
 uses token fallbacks and an explicit `dshst-activation` width. Without the
 fallbacks the card rendered with transparent background and no border.
 
+## Real SearXNG instance (2026-10-22)
+
+A private authenticated instance was tested through the settings page, without
+recording its address or credentials in this repository:
+
+| Check | Evidence |
+|---|---|
+| Probe | `/config` reachable, JSON supported, Basic auth `ok`, 3.6s latency |
+| Credentials | DSH reported `Configured · Source: env`; the secret was supplied through `SEARXNG_BASIC_AUTH` and never written to YAML |
+| Real search | query `DeepSeek Harness`, engine `bing`, 10 normalized sources, 2.9s elapsed, links to deepseek.com / GitHub / runoob |
+| Empty-engine behavior | with `engines: []`, the instance's default engines were suspended and returned no sources; the preview displayed `Search notes` listing `google: access denied`, `duckduckgo: CAPTCHA`, etc. |
+| Engine selection | adding `bing` returned real results; the notes still list the unrelated suspended engines |
+| UI | Test passed, sources rendered with titles/snippets, no secret in the form or YAML |
+
+The default-engine empty result was initially indistinguishable from a genuinely
+empty search. `parseSearxngJson` now carries `unresponsive_engines` as notes and
+the settings preview renders them under **Search notes**.
+
 ## Still to verify / implement
 
 - A real model choosing `web_research` after takeover (the scripted model above exercised the same loop, but not model judgment).
-- A real SearXNG instance (the live search checks still use the local mock).
+- Search takeover and a full `web_search` turn against the real instance (the real adapter was verified through the settings preview, not through the model-facing provider).

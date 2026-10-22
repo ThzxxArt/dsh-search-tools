@@ -55,6 +55,9 @@
   with a real border/background outside the settings theme scope.
 - Adapter picker shows the selected manifest's description/capabilities and keeps
   a visible “not installed” option for orphaned config.
+- SearXNG's `unresponsive_engines` are surfaced as `Search notes` in the settings
+  preview, so an empty result caused by suspended engines is distinguishable from
+  a genuinely empty search.
 
 ### Verified
 
@@ -67,7 +70,7 @@
   GUI: the tool executed against a mock SearXNG, fetched two public pages, wrote
   a `tool/result` with presentation meta, and rendered the card in the
   conversation (`2 sources`, `2 fetched`, source links, fetched details).
-- 51 tests across 12 files, including settings-page, activation-hint,
+- 53 tests across 12 files, including settings-page, activation-hint,
   research-card, takeover-warning, diagnostics text, and `web_research` pipeline
   tests (`pnpm test`).
 - A live Web GUI pass on the new form UX: inline search test rendered two
@@ -76,6 +79,11 @@
   diagnostics`/`diagnostics/clear` worked, and the activation hint rendered as a
   bordered card after disabling/re-enabling the bundle. Dark theme and a 700px
   narrow viewport also rendered correctly; tabs wrap instead of clipping.
+- A real authenticated SearXNG instance was probed and searched through the
+  settings page: JSON API and Basic auth worked, 10 real sources rendered, and
+  credentials stayed out of YAML (`Source: env`). With the instance's default
+  engines suspended, the preview showed `Search notes`; selecting `bing` returned
+  real results. Details: `docs/m0-verification.md`.
 
 ### Fixed during M0
 

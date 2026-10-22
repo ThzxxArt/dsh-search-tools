@@ -9,6 +9,7 @@ export interface SearchPreviewResult {
   sources?: Array<{ url: string; title?: string; snippet?: string }>
   content?: string
   truncated?: boolean
+  notes?: string[]
   code?: string
   message?: string
   elapsedMs?: number

@@ -55,10 +55,12 @@ export function parseSearxngJson(
   }
 
   const answerText = joinAnswers(payload)
+  const notes = unresponsiveNotes(payload.unresponsive_engines)
   return {
     ...(answerText.length > 0 ? { content: answerText } : {}),
     sources: [...sources.values()],
     truncated: false,
+    ...(notes.length > 0 ? { notes } : {}),
   }
 }
 
@@ -105,4 +107,18 @@ function joinAnswers(payload: Record<string, unknown>): string {
     }
   }
   return [...new Set(parts)].join('\n\n')
+}
+
+/** SearXNG reports engine failures as `[["engine", "reason"], ...]`. */
+function unresponsiveNotes(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const notes: string[] = []
+  for (const entry of value) {
+    if (Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string') {
+      notes.push(`${entry[0]}: ${entry[1]}`)
+    } else if (typeof entry === 'string') {
+      notes.push(entry)
+    }
+  }
+  return [...new Set(notes)].slice(0, 8)
 }

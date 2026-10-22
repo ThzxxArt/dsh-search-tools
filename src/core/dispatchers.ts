@@ -99,7 +99,7 @@ export class SearchDispatcher implements WebSearchProvider {
     rawConfig: JsonObject,
     request: { query: string; maxResults?: number },
     signal?: AbortSignal,
-  ): Promise<{ sources: unknown[]; content?: string; truncated: boolean }> {
+  ): Promise<{ sources: unknown[]; content?: string; truncated: boolean; notes?: readonly string[] }> {
     const adapter = this.adapters.getSearchAdapter(adapterId)
     if (adapter === undefined) throw new WebError(`search adapter "${adapterId}" is not registered`, 'SEARCH_ADAPTER_MISSING')
     const runtime = adapter.create(this.adapterContext, () => rawConfig)
@@ -108,6 +108,7 @@ export class SearchDispatcher implements WebSearchProvider {
       sources: [...result.sources],
       ...(result.content === undefined ? {} : { content: result.content }),
       truncated: result.truncated,
+      ...(result.notes === undefined ? {} : { notes: result.notes }),
     }
   }
 
