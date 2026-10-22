@@ -1,0 +1,295 @@
+/**
+ * Authenticated settings routes. Every handler crosses the same
+ * Host/Origin + browser-auth fence as the rest of `/api`.
+ */
+
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-host-webserver'
+import type { Config } from '../config.ts'
+import { snapshot } from '../config.ts'
+import type { FetchDispatcher, SearchDispatcher } from '../core/dispatchers.ts'
+import type { SearchToolsService } from '../core/service.ts'
+import type { Diagnostics } from '../core/diagnostics.ts'
+import type { CacheStats, JsonObject, StatusResponse } from '../core/types.ts'
+import { SearchToolsError, errorCode, errorMessage } from '../shared/errors.ts'
+import { isRecord } from '../shared/validation.ts'
+
+const BASE = '/api/dsh-search-tools'
+const MAX_BODY_BYTES = 64 * 1024
+const VERSION = '0.1.0'
+const TOKEN_REF = 'SEARXNG_TOKEN'
+const BASIC_REF = 'SEARXNG_BASIC_AUTH'
+
+interface ConnectionFence {
+  requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
+}
+
+interface SettingsPathService {
+  prepareDocument?: () => Promise<string>
+}
+
+interface ConfigEditorPathService {
+  documentPath?: string
+}
+
+interface ProfilePathService {
+  patchPath?: string
+}
+
+interface CredentialsService {
+  describe(ref: string): Promise<{ configured: boolean; source?: string; writable: boolean }>
+}
+
+export interface RouteDeps {
+  config: Config
+  search: SearchDispatcher
+  fetch: FetchDispatcher
+  adapters: SearchToolsService
+  diagnostics: Diagnostics
+}
+
+export function registerRoutes(ctx: Context, deps: RouteDeps): void {
+  const connection = ctx.get('connection') as ConnectionFence | undefined
+  if (connection === undefined) return
+
+  const rejected = (req: IncomingMessage, res: ServerResponse): boolean => {
+    const rejection = connection.requestRejection(req)
+    if (rejection === undefined) return false
+    res.statusCode = rejection
+    res.end()
+    return true
+  }
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${BASE}/status`,
+    handler: async (req, res) => {
+      if (rejected(req, res)) return
+      if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
+      await sendStatus(ctx, deps, res)
+    },
+  }), 'dsh-search-tools: status route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${BASE}/adapters`,
+    handler: (req, res) => {
+      if (rejected(req, res)) return
+      if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
+      sendJson(res, 200, deps.adapters.listAdapters())
+    },
+  }), 'dsh-search-tools: adapters route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${BASE}/probe`,
+    handler: async (req, res) => {
+      if (rejected(req, res)) return
+      if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+      const body = await readJson(req, res)
+      if (body === undefined) return
+      const adapter = typeof body.adapter === 'string' ? body.adapter : ''
+      const config = isRecord(body.config) ? body.config as JsonObject : {}
+      const started = Date.now()
+      try {
+        const result = adapter.length === 0
+          ? { ok: false, code: 'ADAPTER_REQUIRED', message: 'adapter is required', latencyMs: 0 }
+          : body.kind === 'fetch'
+            ? await deps.fetch.probe(adapter, config, typeof body.url === 'string' ? body.url : '', AbortSignal.timeout(20_000))
+            : await deps.search.probe(adapter, config, AbortSignal.timeout(20_000))
+        sendJson(res, 200, { ...result, elapsedMs: Date.now() - started })
+      } catch (error) {
+        sendError(res, error, started)
+      }
+    },
+  }), 'dsh-search-tools: probe route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${BASE}/search-preview`,
+    handler: async (req, res) => {
+      if (rejected(req, res)) return
+      if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+      const body = await readJson(req, res)
+      if (body === undefined) return
+      const started = Date.now()
+      try {
+        const query = typeof body.query === 'string' ? body.query.trim() : ''
+        if (query.length === 0) throw new SearchToolsError('query is required', 'BAD_REQUEST')
+        const adapter = typeof body.adapter === 'string' ? body.adapter : snapshot(deps.config).search.adapter
+        const config = isRecord(body.config) ? body.config as JsonObject : {}
+        const result = await deps.search.preview(adapter, config, { query, maxResults: 10 }, AbortSignal.timeout(30_000))
+        sendJson(res, 200, { ok: true, ...result, elapsedMs: Date.now() - started })
+      } catch (error) {
+        sendError(res, error, started)
+      }
+    },
+  }), 'dsh-search-tools: search preview route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${BASE}/fetch-preview`,
+    handler: async (req, res) => {
+      if (rejected(req, res)) return
+      if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+      const body = await readJson(req, res)
+      if (body === undefined) return
+      const started = Date.now()
+      try {
+        const url = typeof body.url === 'string' ? body.url.trim() : ''
+        if (url.length === 0) throw new SearchToolsError('url is required', 'BAD_REQUEST')
+        const adapter = typeof body.adapter === 'string' ? body.adapter : snapshot(deps.config).fetch.adapter
+        const config = isRecord(body.config) ? body.config as JsonObject : {}
+        const result = await deps.fetch.preview(adapter, config, { url }, AbortSignal.timeout(30_000))
+        sendJson(res, 200, {
+          ok: result.statusCode >= 200 && result.statusCode < 300,
+          url: result.url,
+          statusCode: result.statusCode,
+          kind: result.body.kind,
+          content: result.body.content.slice(0, 20_000),
+          chars: result.body.content.length,
+          truncated: result.truncated,
+          elapsedMs: Date.now() - started,
+        })
+      } catch (error) {
+        sendError(res, error, started)
+      }
+    },
+  }), 'dsh-search-tools: fetch preview route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${BASE}/cache/clear`,
+    handler: (req, res) => {
+      if (rejected(req, res)) return
+      if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+      deps.search.clearCache()
+      sendJson(res, 200, { ok: true, cache: deps.search.cacheStats() })
+    },
+  }), 'dsh-search-tools: cache clear route')
+}
+
+async function sendStatus(ctx: Context, deps: RouteDeps, res: ServerResponse): Promise<void> {
+  const state = snapshot(deps.config)
+  const cache: CacheStats = deps.search.cacheStats()
+  const credentials = await describeCredentials(ctx)
+  const configPath = await configPathOf(ctx)
+  const searchInstances = countInstances(state.search.adapters[state.search.adapter])
+  const payload: StatusResponse = {
+    version: VERSION,
+    configPath,
+    search: {
+      enabled: true,
+      registered: true,
+      available: deps.search.available(),
+      adapter: state.search.adapter,
+      instances: searchInstances,
+    },
+    fetch: {
+      enabled: true,
+      registered: true,
+      adapter: state.fetch.adapter,
+    },
+    research: {
+      enabled: state.research.enabled,
+      registered: true,
+    },
+    credentials,
+    cache,
+    lastErrors: deps.diagnostics.list(),
+  }
+  sendJson(res, 200, payload)
+}
+
+async function describeCredentials(ctx: Context): Promise<Record<string, { configured: boolean; source?: string; writable: boolean }>> {
+  const credentials = ctx.get('credentials') as CredentialsService | undefined
+  if (credentials === undefined) {
+    return {
+      [TOKEN_REF]: { configured: false, writable: false },
+      [BASIC_REF]: { configured: false, writable: false },
+    }
+  }
+  const entries = await Promise.all([TOKEN_REF, BASIC_REF].map(async ref => {
+    try {
+      const info = await credentials.describe(ref)
+      return [ref, { configured: info.configured, ...(info.source === undefined ? {} : { source: info.source }), writable: info.writable }] as const
+    } catch {
+      return [ref, { configured: false, writable: false }] as const
+    }
+  }))
+  return Object.fromEntries(entries)
+}
+
+async function configPathOf(ctx: Context): Promise<string | null> {
+  const settings = ctx.get('settings') as SettingsPathService | undefined
+  if (settings?.prepareDocument !== undefined) {
+    try {
+      return await settings.prepareDocument()
+    } catch {
+      // Fall through to the stable profile path.
+    }
+  }
+  const editor = ctx.get('configEditor') as ConfigEditorPathService | undefined
+  if (typeof editor?.documentPath === 'string') return editor.documentPath
+  const profile = ctx.get('profileContext') as ProfilePathService | undefined
+  return typeof profile?.patchPath === 'string' ? profile.patchPath : null
+}
+
+function countInstances(raw: unknown): number {
+  if (!isRecord(raw) || !Array.isArray(raw.instances)) return 0
+  return raw.instances.filter(entry => isRecord(entry) && entry.enabled !== false && typeof entry.url === 'string' && entry.url.length > 0).length
+}
+
+async function readJson(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | undefined> {
+  const mediaType = String(req.headers['content-type'] ?? '').split(';', 1)[0]?.trim().toLowerCase()
+  if (mediaType !== 'application/json') {
+    sendJson(res, 415, { ok: false, code: 'UNSUPPORTED_MEDIA_TYPE', message: 'content-type must be application/json' })
+    return undefined
+  }
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of req as AsyncIterable<Buffer>) {
+    size += chunk.byteLength
+    if (size > MAX_BODY_BYTES) {
+      req.resume()
+      sendJson(res, 413, { ok: false, code: 'BODY_TOO_LARGE', message: 'body exceeds 64 KiB' })
+      return undefined
+    }
+    chunks.push(chunk)
+  }
+  try {
+    const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+    if (!isRecord(parsed)) {
+      sendJson(res, 400, { ok: false, code: 'BAD_REQUEST', message: 'body must be a JSON object' })
+      return undefined
+    }
+    return parsed
+  } catch {
+    sendJson(res, 400, { ok: false, code: 'BAD_REQUEST', message: 'body must be valid JSON' })
+    return undefined
+  }
+}
+
+function sendError(res: ServerResponse, error: unknown, started: number): void {
+  sendJson(res, 200, {
+    ok: false,
+    code: errorCode(error, 'INTERNAL'),
+    message: errorMessage(error),
+    elapsedMs: Date.now() - started,
+  })
+}
+
+function sendJson(res: ServerResponse, status: number, payload: unknown): void {
+  if (res.headersSent) return
+  res.statusCode = status
+  res.setHeader('content-type', 'application/json; charset=utf-8')
+  res.setHeader('cache-control', 'no-store')
+  res.end(JSON.stringify(payload))
+}
+
+function methodNotAllowed(res: ServerResponse, allow: 'GET' | 'POST'): void {
+  res.statusCode = 405
+  res.setHeader('allow', allow)
+  res.end()
+}

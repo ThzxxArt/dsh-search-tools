@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "搜索工具",
+    "description": "为 DeepSeek Harness 提供 adapter-first 的网页搜索与正文抓取，在设置页完成全部配置。"
+  }
+}

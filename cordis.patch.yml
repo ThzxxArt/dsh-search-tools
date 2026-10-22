@@ -1,0 +1,16 @@
+# dsh-search-tools bundle layer
+#
+# The row uses the bare package name so the client module system attaches the
+# browser half. The stable provider ids are owned by the Host half; adapters
+# are selected inside this row's config.
+- insert:
+    - id: dsh-search-tools
+      name: dsh-search-tools
+      config:
+        search:
+          adapter: searxng
+        fetch:
+          adapter: readable-http
+        research:
+          enabled: true
+          defaultFetchTop: 3

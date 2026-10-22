@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "url": "https://example.com/first",
+      "title": "First",
+      "content": "One",
+      "publishedDate": "2026-01-01"
+    },
+    {
+      "url": "https://example.com/second",
+      "title": "Second",
+      "content": "Two",
+      "published_date": "2026-01-02"
+    }
+  ],
+  "answers": ["answer"],
+  "infoboxes": [{ "content": "infobox" }]
+}
