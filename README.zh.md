@@ -2,7 +2,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供 adapter-first 的网页搜索与正文抓取。
 
-> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。详见 `docs/m0-verification.md`。剩余工作是完整表单体验、`web_research` 卡片回放和模型端到端测试。
+> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。`web_research` 卡片已有组件级回放测试，设置页也有组件测试；剩余工作是完整表单体验和真实模型/工具回合。详见 `docs/m0-verification.md`。
 
 ## 它做什么
 
@@ -65,7 +65,7 @@ src/research/             web_research pipeline、render、tool
 src/host/                 受认证的设置路由
 src/client/               设置 → 搜索工具 + 工具卡片
 src/shared/               config、校验、diff、URL 辅助
-tests/                    config、diff、URL、SearXNG 解析、dispatcher/认证
+tests/                    Host 单测 + 设置页/研究卡片组件测试
 ```
 
 Readability 使用 `linkedom`，不是 `jsdom`：jsdom 的 `tr46` 依赖会调用

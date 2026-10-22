@@ -25,7 +25,7 @@ export function ResearchCard(props: ResearchCardProps): React.ReactElement {
   if (phase !== 'result' || meta === undefined) {
     return (
       <div className="dshst-research-head">
-        <StateDot state={phase === 'preparing' ? 'ongoing' : 'ongoing'} />
+        <StateDot state="ongoing" />
         <span>{query}</span>
         <Tag tone="outline">{t('researchCardSearchFetch')}</Tag>
       </div>
@@ -44,10 +44,10 @@ export function ResearchCard(props: ResearchCardProps): React.ReactElement {
       </div>
       {meta.sources !== undefined && meta.sources.length > 0 ? (
         <ul className="dshst-research-list">
-          {meta.sources.map(source => (
-            <li key={source.url ?? source.title}>
+          {meta.sources.map((source, index) => (
+            <li key={`${source.url ?? source.title ?? 'source'}-${index}`}>
               {source.url === undefined
-                ? source.title
+                ? source.title ?? source.domain
                 : <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title ?? source.domain ?? source.url}</a>}
             </li>
           ))}
@@ -57,8 +57,8 @@ export function ResearchCard(props: ResearchCardProps): React.ReactElement {
         <details className="dshst-details">
           <summary>{t('researchCardDetails')}</summary>
           <ul className="dshst-research-list">
-            {meta.fetched.map(page => (
-              <li key={page.url}>
+            {meta.fetched.map((page, index) => (
+              <li key={`${page.url ?? 'page'}-${index}`}>
                 {page.title ?? page.url} · {page.chars ?? 0} {t('researchCardChars')}
                 {page.error === undefined ? null : <span className="dshst-error"> · {page.error}</span>}
               </li>
@@ -70,6 +70,16 @@ export function ResearchCard(props: ResearchCardProps): React.ReactElement {
   )
 }
 
+function httpUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function normalizeMeta(value: unknown): ResearchMeta | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const record = value as Record<string, unknown>
@@ -77,23 +87,27 @@ function normalizeMeta(value: unknown): ResearchMeta | undefined {
     ? record.sources.flatMap((entry) => {
       if (typeof entry !== 'object' || entry === null) return []
       const source = entry as Record<string, unknown>
-      return [{
-        ...(typeof source.url === 'string' ? { url: source.url } : {}),
+      const url = httpUrl(source.url)
+      const normalized = {
+        ...(url === undefined ? {} : { url }),
         ...(typeof source.title === 'string' ? { title: source.title } : {}),
         ...(typeof source.domain === 'string' ? { domain: source.domain } : {}),
-      }]
+      }
+      return Object.keys(normalized).length === 0 ? [] : [normalized]
     })
     : undefined
   const fetched = Array.isArray(record.fetched)
     ? record.fetched.flatMap((entry) => {
       if (typeof entry !== 'object' || entry === null) return []
       const page = entry as Record<string, unknown>
-      return [{
-        ...(typeof page.url === 'string' ? { url: page.url } : {}),
+      const url = httpUrl(page.url)
+      const normalized = {
+        ...(url === undefined ? {} : { url }),
         ...(typeof page.title === 'string' ? { title: page.title } : {}),
         ...(typeof page.chars === 'number' ? { chars: page.chars } : {}),
         ...(typeof page.error === 'string' ? { error: page.error } : {}),
-      }]
+      }
+      return Object.keys(normalized).length === 0 ? [] : [normalized]
     })
     : undefined
   return {

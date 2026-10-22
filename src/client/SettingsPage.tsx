@@ -1,6 +1,6 @@
 /** Settings → Search Tools page. The only editable surface for this plugin. */
 
-import { useEffect, useSyncExternalStore, useState } from 'react'
+import { useEffect, useId, useSyncExternalStore, useState } from 'react'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, Input, StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -10,9 +10,11 @@ import type {
 import { DEFAULT_STORED_CONFIG, type ActivationConfig, type StoredConfig } from '../shared/defaults.ts'
 import { diffSections, type ConfigSection } from '../shared/diff.ts'
 import { getPath, setPath } from '../shared/path.ts'
+import { validateManifestConfig } from '../shared/validation.ts'
 import { validateSearxngConfig } from '../search/adapters/searxng/schema.ts'
 import { validateReadableHttpConfig } from '../fetch/adapters/readable-http/schema.ts'
 import { clearCache, fetchAdapters, fetchStatus, previewFetch, previewSearch, probeSearch } from './api.ts'
+import { issueText } from './issue-text.ts'
 import { Field, InstanceEditor, type InstanceTestResult, type InstanceValue, type Translate } from './components/Field.tsx'
 
 export interface WebSelection {
@@ -121,7 +123,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   const readOnly = snapshot.status !== 'ready' || snapshot.writable === false
   const currentSearch = webSnapshot.value?.searchProvider ?? ''
   const currentFetch = webSnapshot.value?.fetchProvider ?? ''
-  const errors = validateDraft(draft)
+  const errors = validateDraft(draft, adapters, t)
   if (currentSearch === SEARCH_PROVIDER && !hasEnabledSearxngInstance(draft)) {
     errors.push({ path: 'instances', message: t('instancesRequiredWhenActive') })
   }
@@ -366,7 +368,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
       {snapshot.status === 'loading' ? <div className="dshst-notice">{t('loading')}</div> : null}
       {snapshot.status === 'unavailable' ? <div className="dshst-notice">{t('unavailable')}</div> : null}
       {snapshot.status === 'ready' && snapshot.writable === false ? <div className="dshst-notice">{t('readOnly')}</div> : null}
-      {errors.length > 0 ? <div className="dshst-notice">{t('invalid')}<ul className="dshst-research-list">{errors.slice(0, 8).map(error => <li key={`${error.path}:${error.message}`}>{error.path}: {error.message}</li>)}</ul></div> : null}
+      {errors.length > 0 ? <div className="dshst-notice">{t('invalid')}<ul className="dshst-research-list">{errors.slice(0, 8).map(error => <li key={`${error.path}:${error.code ?? error.message}`}>{error.path}: {issueText(error, t)}</li>)}</ul></div> : null}
 
       {tab === 'overview' ? (
         <Overview
@@ -627,7 +629,8 @@ function AdapterForm({ manifest, config, errors, disabled, text, t, onTestInstan
   return (
     <div>
       {manifest.fields.map(field => {
-        const error = errors.find(issue => issue.path === field.key)?.message
+        const issue = errors.find(entry => entry.path === field.key || entry.path.startsWith(`${field.key}[`))
+        const error = issue === undefined ? undefined : issueText(issue, t)
         if (field.kind === 'instances') {
           return (
             <div className="dshst-row" key={field.key}>
@@ -742,11 +745,13 @@ function NumberRow({ label, value, min, max, step, disabled, onChange }: {
   disabled: boolean
   onChange: (value: number) => void
 }): React.ReactElement {
+  const id = useId()
   return (
     <div className="dshst-row">
-      <label>{label}</label>
+      <label htmlFor={id}>{label}</label>
       <div>
         <Input
+          id={id}
           type="number"
           min={min}
           max={max}
@@ -798,14 +803,22 @@ function hasEnabledSearxngInstance(draft: StoredConfig): boolean {
     && (entry as { url: string }).url.trim().length > 0)
 }
 
-function validateDraft(draft: StoredConfig): AdapterIssue[] {
+function validateDraft(draft: StoredConfig, adapters: AdapterListResponse, t: Translate): AdapterIssue[] {
   const issues: AdapterIssue[] = []
   const searxng = validateSearxngConfig(draft.search.adapters.searxng ?? {})
   if (draft.search.adapter === 'searxng') issues.push(...searxng.issues)
+  const searchManifest = findManifest(adapters.search, draft.search.adapter)
+  if (searchManifest !== undefined && searchManifest.id !== 'searxng') {
+    issues.push(...validateManifestConfig(searchManifest, adapterConfig(draft.search, draft.search.adapter)).issues)
+  }
   const readable = validateReadableHttpConfig(draft.fetch.adapters['readable-http'] ?? {})
   if (draft.fetch.adapter === 'readable-http') issues.push(...readable.issues)
-  if (draft.research.defaultFetchTop > draft.research.maxFetch) issues.push({ path: 'research.defaultFetchTop', message: '默认抓取条数不能大于最大抓取条数' })
-  if (draft.research.maxTotalChars < draft.research.maxCharsPerPage) issues.push({ path: 'research.maxTotalChars', message: '总字符上限不能小于单页上限' })
+  const fetchManifest = findManifest(adapters.fetch, draft.fetch.adapter)
+  if (fetchManifest !== undefined && fetchManifest.id !== 'readable-http') {
+    issues.push(...validateManifestConfig(fetchManifest, adapterConfig(draft.fetch, draft.fetch.adapter)).issues)
+  }
+  if (draft.research.defaultFetchTop > draft.research.maxFetch) issues.push({ path: 'research.defaultFetchTop', message: t('researchFetchTopTooLarge') })
+  if (draft.research.maxTotalChars < draft.research.maxCharsPerPage) issues.push({ path: 'research.maxTotalChars', message: t('researchTotalCharsTooSmall') })
   return issues
 }
 

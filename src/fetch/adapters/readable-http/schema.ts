@@ -53,12 +53,12 @@ export function validateReadableHttpConfig(raw: unknown): AdapterValidation {
   const minArticleChars = readNumber(value.minArticleChars, 200)
   const maxArticleChars = readNumber(value.maxArticleChars, 200_000)
   const maxBodyChars = readNumber(value.maxBodyChars, 2_000_000)
-  if (maxArticleChars < minArticleChars) issues.push(issue('maxArticleChars', '正文上限不能小于正文下限'))
-  if (maxBodyChars < minArticleChars) issues.push(issue('maxBodyChars', '解码上限不能小于正文下限'))
-  if (readNumber(value.timeoutMs, 20_000) < 1_000) issues.push(issue('timeoutMs', '超时不能小于 1000ms'))
-  if (readNumber(value.maxResponseBytes, 5_000_000) < 1_024) issues.push(issue('maxResponseBytes', '响应上限不能小于 1024 字节'))
+  if (maxArticleChars < minArticleChars) issues.push(issue('maxArticleChars', '正文上限不能小于正文下限', 'readable.maxArticleBelowMin'))
+  if (maxBodyChars < minArticleChars) issues.push(issue('maxBodyChars', '解码上限不能小于正文下限', 'readable.maxBodyBelowMin'))
+  if (readNumber(value.timeoutMs, 20_000) < 1_000) issues.push(issue('timeoutMs', '超时不能小于 1000ms', 'readable.timeoutTooSmall'))
+  if (readNumber(value.maxResponseBytes, 5_000_000) < 1_024) issues.push(issue('maxResponseBytes', '响应上限不能小于 1024 字节', 'readable.maxResponseTooSmall'))
   const userAgent = readString(value.userAgent, DEFAULT_READABLE_HTTP_CONFIG.userAgent).trim()
-  if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行'))
+  if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行', 'userAgent.invalid'))
   return result(issues)
 }
 

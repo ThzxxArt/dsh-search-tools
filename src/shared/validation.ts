@@ -38,8 +38,18 @@ export function normalizeTags(values: readonly string[]): string[] {
   return result
 }
 
-export function issue(path: string, message: string): AdapterIssue {
-  return { path, message }
+export function issue(
+  path: string,
+  message: string,
+  code?: string,
+  params?: Record<string, string | number>,
+): AdapterIssue {
+  return {
+    path,
+    message,
+    ...(code === undefined ? {} : { code }),
+    ...(params === undefined ? {} : { params }),
+  }
 }
 
 export function result(issues: readonly AdapterIssue[]): AdapterValidation {
@@ -57,44 +67,49 @@ export function validateManifestConfig(manifest: AdapterManifest, config: unknow
 }
 
 function validateField(field: AdapterField, value: unknown, issues: AdapterIssue[]): void {
+  const label = plainText(field.label)
   if (value === undefined || value === null || value === '') {
-    if (field.required) issues.push(issue(field.key, `${field.label}不能为空`))
+    if (field.required) issues.push(issue(field.key, `${label}不能为空`, 'field.required', { label }))
     return
   }
   switch (field.kind) {
     case 'text':
     case 'url':
     case 'password':
-      if (typeof value !== 'string') issues.push(issue(field.key, `${field.label}必须是字符串`))
-      else if (field.kind === 'url' && !isHttpUrl(value)) issues.push(issue(field.key, `${field.label}必须是 http(s) URL`))
+      if (typeof value !== 'string') issues.push(issue(field.key, `${label}必须是字符串`, 'field.string', { label }))
+      else if (field.kind === 'url' && !isHttpUrl(value)) issues.push(issue(field.key, `${label}必须是 http(s) URL`, 'field.httpUrl', { label }))
       break
     case 'number':
       if (typeof value !== 'number' || !Number.isFinite(value)) {
-        issues.push(issue(field.key, `${field.label}必须是数字`))
+        issues.push(issue(field.key, `${label}必须是数字`, 'field.number', { label }))
         return
       }
-      if (field.min !== undefined && value < field.min) issues.push(issue(field.key, `${field.label}不能小于 ${field.min}`))
-      if (field.max !== undefined && value > field.max) issues.push(issue(field.key, `${field.label}不能大于 ${field.max}`))
+      if (field.min !== undefined && value < field.min) issues.push(issue(field.key, `${label}不能小于 ${field.min}`, 'field.min', { label, min: field.min }))
+      if (field.max !== undefined && value > field.max) issues.push(issue(field.key, `${label}不能大于 ${field.max}`, 'field.max', { label, max: field.max }))
       break
     case 'boolean':
-      if (typeof value !== 'boolean') issues.push(issue(field.key, `${field.label}必须是布尔值`))
+      if (typeof value !== 'boolean') issues.push(issue(field.key, `${label}必须是布尔值`, 'field.boolean', { label }))
       break
     case 'select':
       if (typeof value !== 'string' || !field.options.some(option => option.value === value)) {
-        issues.push(issue(field.key, `${field.label}不是允许的选项`))
+        issues.push(issue(field.key, `${label}不是允许的选项`, 'field.option', { label }))
       }
       break
     case 'tags':
       if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
-        issues.push(issue(field.key, `${field.label}必须是字符串数组`))
+        issues.push(issue(field.key, `${label}必须是字符串数组`, 'field.stringArray', { label }))
       }
       break
     case 'instances':
       if (!Array.isArray(value) || value.some(entry => !isRecord(entry))) {
-        issues.push(issue(field.key, `${field.label}必须是实例数组`))
+        issues.push(issue(field.key, `${label}必须是实例数组`, 'field.instances', { label }))
       }
       break
   }
+}
+
+function plainText(value: AdapterField['label']): string {
+  return typeof value === 'string' ? value : value.en
 }
 
 /** Return a plain JSON object from an unknown adapter config. */

@@ -22,7 +22,7 @@ export function TakeoverWarning({ subject, form, web, t }: TakeoverWarningProps)
     () => form.getSnapshot(),
     () => form.getSnapshot(),
   )
-  if (subject.kind !== 'bundle' || subject.pkg.name !== 'dsh-search-tools') return null
+  if (subject.kind !== 'bundle' || !isThisPackage(subject.pkg.name)) return null
   const search = webSnapshot.value?.searchProvider === SEARCH_PROVIDER
   const fetch = webSnapshot.value?.fetchProvider === FETCH_PROVIDER
   if (!search && !fetch) return null
@@ -52,4 +52,8 @@ export function TakeoverWarning({ subject, form, web, t }: TakeoverWarningProps)
       </div>
     </section>
   )
+}
+
+function isThisPackage(name: string): boolean {
+  return name === 'dsh-search-tools' || name.endsWith('/dsh-search-tools')
 }

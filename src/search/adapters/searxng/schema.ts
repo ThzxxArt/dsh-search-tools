@@ -120,41 +120,46 @@ export function validateSearxngConfig(raw: unknown): AdapterValidation {
   const seen = new Set<string>()
   instances.forEach((entry, index) => {
     if (!isRecord(entry)) {
-      issues.push(issue(`instances[${index}]`, '实例必须是对象'))
+      issues.push(issue(`instances[${index}]`, '实例必须是对象', 'instances.invalid'))
       return
     }
     const url = readString(entry.url, '').trim()
     const enabled = readBoolean(entry.enabled, true)
     if (url.length === 0) {
-      if (enabled) issues.push(issue(`instances[${index}].url`, '启用的实例必须有 URL'))
+      if (enabled) issues.push(issue(`instances[${index}].url`, '启用的实例必须有 URL', 'instances.urlRequired'))
       return
     }
     try {
       const normalized = normalizeInstanceUrl(url)
-      if (seen.has(normalized)) issues.push(issue(`instances[${index}].url`, '实例 URL 重复'))
+      if (seen.has(normalized)) issues.push(issue(`instances[${index}].url`, '实例 URL 重复', 'instances.urlDuplicate'))
       seen.add(normalized)
     } catch (error) {
-      issues.push(issue(`instances[${index}].url`, error instanceof Error ? error.message : '实例 URL 无效'))
+      issues.push(issue(
+        `instances[${index}].url`,
+        error instanceof Error ? error.message : '实例 URL 无效',
+        'instances.urlInvalid',
+        { reason: error instanceof Error ? error.message : 'invalid URL' },
+      ))
     }
   })
   const auth = isRecord(value.auth) ? readString(value.auth.type, 'none') : 'none'
-  if (!AUTH_TYPES.has(auth)) issues.push(issue('auth.type', '认证类型无效'))
+  if (!AUTH_TYPES.has(auth)) issues.push(issue('auth.type', '认证类型无效', 'auth.typeInvalid'))
   const requestTimeoutMs = readNumber(value.requestTimeoutMs, 12_000)
   const deadlineMs = readNumber(value.deadlineMs, 45_000)
-  if (deadlineMs < requestTimeoutMs) issues.push(issue('deadlineMs', '总预算不能小于单次请求超时'))
+  if (deadlineMs < requestTimeoutMs) issues.push(issue('deadlineMs', '总预算不能小于单次请求超时', 'deadline.beforeRequest'))
   const proxy = readString(value.proxy, '').trim()
   if (proxy.length > 0) {
     try {
       const url = new URL(proxy)
       if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username.length > 0 || url.password.length > 0) {
-        issues.push(issue('proxy', '代理必须是 http(s) URL，且不能包含凭据'))
+        issues.push(issue('proxy', '代理必须是 http(s) URL，且不能包含凭据', 'proxy.credentials'))
       }
     } catch {
-      issues.push(issue('proxy', '代理必须是 http(s) URL'))
+      issues.push(issue('proxy', '代理必须是 http(s) URL', 'proxy.invalid'))
     }
   }
   const userAgent = readString(value.userAgent, DEFAULT_SEARXNG_CONFIG.userAgent).trim()
-  if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行'))
+  if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行', 'userAgent.invalid'))
   return result(issues)
 }
 

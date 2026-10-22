@@ -147,6 +147,9 @@ export interface AdapterManifest {
 export interface AdapterIssue {
   path: string
   message: string
+  /** Stable message key for UI localization; `message` stays a readable fallback. */
+  code?: string
+  params?: Record<string, string | number>
 }
 
 export interface AdapterValidation {

@@ -38,9 +38,23 @@ Web URL: `http://127.0.0.1:3091` (separate from the running GUI at `dsh.metona.c
 8. **Proxy stub.** `search.proxy` now creates a lazy `undici.ProxyAgent` instead of being ignored.
 9. **UA validation default.** Missing `userAgent` now validates against the adapter default rather than an empty string.
 
+## Component tests (2026-10-22)
+
+`pnpm test` now runs 37 tests across 9 files. The browser-facing additions:
+
+| File | Coverage |
+|---|---|
+| `tests/research-card.spec.tsx` | settled card from presentation meta, fallback before result / missing meta, malformed source filtering, non-http link rejection |
+| `tests/settings-page.spec.tsx` | render + save section ops, secret write through credentials (not the form), takeover requires a passing search test, localized invalid-instance message, research budget persistence |
+| `tests/takeover-warning.spec.tsx` | scoped package recognition and previous-provider restore from the Plugins page |
+
+`jsdom` is a **devDependency** only; the production Readability path still uses
+linkedom. Component tests mock the DSH primitives to keep the page tests focused
+on state transitions rather than CSS/shiki initialization.
+
 ## Still to verify / implement
 
-- `web_research` tool card with a real `tool/result` replay.
-- Full settings-page component tests (React Testing Library); currently manual browser checks + host unit tests.
-- Validation messages from adapter schemas are still Chinese; they need code-based localization for the English UI.
+- `web_research` card with a **live** DSH `tool/result` replay. The component-level replay now covers the presentation-meta shape and malformed input.
+- Full form UX polish (preview/diagnostics are still basic).
 - `web_search` through the actual model/tool call after takeover (the stable dispatcher is unit-tested and the host selection is persisted; the full model turn was not exercised).
+- Visual pass for the `plugins.bundle.activation` hint and the zero-instance empty state.

@@ -16,6 +16,16 @@
 - YAML-backed config through DSH settings; credentials-backed secrets.
 - Project skeleton: TypeScript, tsdown host/client builds, Vitest, CI/release
   workflows, bilingual README, MIT license.
+- Component tests for the settings page and `web_research` card
+  (`tests/settings-page.spec.tsx`, `tests/research-card.spec.tsx`), with jsdom
+  as a dev-only test environment.
+- Code-based adapter issue messages, localized for `zh` / `en`; the settings
+  page falls back to the English message when no code is present.
+- Generic manifest validation for external adapters, so a new adapter's required
+  fields and numeric bounds are checked before saving without importing its code
+  into the browser.
+- The research card only turns `http(s)` source URLs into links and drops
+  malformed presentation-meta entries instead of rendering empty rows.
 
 ### Verified
 
@@ -24,6 +34,8 @@
   cookie and 200 with it; probe/search-preview work against a mock SearXNG;
   search/fetch takeover and restore work; secret write stays out of YAML.
   Details: `docs/m0-verification.md`.
+- 37 tests across 9 files, including settings-page, research-card, and
+  takeover-warning component tests (`pnpm test`).
 
 ### Fixed during M0
 
@@ -44,3 +56,9 @@
 - Add per-instance probe buttons and an empty-state guide.
 - Add localized adapter manifests so external adapters can ship `en` / `zh`
   labels without changing the page.
+- Drop malformed `web_research` presentation-meta entries instead of rendering
+  empty list items or duplicate React keys.
+- Give research number fields real label/id associations, so they are reachable
+  by accessible name as well as by mouse.
+- Recognize a scoped package name (`@scope/dsh-search-tools`) in the Plugins-page
+  takeover warning instead of requiring the unscoped name verbatim.
