@@ -6,8 +6,8 @@ npm: https://www.npmjs.com/package/dsh-search-tools
 DSH target: `0.2.1-rc.2` (`>=0.2.1-rc.2 <0.3.0`)  
 Node target: `^22.19.0 || >=24.0.0`
 
-Status: **UI/UX release.** Search, fetch, research, takeover, and credential
-behavior are unchanged.
+Status: **Published 2026-10-23.** UI/UX release. Search, fetch, research,
+takeover, and credential behavior are unchanged.
 
 ## What changed
 

@@ -203,10 +203,20 @@ from the local tarball). The Search and Research pages remain long at 416px
 because all required fields and instance/credential editors stay visible; the
 earlier 1,000px Search-height target was not met without hiding controls.
 
+## Publication (2026-10-23)
+
+- `v0.1.2` tag points at `fa9e2e4`; CI on `main` and the Release workflow both
+  completed successfully.
+- npm `dsh-search-tools@0.1.2` is published and is the `latest` dist-tag.
+- The GitHub Release `v0.1.2` has `dsh-search-tools-0.1.2.tgz` attached.
+- npm registry and GitHub Release tarballs both hash to
+  `8dbe193776a0e7748fb513a3511a4fca33cfdc56db50729c25ac426cf45871a8`.
+- The published package was installed into `m0web` from
+  `registry.npmjs.org`; the settings page reported `0.1.2`, all five tabs
+  rendered, and there were no browser errors.
+
 ## Remaining
 
-- Publish `0.1.2` after review: push the tag, let the release workflow publish,
-  and install from the public registry in a fresh profile.
 - Additional adapter packages beyond SearXNG / Readability HTTP.
 - Autonomous tool-selection evaluation; the real-model run named the tool under
   test.
