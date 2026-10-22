@@ -1330,6 +1330,7 @@ dsh-search-tools/
 - 客户端类型包只做 devDependency，运行时由 DSH 平台模块表提供。
 - 外部 adapter 包用 `peerDependencies: { "dsh-search-tools": "^0.1.0" }`，并注入 `searchTools`。
 - `engines.dsh` 限定 `<0.3.0`；DSH preview API 变化时先跑适配层测试。
+- **实现骨架的版本口径**：npm `latest` 仍是旧的 `0.0.1-rc.1`，真正的 0.2.1 包挂在 `next`（`0.2.1-rc.2`）。实际 `package.json` 用 `0.2.1-rc.2`，并以它为准；`@deepseek-ai/dsh-invariants` 没有 0.2.1-rc.2，使用 `0.2.0-rc.2`。
 
 ### 9.3 构建
 
