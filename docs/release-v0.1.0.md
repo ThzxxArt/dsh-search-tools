@@ -71,8 +71,9 @@ git push origin main --follow-tags
 Pushing the tag runs `.github/workflows/release.yml`, which repeats `pnpm release`,
 publishes to npm with provenance, and creates the GitHub release. The workflow
 checks the exact package version first and skips the npm step when that version
-already exists, so a manual publish followed by a tag push still produces the
-GitHub release without a duplicate-version failure. If publishing manually, run
+already exists. If npm accepts a manual publish before its read model exposes the
+new version, the workflow rechecks for up to a minute and treats the accepted
+version as success instead of failing on a duplicate. If publishing manually, run
 `npm publish --access public` only after the same checks pass. Do not publish from
 a dirty worktree.
 
