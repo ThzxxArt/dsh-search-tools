@@ -201,6 +201,7 @@ export function InstanceEditor({ value, disabled, invalid, t, onTest, testingUrl
             />
           </div>
           <div className="dshst-actions">
+            <span className="dshst-hint">{t('enabled')}</span>
             <Switch
               checked={instance.enabled}
               label={t('enableInstanceN', { n: index + 1 })}

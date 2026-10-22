@@ -55,6 +55,16 @@
   with a real border/background outside the settings theme scope.
 - Adapter picker shows the selected manifest's description/capabilities and keeps
   a visible “not installed” option for orphaned config.
+- Adapter picker is now a radio-card group with per-adapter
+  configured/needs-setup/needs-attention status, a “not installed” orphan card,
+  and a Refresh adapters action.
+- Research tab previews the model-facing `web_research` description and parameter
+  bounds from the current draft. The contract lives in `src/research/prompt.ts`
+  and is shared with the registered tool, so the preview cannot drift from the
+  tool description.
+- Instance rows stack the URL/label fields and their actions in the 800px
+  settings pane, and show a visible “Enabled” label next to the switch. This
+  fixes a 4px-wide URL input caused by the action row consuming the grid.
 - SearXNG's `unresponsive_engines` are surfaced as `Search notes` in the settings
   preview, so an empty result caused by suspended engines is distinguishable from
   a genuinely empty search.
@@ -70,7 +80,7 @@
   GUI: the tool executed against a mock SearXNG, fetched two public pages, wrote
   a `tool/result` with presentation meta, and rendered the card in the
   conversation (`2 sources`, `2 fetched`, source links, fetched details).
-- 53 tests across 12 files, including settings-page, activation-hint,
+- 61 tests across 12 files, including settings-page, activation-hint,
   research-card, takeover-warning, diagnostics text, and `web_research` pipeline
   tests (`pnpm test`).
 - A live Web GUI pass on the new form UX: inline search test rendered two
@@ -79,6 +89,12 @@
   diagnostics`/`diagnostics/clear` worked, and the activation hint rendered as a
   bordered card after disabling/re-enabling the bundle. Dark theme and a 700px
   narrow viewport also rendered correctly; tabs wrap instead of clipping.
+- A live Web GUI pass on the product-polish surface: the picker rendered as a
+  one-card radiogroup with `Configured`, `Refresh adapters` reported success, the
+  research prompt rendered at 530×272 with current bounds, and at 700px the prompt
+  reflowed to 382px without horizontal overflow. The same pass caught and fixed a
+  4px-wide instance URL input caused by the action row consuming the instance
+  grid; URL/label now render full width with actions below.
 - A real authenticated SearXNG instance was probed and searched through the
   settings page: JSON API and Basic auth worked, 10 real sources rendered, and
   credentials stayed out of YAML (`Source: env`). With the instance's default

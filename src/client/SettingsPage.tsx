@@ -7,7 +7,7 @@ import { Button, Input, StateDot, Switch, Tag } from '@deepseek-ai/dsh-client-ui
 import type {
   AdapterIssue, AdapterListResponse, AdapterManifest, JsonObject, JsonValue, LocalizedText, StatusResponse,
 } from '../core/types.ts'
-import { DEFAULT_STORED_CONFIG, type ActivationConfig, type StoredConfig } from '../shared/defaults.ts'
+import { DEFAULT_STORED_CONFIG, type ActivationConfig, type ResearchConfig, type StoredConfig } from '../shared/defaults.ts'
 import { diffSections, type ConfigSection } from '../shared/diff.ts'
 import { getPath, setPath } from '../shared/path.ts'
 import { isRecord, validateManifestConfig } from '../shared/validation.ts'
@@ -18,6 +18,7 @@ import {
 } from './api.ts'
 import { formatDiagnostics } from './diagnostic-text.ts'
 import { issueText } from './issue-text.ts'
+import { buildResearchPromptPreview } from '../research/prompt.ts'
 import { Field, InstanceEditor, type InstanceTestResult, type InstanceValue, type Translate } from './components/Field.tsx'
 
 export interface WebSelection {
@@ -113,6 +114,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   const [secretBusy, setSecretBusy] = useState<string>()
   const [instanceTesting, setInstanceTesting] = useState<string>()
   const [instanceResults, setInstanceResults] = useState<Record<string, InstanceTestResult>>({})
+  const [refreshingAdapters, setRefreshingAdapters] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -148,11 +150,12 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   const fetchIssues = validateFetchDraft(draft, adapters)
   const researchIssues = validateResearchDraft(draft, t)
   const activeSearchManifest = findManifest(adapters.search, draft.search.adapter)
+  const activeInstancesField = activeSearchManifest?.fields.find(field => field.kind === 'instances')
   // Only adapters that actually model instances need the non-empty rule. The
   // takeover test remains the authority for adapters configured some other way.
   if (currentSearch === SEARCH_PROVIDER
-    && activeSearchManifest?.fields.some(field => field.kind === 'instances') === true
-    && !hasEnabledInstanceConfig(adapterConfig(draft.search, draft.search.adapter))) {
+    && activeInstancesField !== undefined
+    && !hasEnabledInstances(getPath(adapterConfig(draft.search, draft.search.adapter), activeInstancesField.key))) {
     searchIssues.push({ path: 'instances', message: t('instancesRequiredWhenActive') })
   }
   const errors = [...searchIssues, ...fetchIssues, ...researchIssues]
@@ -168,6 +171,18 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
       setStatus(await fetchStatus())
     } catch {
       // Keep the previous status; actions already surface their own errors.
+    }
+  }
+
+  const refreshAdapters = async (): Promise<void> => {
+    setRefreshingAdapters(true)
+    try {
+      setAdapters(await fetchAdapters())
+      setMessage(t('adaptersRefreshed'))
+    } catch (error) {
+      setMessage(`${t('adaptersRefreshFailed')}: ${errorText(error)}`)
+    } finally {
+      setRefreshingAdapters(false)
     }
   }
 
@@ -512,8 +527,11 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
             <AdapterPicker
               manifests={adapters.search}
               value={draft.search.adapter}
+              configs={draft.search.adapters}
+              refreshing={refreshingAdapters}
               text={text}
               t={t}
+              onRefresh={() => { void refreshAdapters() }}
               onChange={(id) => edit({
                 ...draft,
                 search: {
@@ -577,8 +595,11 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
             <AdapterPicker
               manifests={adapters.fetch}
               value={draft.fetch.adapter}
+              configs={draft.fetch.adapters}
+              refreshing={refreshingAdapters}
               text={text}
               t={t}
+              onRefresh={() => { void refreshAdapters() }}
               onChange={(id) => edit({
                 ...draft,
                 fetch: {
@@ -645,6 +666,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
             <NumberRow label={t('researchConcurrency')} value={draft.research.concurrency} min={1} max={8} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, concurrency: value } })} />
             <NumberRow label={t('researchTimeout')} value={draft.research.timeoutMs} min={5000} max={600000} step={1000} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, timeoutMs: value } })} />
           </section>
+          <ResearchPrompt research={draft.research} t={t} />
         </div>
       ) : null}
 
@@ -802,31 +824,124 @@ function PreviewPanel({ preview, t }: { preview: PreviewState | undefined; t: Tr
   )
 }
 
-function AdapterPicker({ manifests, value, text, t, onChange }: {
+function AdapterPicker({ manifests, value, configs, refreshing, text, t, onRefresh, onChange }: {
   manifests: readonly AdapterManifest[]
   value: string
+  configs: Record<string, JsonObject>
+  refreshing: boolean
   text: (value: LocalizedText) => string
   t: Translate
+  onRefresh: () => void
   onChange: (id: string) => void
 }): React.ReactElement {
+  const labelId = useId()
+  const groupName = useId()
   const selected = manifests.find(manifest => manifest.id === value)
   const missing = value.length > 0 && selected === undefined
   return (
-    <div className="dshst-row">
-      <label htmlFor="dshst-adapter">{t('adapter')}</label>
-      <div>
-        <select id="dshst-adapter" value={value} onChange={event => { onChange(event.target.value) }}>
-          {missing ? <option value={value}>{t('adapterNotInstalled', { id: value })}</option> : null}
-          {manifests.map(manifest => <option key={manifest.id} value={manifest.id}>{text(manifest.label)}</option>)}
-        </select>
-        {selected === undefined ? null : <p className="dshst-hint">{text(selected.description)}</p>}
-        {selected?.capabilities === undefined || selected.capabilities.length === 0 ? null : (
-          <div className="dshst-tags">{selected.capabilities.map(capability => <Tag key={capability}>{capability}</Tag>)}</div>
-        )}
-        <p className="dshst-hint">{t('adapterHint')}</p>
+    <div className="dshst-picker">
+      <div className="dshst-picker-head">
+        <div>
+          <div className="dshst-picker-label" id={labelId}>{t('adapter')}</div>
+          <p className="dshst-hint">{t('adapterHint')}</p>
+        </div>
+        <Button size="sm" variant="outline" disabled={refreshing} onClick={onRefresh}>
+          {refreshing ? t('refreshingAdapters') : t('refreshAdapters')}
+        </Button>
       </div>
+      <div className="dshst-picker-grid" role="radiogroup" aria-labelledby={labelId}>
+        {missing ? (
+          <label className="dshst-adapter-card" data-selected="true">
+            <input
+              type="radio"
+              name={groupName}
+              value={value}
+              checked
+              onChange={() => { onChange(value) }}
+            />
+            <span className="dshst-adapter-body">
+              <span className="dshst-adapter-head">
+                <span className="dshst-adapter-name">{t('adapterNotInstalled', { id: value })}</span>
+                <Tag tone="warning">{t('adapterNotInstalledTag')}</Tag>
+              </span>
+              <span className="dshst-adapter-desc">{t('adapterMissingHint')}</span>
+            </span>
+          </label>
+        ) : null}
+        {manifests.map((manifest) => {
+          const state = adapterState(manifest, configs[manifest.id])
+          const status = state === 'ready'
+            ? t('adapterConfigured')
+            : state === 'attention' ? t('adapterNeedsAttention') : t('adapterNeedsSetup')
+          return (
+            <label key={manifest.id} className="dshst-adapter-card" data-selected={value === manifest.id}>
+              <input
+                type="radio"
+                name={groupName}
+                value={manifest.id}
+                checked={value === manifest.id}
+                onChange={() => { onChange(manifest.id) }}
+              />
+              <span className="dshst-adapter-body">
+                <span className="dshst-adapter-head">
+                  <span className="dshst-adapter-name">{text(manifest.label)}</span>
+                  <Tag tone={state === 'ready' ? 'success' : state === 'attention' ? 'warning' : 'outline'}>{status}</Tag>
+                </span>
+                <span className="dshst-adapter-desc">{text(manifest.description)}</span>
+                {manifest.capabilities === undefined || manifest.capabilities.length === 0 ? null : (
+                  <span className="dshst-tags">{manifest.capabilities.map(capability => <Tag key={capability}>{capability}</Tag>)}</span>
+                )}
+              </span>
+            </label>
+          )
+        })}
+      </div>
+      {manifests.length === 0 && !missing ? <p className="dshst-hint">{t('noAdapters')}</p> : null}
     </div>
   )
+}
+
+function ResearchPrompt({ research, t }: { research: ResearchConfig; t: Translate }): React.ReactElement {
+  const preview = buildResearchPromptPreview(research)
+  return (
+    <section className="dshst-card">
+      <div>
+        <div className="dshst-card-title">{t('researchPromptTitle')}</div>
+        <p className="dshst-card-desc">{t('researchPromptHint')}</p>
+      </div>
+      {preview.enabled ? null : <p className="dshst-notice" role="status">{t('researchPromptDisabled')}</p>}
+      <pre className="dshst-pre dshst-prompt" data-testid="research-prompt">{preview.text}</pre>
+      <p className="dshst-hint">{t('researchPromptEnglish')}</p>
+    </section>
+  )
+}
+
+function adapterState(manifest: AdapterManifest, config: JsonObject | undefined): 'ready' | 'attention' | 'setup' {
+  if (config === undefined) return 'setup'
+  const instances = manifest.fields.find(field => field.kind === 'instances')
+  if (instances !== undefined) {
+    if (!hasEnabledInstances(getPath(config, instances.key))) return 'setup'
+  } else if (!hasMeaningfulConfig(manifest, config)) {
+    return 'setup'
+  }
+  return validateAdapterConfig(manifest, config).length > 0 ? 'attention' : 'ready'
+}
+
+function hasMeaningfulConfig(manifest: AdapterManifest, config: JsonObject): boolean {
+  return manifest.fields
+    .filter(field => field.kind !== 'boolean' && field.kind !== 'instances')
+    .some((field) => {
+      const value = getPath(config, field.key)
+      if (typeof value === 'string') return value.trim().length > 0
+      if (Array.isArray(value)) return value.length > 0
+      return value !== undefined && value !== null
+    })
+}
+
+function validateAdapterConfig(manifest: AdapterManifest, config: JsonObject): readonly AdapterIssue[] {
+  if (manifest.kind === 'search' && manifest.id === 'searxng') return validateSearxngConfig(config).issues
+  if (manifest.kind === 'fetch' && manifest.id === 'readable-http') return validateReadableHttpConfig(config).issues
+  return validateManifestConfig(manifest, config).issues
 }
 
 function AdapterForm({ manifest, config, errors, disabled, text, t, onTestInstance, testingInstanceUrl, instanceResults, onChange }: {
@@ -1013,10 +1128,9 @@ function findManifest(list: readonly AdapterManifest[], id: string): AdapterMani
   return list.find(manifest => manifest.id === id)
 }
 
-function hasEnabledInstanceConfig(raw: JsonObject): boolean {
-  const instances = raw.instances
-  if (!Array.isArray(instances)) return false
-  return instances.some(entry => isRecord(entry)
+function hasEnabledInstances(value: unknown): boolean {
+  if (!Array.isArray(value)) return false
+  return value.some(entry => isRecord(entry)
     && entry.enabled !== false
     && typeof entry.url === 'string'
     && entry.url.trim().length > 0)
@@ -1036,29 +1150,15 @@ function errorText(error: unknown): string {
 }
 
 function validateSearchDraft(draft: StoredConfig, adapters: AdapterListResponse): AdapterIssue[] {
-  const issues: AdapterIssue[] = []
-  if (draft.search.adapter === 'searxng') {
-    issues.push(...validateSearxngConfig(draft.search.adapters.searxng ?? {}).issues)
-    return issues
-  }
   const manifest = findManifest(adapters.search, draft.search.adapter)
-  if (manifest !== undefined) {
-    issues.push(...validateManifestConfig(manifest, adapterConfig(draft.search, draft.search.adapter)).issues)
-  }
-  return issues
+  if (manifest === undefined) return []
+  return [...validateAdapterConfig(manifest, adapterConfig(draft.search, draft.search.adapter))]
 }
 
 function validateFetchDraft(draft: StoredConfig, adapters: AdapterListResponse): AdapterIssue[] {
-  const issues: AdapterIssue[] = []
-  if (draft.fetch.adapter === 'readable-http') {
-    issues.push(...validateReadableHttpConfig(draft.fetch.adapters['readable-http'] ?? {}).issues)
-    return issues
-  }
   const manifest = findManifest(adapters.fetch, draft.fetch.adapter)
-  if (manifest !== undefined) {
-    issues.push(...validateManifestConfig(manifest, adapterConfig(draft.fetch, draft.fetch.adapter)).issues)
-  }
-  return issues
+  if (manifest === undefined) return []
+  return [...validateAdapterConfig(manifest, adapterConfig(draft.fetch, draft.fetch.adapter))]
 }
 
 function validateResearchDraft(draft: StoredConfig, t: Translate): AdapterIssue[] {

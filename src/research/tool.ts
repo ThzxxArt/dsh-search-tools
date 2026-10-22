@@ -5,21 +5,17 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config } from '../config.ts'
 import type { JsonValue } from '../core/types.ts'
 import { runResearch, researchMeta, type ResearchArgs, type ResearchValue } from './pipeline.ts'
+import { RESEARCH_TOOL_DESCRIPTION, RESEARCH_TOOL_NAME, RESEARCH_TOOL_PARAMETERS } from './prompt.ts'
 import { renderResearch } from './render.ts'
 
-export const RESEARCH_TOOL_NAME = 'web_research'
+export { RESEARCH_TOOL_NAME } from './prompt.ts'
 
 /** Register the tool. The caller owns the returned disposer. */
 export function applyResearchTool(ctx: Context, config: Config): () => void {
   return ctx.tools.register(defineTool({
     name: RESEARCH_TOOL_NAME,
-    description: 'Search the web, fetch the top results, and return readable page content in one call. Use this when you need page content, not only source links.',
-    parameters: {
-      query: { type: 'string', required: true, description: 'Search query.' },
-      max_results: { type: 'number', description: 'Number of sources to return (bounded by deployment config).' },
-      fetch_top: { type: 'number', description: 'Number of top results to fetch; 0 returns sources only.' },
-      max_chars: { type: 'number', description: 'Per-page character budget (bounded by deployment config).' },
-    },
+    description: RESEARCH_TOOL_DESCRIPTION,
+    parameters: RESEARCH_TOOL_PARAMETERS,
     output: {
       schema: {
         type: 'object',

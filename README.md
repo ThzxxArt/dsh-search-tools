@@ -11,8 +11,10 @@ Adapter-first web search and readable page fetching for [DeepSeek Harness](https
 > model (via an OpenAI-compatible gateway) called `web_research`, built-in
 > `web_search`, and built-in `web_fetch`; search used a real SearXNG instance and
 > the research card rendered. The provider key stayed in the process environment.
-> Remaining work is product polish such as the provider picker and research-prompt
-> preview. See `docs/m0-verification.md`.
+> The provider picker is now card-based with configured/needs-setup status and a
+> refresh action; Research previews the model-facing `web_research` prompt with
+> bounds from the current draft. Remaining work is release closeout and additional
+> adapters. See `docs/m0-verification.md`.
 
 ## What it does
 
@@ -83,7 +85,7 @@ DSH checkout's own docs for the exact `--patch` command.
 src/core/                 adapter types, registry, stable dispatchers
 src/search/adapters/      search adapters (searxng first)
 src/fetch/adapters/       fetch adapters (readable-http first)
-src/research/             web_research pipeline, render, tool
+src/research/             web_research pipeline, prompt, render, tool
 src/host/                 authenticated settings routes
 src/client/               Settings → Search Tools + tool card
 src/shared/               config, validation, diff, URL helpers

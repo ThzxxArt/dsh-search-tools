@@ -2,7 +2,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供 adapter-first 的网页搜索与正文抓取。
 
-> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。设置页提供搜索/抓取内联测试、结构化结果、诊断复制/清空、键盘保存；激活提示和零实例空状态已做视觉验收。真实模型已通过 OpenAI 兼容网关分别调用 `web_research`、内置 `web_search` 和内置 `web_fetch`，搜索走真实 SearXNG，卡片正常渲染；密钥只放在进程环境。剩余是 provider picker、研究提示词预览等产品打磨。详见 `docs/m0-verification.md`。
+> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。设置页提供搜索/抓取内联测试、结构化结果、诊断复制/清空、键盘保存；激活提示和零实例空状态已做视觉验收。真实模型已通过 OpenAI 兼容网关分别调用 `web_research`、内置 `web_search` 和内置 `web_fetch`，搜索走真实 SearXNG，卡片正常渲染；密钥只放在进程环境。provider picker 已改为卡片式，带配置状态与刷新；研究页会预览模型看到的 `web_research` 工具提示和当前草稿边界。剩余是发布收尾和更多 adapter。详见 `docs/m0-verification.md`。
 
 ## 它做什么
 
@@ -62,7 +62,7 @@ lib/types/**        类型声明
 src/core/                 adapter 类型、注册表、稳定 dispatcher
 src/search/adapters/      搜索 adapter（第一个是 searxng）
 src/fetch/adapters/       抓取 adapter（第一个是 readable-http）
-src/research/             web_research pipeline、render、tool
+src/research/             web_research pipeline、prompt、render、tool
 src/host/                 受认证的设置路由
 src/client/               设置 → 搜索工具 + 工具卡片
 src/shared/               config、校验、diff、URL 辅助

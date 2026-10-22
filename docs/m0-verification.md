@@ -38,15 +38,16 @@ Web URL: `http://127.0.0.1:3091` (separate from the running GUI at `dsh.metona.c
 8. **Proxy stub.** `search.proxy` now creates a lazy `undici.ProxyAgent` instead of being ignored.
 9. **UA validation default.** Missing `userAgent` now validates against the adapter default rather than an empty string.
 10. **Fetched count on failure.** The card counted attempted fetches as successes. It now shows `ok/total fetched` when any page failed and keeps the warning dot.
+11. **Instance editor collapsed in the settings pane.** The action row's auto-width column consumed the instance grid, leaving the URL input 4px wide at the 530px card width. URL/label now stack full width and the actions sit below; a visible “Enabled” label was added beside the switch.
 
 ## Component tests (2026-10-22)
 
-`pnpm test` now runs 53 tests across 12 files. The browser-facing additions:
+`pnpm test` now runs 61 tests across 12 files. The browser-facing additions:
 
 | File | Coverage |
 |---|---|
 | `tests/research-card.spec.tsx` | settled card from presentation meta, fallback before result / missing meta, malformed source filtering, non-http link rejection |
-| `tests/settings-page.spec.tsx` | render + save section ops, secret write through credentials (not the form), takeover requires a passing search test, localized invalid-instance message, research budget persistence |
+| `tests/settings-page.spec.tsx` | render + save section ops, secret write through credentials (not the form), takeover requires a passing search test, localized invalid-instance message, research budget persistence, card picker/orphan/refresh states, research prompt bounds |
 | `tests/takeover-warning.spec.tsx` | scoped package recognition and previous-provider restore from the Plugins page |
 | `tests/research-pipeline.spec.ts` | real HTML extraction into Markdown, per-page failure isolation, clipping/total budget, disabled mode, presentation-meta projection |
 
@@ -141,9 +142,29 @@ argument shape, real provider routing, and the UI end to end — not autonomous
 tool selection under an ambiguous request. The provider key and the SearXNG
 address/credentials are intentionally absent from this repository.
 
+## Product polish (2026-10-22)
+
+The provider picker is now a native radio group of adapter cards rather than a
+`<select>`, and the Research tab previews the model-facing tool contract.
+
+| Check | Evidence |
+|---|---|
+| Picker semantics | one `radiogroup` named “Backend”; the selected SearXNG card contains a native radio; description + capabilities render inside the card |
+| Per-adapter status | the configured SearXNG instance rendered `Configured`; unconfigured and invalid drafts map to `Needs setup` / `Needs attention`; an orphaned adapter keeps a visible `Not installed` card |
+| Refresh | `Refresh adapters` re-fetched `/adapters`; footer showed `Adapters refreshed`; a failed refresh keeps the previous list and shows the error |
+| Research prompt | `web_research` description, `query/max_results/fetch_top/max_chars`, defaults/ranges, and total/concurrency/timeout limits rendered from the current draft |
+| Prompt geometry | 530×272 in the 800px settings pane; 382px wide at a 700px viewport with no horizontal overflow; long text wraps inside the scrollable preview |
+| Instance layout regression | live measurement before the fix: URL input `width: 4`; after the fix: URL and label render full width (280px in the final packaged smoke test) with the action row below |
+| Narrow viewport | at 700px, fields stack, tabs wrap (`Advanced` on a second row), and the prompt remains readable |
+
+The prompt preview is intentionally read-only and uses the draft values, not the
+saved values, so changing a research bound updates the preview immediately. It
+does not yet copy the prompt to the clipboard.
+
 ## Still to implement (not validation gaps)
 
-- Profile-level provider picker as cards rather than a native `<select>`.
-- A research-prompt preview on the settings page.
+- Release closeout: version bump, final README pass, and a decision on the
+  `publint` warning.
+- Additional adapter packages beyond SearXNG / Readability HTTP.
 - `publint` still flags `lib/client.js` as CJS under a `"type": "module"` package;
   this is the DSH lazy-CJS client shape, not a runtime failure.

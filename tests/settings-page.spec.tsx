@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { AdapterListResponse, AdapterManifest, StatusResponse } from '../src/core/types.ts'
@@ -154,6 +154,112 @@ describe('SettingsPage', () => {
     expect(JSON.stringify(form.mutate.mock.calls)).not.toContain('token-123')
   })
 
+  it('renders the adapter picker as a radio group and switches backends', async () => {
+    const fixture: AdapterManifest = {
+      kind: 'search',
+      id: 'fixture',
+      label: 'Fixture',
+      description: 'A fixture adapter without instance rows.',
+      defaults: {},
+      fields: [{ kind: 'text', key: 'endpoint', label: 'Endpoint' }],
+    }
+    vi.mocked(fetchAdapters).mockResolvedValue({
+      search: [searxngManifest, fixture],
+      fetch: [readableHttpManifest],
+    })
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+
+    expect(await screen.findByRole('radiogroup', { name: 'Backend' })).toBeInTheDocument()
+    const searxngCard = screen.getByRole('radio', { name: /SearXNG/ }).closest('label')
+    expect(searxngCard).not.toBeNull()
+    expect(within(searxngCard as HTMLElement).getByText('Needs setup')).toBeInTheDocument()
+    const fixtureRadio = screen.getByRole('radio', { name: /Fixture/ })
+    expect(fixtureRadio).not.toBeChecked()
+    fireEvent.click(fixtureRadio)
+
+    expect(fixtureRadio).toBeChecked()
+    expect(await screen.findByLabelText('Endpoint')).toBeInTheDocument()
+  })
+
+  it('marks an adapter with an invalid instance as needing attention', async () => {
+    const config: StoredConfig = {
+      ...DEFAULT_STORED_CONFIG,
+      search: {
+        adapter: 'searxng',
+        adapters: { searxng: { instances: [{ url: 'ftp://invalid.example', enabled: true, label: '' }] } },
+      },
+    }
+    renderPage(undefined, config)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+
+    expect(await screen.findByText('Needs attention')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /SearXNG/ })).toBeChecked()
+  })
+
+  it('keeps an orphaned adapter visible as not installed', async () => {
+    const config: StoredConfig = {
+      ...DEFAULT_STORED_CONFIG,
+      search: { adapter: 'ghost', adapters: { ghost: { endpoint: 'https://ghost.example' } } },
+    }
+    renderPage(undefined, config)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+
+    const ghost = await screen.findByRole('radio', { name: /ghost is not installed/ })
+    expect(ghost).toBeChecked()
+    expect(screen.getByText('Not installed')).toBeInTheDocument()
+  })
+
+  it('reports a failed adapter refresh without dropping the current list', async () => {
+    vi.mocked(fetchAdapters)
+      .mockResolvedValueOnce(ADAPTERS)
+      .mockRejectedValueOnce(new Error('offline'))
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    await screen.findByRole('radiogroup', { name: 'Backend' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh adapters' }))
+    expect(await screen.findByText(/Could not refresh adapters: offline/)).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /SearXNG/ })).toBeInTheDocument()
+  })
+
+  it('refreshes the adapter list from the picker', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    await screen.findByRole('radiogroup', { name: 'Backend' })
+    expect(fetchAdapters).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh adapters' }))
+    await waitFor(() => expect(fetchAdapters).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('Adapters refreshed')).toBeInTheDocument()
+  })
+
+  it('previews the model-facing research prompt and updates its bounds', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Research' }))
+    await screen.findByText('Maximum pages to read')
+
+    const prompt = await screen.findByTestId('research-prompt')
+    expect(prompt).toHaveTextContent('Search the web, fetch the top results')
+    expect(prompt).toHaveTextContent('Default 8; range 1–8')
+    expect(prompt).toHaveTextContent('Total content budget: 40,000 characters')
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Maximum pages to read' }), { target: { value: '5' } })
+    expect(prompt).toHaveTextContent('range 0–5')
+  })
+
+  it('shows the research prompt as disabled when web_research is off', async () => {
+    const config: StoredConfig = {
+      ...DEFAULT_STORED_CONFIG,
+      research: { ...DEFAULT_STORED_CONFIG.research, enabled: false },
+    }
+    renderPage(undefined, config)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Research' }))
+
+    expect(await screen.findByText(/web_research is off/)).toBeInTheDocument()
+    expect(screen.getByTestId('research-prompt')).toHaveTextContent('web_research')
+  })
+
   it('runs a search test before enabling search takeover', async () => {
     const { web } = renderPage()
     await screen.findByRole('heading', { name: 'Search Tools' })
@@ -210,6 +316,34 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('tab', { name: /^Search$/ }))
     fireEvent.change(await screen.findByLabelText('Endpoint'), { target: { value: 'https://fixture.example/v2' } })
     expect(screen.getByRole('button', { name: 'Save and apply' })).toBeEnabled()
+  })
+
+  it('uses the manifest instances key in the active takeover rule', async () => {
+    const fixture: AdapterManifest = {
+      kind: 'search',
+      id: 'fixture',
+      label: 'Fixture',
+      description: 'A fixture adapter with a renamed instance field.',
+      defaults: {},
+      fields: [{ kind: 'instances', key: 'nodes', label: 'Nodes' }],
+    }
+    vi.mocked(fetchAdapters).mockResolvedValue({
+      search: [searxngManifest, fixture],
+      fetch: [readableHttpManifest],
+    })
+    const config: StoredConfig = {
+      ...DEFAULT_STORED_CONFIG,
+      search: {
+        adapter: 'fixture',
+        adapters: { fixture: { nodes: [{ url: 'https://fixture.example', enabled: true, label: '' }] } },
+      },
+    }
+    renderPage({ searchProvider: 'dsh-search-tools', fetchProvider: '' }, config)
+
+    await screen.findByText('Search backend not configured')
+    expect(screen.queryByText(/Cannot save without an enabled instance/)).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    expect(await screen.findByText('Configured')).toBeInTheDocument()
   })
 
   it('localizes invalid adapter issues and blocks saving', async () => {
