@@ -32,13 +32,18 @@ export function ResearchCard(props: ResearchCardProps): React.ReactElement {
     )
   }
 
+  const fetched = meta.fetched ?? []
+  const failed = fetched.filter(page => page.error !== undefined).length
+  const fetchedOk = fetched.length - failed
   return (
     <div>
       <div className="dshst-research-head">
-        <StateDot state={meta.fetched?.some(page => page.error !== undefined) ? 'warning' : 'done'} />
+        <StateDot state={failed > 0 ? 'warning' : 'done'} />
         <strong>{query}</strong>
         <Tag tone="outline">{t('researchCardSources', { n: meta.sourceCount ?? meta.sources?.length ?? 0 })}</Tag>
-        <Tag tone="outline">{t('researchCardFetched', { n: meta.fetched?.length ?? 0 })}</Tag>
+        <Tag tone="outline">{failed > 0
+          ? t('researchCardFetchedPartial', { ok: fetchedOk, n: fetched.length })
+          : t('researchCardFetched', { n: fetched.length })}</Tag>
         {meta.truncated === true ? <Tag tone="warning">{t('researchCardTruncated')}</Tag> : null}
         <Tag tone="quiet">{t('researchCardUntrusted')}</Tag>
       </div>

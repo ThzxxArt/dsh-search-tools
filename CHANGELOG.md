@@ -8,8 +8,8 @@
   manifest-driven settings metadata.
 - SearXNG search adapter skeleton: config validation, JSON/HTML parsing, auth
   lookup, failover, pagination, cache, probe.
-- Readability HTTP fetch adapter skeleton: DSH safe fetch, lazy jsdom/Readability,
-  fail-open extraction.
+- Readability HTTP fetch adapter skeleton: DSH safe fetch, lazily imported
+  linkedom/Readability, fail-open extraction.
 - `web_research` tool and conversation card.
 - Settings section registration (`settings.section`) and authenticated host
   routes for status, adapters, probe, search preview, fetch preview, cache clear.
@@ -26,6 +26,11 @@
   into the browser.
 - The research card only turns `http(s)` source URLs into links and drops
   malformed presentation-meta entries instead of rendering empty rows.
+- `web_research` pipeline integration test: real HTML extraction, per-page
+  failure isolation, text clipping, total-budget accounting, disabled mode, and
+  presentation-meta projection.
+- The research card reports successful fetches separately when some pages fail
+  (`1/2 fetched`) instead of counting attempts as successes.
 
 ### Verified
 
@@ -34,8 +39,12 @@
   cookie and 200 with it; probe/search-preview work against a mock SearXNG;
   search/fetch takeover and restore work; secret write stays out of YAML.
   Details: `docs/m0-verification.md`.
-- 37 tests across 9 files, including settings-page, research-card, and
-  takeover-warning component tests (`pnpm test`).
+- A scripted model drove `web_research` through the real DSH agent loop and Web
+  GUI: the tool executed against a mock SearXNG, fetched two public pages, wrote
+  a `tool/result` with presentation meta, and rendered the card in the
+  conversation (`2 sources`, `2 fetched`, source links, fetched details).
+- 41 tests across 10 files, including settings-page, research-card,
+  takeover-warning, and `web_research` pipeline tests (`pnpm test`).
 
 ### Fixed during M0
 

@@ -5,9 +5,11 @@ Adapter-first web search and readable page fetching for [DeepSeek Harness](https
 > **Status: v0.1.0 in progress, M0 verified.** The host and client bundles build,
 > Settings → Search Tools appears in the real Web GUI, Save writes YAML,
 > authenticated routes work, search/fetch takeover and restore work, and
-> credentials stay out of YAML. Component-level `web_research` replay and
-> settings-page tests are in place; the remaining work is the full form UX and a
-> live model/tool turn. See `docs/m0-verification.md`.
+> credentials stay out of YAML. Component tests cover the settings page and card,
+> and a scripted model drove `web_research` through the real DSH loop into a
+> rendered card (mock SearXNG + public-page fetch). Remaining work is the full
+> form UX, a real-model tool choice, and visual polish for the activation hint
+> and empty state. See `docs/m0-verification.md`.
 
 ## What it does
 

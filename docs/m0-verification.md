@@ -37,24 +37,45 @@ Web URL: `http://127.0.0.1:3091` (separate from the running GUI at `dsh.metona.c
 7. **Static cache bounds.** The LRU is rebuilt when `cacheTtlMs` / `cacheMaxEntries` change; `cacheMaxEntries: 0` disables it.
 8. **Proxy stub.** `search.proxy` now creates a lazy `undici.ProxyAgent` instead of being ignored.
 9. **UA validation default.** Missing `userAgent` now validates against the adapter default rather than an empty string.
+10. **Fetched count on failure.** The card counted attempted fetches as successes. It now shows `ok/total fetched` when any page failed and keeps the warning dot.
 
 ## Component tests (2026-10-22)
 
-`pnpm test` now runs 37 tests across 9 files. The browser-facing additions:
+`pnpm test` now runs 41 tests across 10 files. The browser-facing additions:
 
 | File | Coverage |
 |---|---|
 | `tests/research-card.spec.tsx` | settled card from presentation meta, fallback before result / missing meta, malformed source filtering, non-http link rejection |
 | `tests/settings-page.spec.tsx` | render + save section ops, secret write through credentials (not the form), takeover requires a passing search test, localized invalid-instance message, research budget persistence |
 | `tests/takeover-warning.spec.tsx` | scoped package recognition and previous-provider restore from the Plugins page |
+| `tests/research-pipeline.spec.ts` | real HTML extraction into Markdown, per-page failure isolation, clipping/total budget, disabled mode, presentation-meta projection |
 
 `jsdom` is a **devDependency** only; the production Readability path still uses
 linkedom. Component tests mock the DSH primitives to keep the page tests focused
 on state transitions rather than CSS/shiki initialization.
 
+## Live `web_research` replay (2026-10-22)
+
+The real DSH agent loop and Web UI ran `web_research` end to end:
+
+| Check | Evidence |
+|---|---|
+| Model request reaches the tool | scripted Messages server returned `tool_call_success` for `web_research` with `{ query, max_results: 3, fetch_top: 2 }` |
+| Host executes the tool | `tool/call` and non-error `tool/result` landed in the session log |
+| Search adapter runs | mock SearXNG returned two sources; `meta.sourceCount` was 2 |
+| Fetch adapter runs | public pages were fetched; `meta.fetched` carried `chars: 12000` (Wikipedia) and `chars: 172` (example.com) |
+| Card renders | conversation shows `2 sources`, `2 fetched`, both source links, and a `Fetched details` disclosure under **Called tools** |
+| SSRF fence | a first run with `http://127.0.0.1` article URLs produced `Fetch failed: URL hostname "127.0.0.1" resolves to a non-public IP address`; this is DSH's safe-fetch policy doing its job |
+| Replay persistence | after collapsing/reopening the session, the same card renders from the persisted `tool/result` meta |
+
+The card sits inside the conversation's **Called tools** group; expand that group
+to see it. This is the host UI's grouping, not a missing card.
+
+The model here is scripted; it exercises the real loop, tool execution, event
+log, and client card, but not a real model choosing `web_research` on its own.
+
 ## Still to verify / implement
 
-- `web_research` card with a **live** DSH `tool/result` replay. The component-level replay now covers the presentation-meta shape and malformed input.
+- A real model choosing `web_research` after takeover (the scripted model above exercised the same loop, but not model judgment).
 - Full form UX polish (preview/diagnostics are still basic).
-- `web_search` through the actual model/tool call after takeover (the stable dispatcher is unit-tested and the host selection is persisted; the full model turn was not exercised).
 - Visual pass for the `plugins.bundle.activation` hint and the zero-instance empty state.

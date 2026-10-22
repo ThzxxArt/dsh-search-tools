@@ -44,11 +44,27 @@ describe('ResearchCard', () => {
     expect(screen.getByText('DeepSeek Harness')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Example result' })).toHaveAttribute('href', 'https://example.com/a')
     expect(screen.getByText('2 sources')).toBeInTheDocument()
-    expect(screen.getByText('2 fetched')).toBeInTheDocument()
+    expect(screen.getByText('1/2 fetched')).toBeInTheDocument()
     expect(screen.getByText('truncated')).toBeInTheDocument()
     expect(screen.getByText('External content untrusted')).toBeInTheDocument()
     expect(screen.getByText(/Fetched page/)).toBeInTheDocument()
     expect(screen.getByText(/HTTP 404/)).toBeInTheDocument()
+  })
+
+  it('reports a clean fetched count when every page succeeded', () => {
+    renderCard('result', {
+      args: { query: 'all good' },
+      meta: {
+        query: 'all good',
+        sources: [{ url: 'https://example.com/a', title: 'A' }],
+        fetched: [
+          { url: 'https://example.com/a', title: 'A', chars: 1200 },
+          { url: 'https://example.com/b', title: 'B', chars: 800 },
+        ],
+      },
+    })
+    expect(screen.getByText('2 fetched')).toBeInTheDocument()
+    expect(screen.queryByText(/\/2 fetched/)).not.toBeInTheDocument()
   })
 
   it('falls back to the compact row before the result', () => {
