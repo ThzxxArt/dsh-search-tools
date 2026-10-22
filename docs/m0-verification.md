@@ -161,10 +161,24 @@ The prompt preview is intentionally read-only and uses the draft values, not the
 saved values, so changing a research bound updates the preview immediately. It
 does not yet copy the prompt to the clipboard.
 
-## Still to implement (not validation gaps)
+## Release closeout (2026-10-22)
 
-- Release closeout: version bump, final README pass, and a decision on the
-  `publint` warning.
+- Package version is `0.1.0`; the changelog is dated and the README marks the
+  release-candidate state.
+- `pnpm release` passes with **65 tests / 13 files**, typecheck, host/client/type
+  builds, and a pack dry run.
+- The publint `lib/client.js` CJS/ESM verdict is handled by a narrow, tested
+  policy: only that exact `FILE_INVALID_FORMAT` diagnostic is ignored, and every
+  other publint diagnostic remains fatal.
+- Package metadata now ships `CHANGELOG.md` / `SECURITY.md` and declares public
+  npm access.
+- Publication steps and post-publish smoke tests live in
+  `docs/release-v0.1.0.md`.
+
+## Remaining
+
+- Publish `0.1.0`: configure the repository remote, push the `v0.1.0` tag, and
+  provide npm credentials or the release-workflow `NPM_TOKEN`.
 - Additional adapter packages beyond SearXNG / Readability HTTP.
-- `publint` still flags `lib/client.js` as CJS under a `"type": "module"` package;
-  this is the DSH lazy-CJS client shape, not a runtime failure.
+- Autonomous tool-selection evaluation; the real-model run named the tool under
+  test.

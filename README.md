@@ -2,19 +2,16 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 
-> **Status: v0.1.0 in progress, M0 verified.** The host and client bundles build,
-> Settings → Search Tools appears in the real Web GUI, Save writes YAML,
-> authenticated routes work, search/fetch takeover and restore work, and
-> credentials stay out of YAML. The settings page has inline search/fetch tests
-> with structured results, diagnostics copy/clear, and keyboard save; the
-> activation hint and zero-instance empty state have had a visual pass. A real
-> model (via an OpenAI-compatible gateway) called `web_research`, built-in
-> `web_search`, and built-in `web_fetch`; search used a real SearXNG instance and
-> the research card rendered. The provider key stayed in the process environment.
-> The provider picker is now card-based with configured/needs-setup status and a
-> refresh action; Research previews the model-facing `web_research` prompt with
-> bounds from the current draft. Remaining work is release closeout and additional
-> adapters. See `docs/m0-verification.md`.
+> **Status: v0.1.0 release candidate (2026-10-22).** M0 is verified end to end:
+> the host and client bundles build, Settings → Search Tools renders in the real
+> Web GUI, Save writes YAML, authenticated routes work, search/fetch takeover and
+> restore work, and credentials stay out of YAML. The settings page has inline
+> search/fetch tests, diagnostics copy/clear, keyboard save, a card-based adapter
+> picker, and a live preview of the model-facing `web_research` contract. A real
+> OpenAI-compatible model called `web_research`, built-in `web_search`, and
+> built-in `web_fetch`; search used a real SearXNG instance and the research card
+> rendered. Build, test, pack, and publint checks pass. Publication is the
+> remaining external step; see `docs/release-v0.1.0.md`.
 
 ## What it does
 
@@ -75,6 +72,13 @@ Primary path is the Web UI:
 2. **Add plugin** → enter `dsh-search-tools`.
 3. Enable it.
 4. Open **Settings → Search Tools** and configure a SearXNG instance.
+
+Before the npm release, install a packed tarball instead:
+
+```sh
+pnpm pack
+dsh plugin --profile <profile> add ./dsh-search-tools-0.1.0.tgz
+```
 
 For local development, an absolute-path overlay can load `src/index.ts`; use the
 DSH checkout's own docs for the exact `--patch` command.

@@ -2,7 +2,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供 adapter-first 的网页搜索与正文抓取。
 
-> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。设置页提供搜索/抓取内联测试、结构化结果、诊断复制/清空、键盘保存；激活提示和零实例空状态已做视觉验收。真实模型已通过 OpenAI 兼容网关分别调用 `web_research`、内置 `web_search` 和内置 `web_fetch`，搜索走真实 SearXNG，卡片正常渲染；密钥只放在进程环境。provider picker 已改为卡片式，带配置状态与刷新；研究页会预览模型看到的 `web_research` 工具提示和当前草稿边界。剩余是发布收尾和更多 adapter。详见 `docs/m0-verification.md`。
+> **状态：v0.1.0 发布候选（2026-10-22）。** M0 已端到端验证：Host 与客户端 bundle 可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。设置页提供搜索/抓取内联测试、诊断复制/清空、键盘保存、卡片式 adapter picker，以及模型看到的 `web_research` 契约预览。真实 OpenAI 兼容模型已分别调用 `web_research`、内置 `web_search` 和内置 `web_fetch`，搜索走真实 SearXNG，研究卡片正常渲染。构建、测试、打包和 publint 检查均通过。发布是剩余的外部步骤；见 `docs/release-v0.1.0.md`。
 
 ## 它做什么
 
@@ -53,6 +53,13 @@ lib/types/**        类型声明
 2. **添加插件** → 输入 `dsh-search-tools`。
 3. 启用。
 4. 打开 **设置 → 搜索工具**，配置 SearXNG 实例。
+
+npm 发布前，先用打包产物安装：
+
+```sh
+pnpm pack
+dsh plugin --profile <profile> add ./dsh-search-tools-0.1.0.tgz
+```
 
 本地开发可以用绝对路径 overlay 加载 `src/index.ts`，具体 `--patch` 命令以 DSH checkout 文档为准。
 

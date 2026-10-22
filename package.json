@@ -2,6 +2,14 @@
   "name": "dsh-search-tools",
   "version": "0.1.0",
   "description": "Adapter-first web search and readable page fetching for DeepSeek Harness, configured entirely in the Web UI.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "searxng",
+    "web-search",
+    "web-fetch",
+    "readability"
+  ],
   "type": "module",
   "license": "MIT",
   "author": "ThzxxArt",
@@ -35,6 +43,8 @@
     "icon.svg",
     "README.md",
     "README.zh.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
   ],
@@ -122,6 +132,9 @@
     "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@11.28.5",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "pnpm build:host && pnpm build:client && pnpm build:types",
     "build:host": "tsdown",
@@ -131,7 +144,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "pack:check": "pnpm build && pnpm pack --dry-run && publint",
+    "check:publint": "node scripts/publint.mjs",
+    "pack:check": "pnpm build && pnpm pack --dry-run && pnpm check:publint",
     "release": "pnpm typecheck && pnpm test && pnpm pack:check"
   }
 }

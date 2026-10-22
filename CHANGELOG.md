@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-10-22
 
 ### Added
 
@@ -69,6 +69,14 @@
   preview, so an empty result caused by suspended engines is distinguishable from
   a genuinely empty search.
 
+### Changed
+
+- `pnpm release` now uses a narrow publint policy that ignores only the known
+  `FILE_INVALID_FORMAT` verdict for `lib/client.js` (a DSH browser CJS factory)
+  and reports every other diagnostic. The same check runs in CI.
+- Package metadata now includes search keywords, `publishConfig.access: public`,
+  and publishes `CHANGELOG.md` / `SECURITY.md` in the tarball.
+
 ### Verified
 
 - M0 on DSH `0.2.1-rc.2`: Settings → Search Tools renders; Save writes
@@ -80,9 +88,9 @@
   GUI: the tool executed against a mock SearXNG, fetched two public pages, wrote
   a `tool/result` with presentation meta, and rendered the card in the
   conversation (`2 sources`, `2 fetched`, source links, fetched details).
-- 61 tests across 12 files, including settings-page, activation-hint,
-  research-card, takeover-warning, diagnostics text, and `web_research` pipeline
-  tests (`pnpm test`).
+- 65 tests across 13 files, including settings-page, activation-hint,
+  research-card, takeover-warning, diagnostics text, publint policy, and
+  `web_research` pipeline tests (`pnpm test`).
 - A live Web GUI pass on the new form UX: inline search test rendered two
   structured sources, the footer no longer covered the result, the zero-instance
   empty state and one-column Overview layout rendered correctly, `Copy
@@ -108,6 +116,11 @@
   with no secret in YAML, the repository, or the three test-session logs (the
   chat transcript that supplied it is separate and should be treated as exposed).
   Details: `docs/m0-verification.md`.
+- Final v0.1.0 gate: `pnpm release` passed with 65 tests / 13 files, host/client/
+  type builds, a pack dry run, and no publint issues after the documented
+  client-bundle exemption. `npm publish --dry-run` accepted the 99-file, 158.4 kB
+  tarball, including `CHANGELOG.md` / `SECURITY.md`; publication itself remains
+  pending npm authentication and a reachable repository remote.
 
 ### Fixed during M0
 
