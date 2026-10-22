@@ -1168,7 +1168,7 @@ dsh-search-tools/
 ├── CHANGELOG.md
 ├── SECURITY.md
 ├── THIRD_PARTY_NOTICES.md
-├── scripts/build-client.ts
+├── tsdown.client.config.ts
 ├── src/
 │   ├── index.ts                 # Host apply
 │   ├── config/
@@ -1335,7 +1335,7 @@ dsh-search-tools/
 ### 9.3 构建
 
 - Host：tsdown ESM → `lib/index.js`；`tsc` → `lib/types`。
-- Client：`scripts/build-client.ts` 复刻 lazy-CJS factory：
+- Client：`tsdown.client.config.ts` 复刻 lazy-CJS factory：
   - `format: 'cjs'`，`platform: 'browser'`
   - external：`react`、`react/jsx-runtime`、`@deepseek-ai/dsh-client-ui-primitives`、`@deepseek-ai/dsh-client-ui-slots`
   - banner：`window.__ModuleLoader__.load({ id: "dsh-search-tools", factory: (require) => {`
