@@ -1,6 +1,6 @@
 {
   "name": "dsh-search-tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Adapter-first web search and readable page fetching for DeepSeek Harness, configured entirely in the Web UI.",
   "keywords": [
     "deepseek-harness",
@@ -42,7 +42,7 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
-    "README.zh.md",
+    "README.en.md",
     "CHANGELOG.md",
     "SECURITY.md",
     "LICENSE",

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.1 — 2026-10-22
+
+### Changed
+
+- `README.md` is now the complete Simplified Chinese guide; `README.en.md` is the
+  full English counterpart. `README.zh.md` remains only as a compatibility pointer
+  to the canonical Chinese README.
+- The npm tarball ships `README.md` and `README.en.md`. `README.zh.md` remains a
+  small compatibility pointer; npm's automatic README handling may still include
+  it even though it is not in the explicit `files` list.
+- Status metadata and the default SearXNG/Readability User-Agents report
+  `0.1.1`.
+- Added the v0.1.1 release checklist. No functional behavior changed.
+
+### Verified
+
+- The full `pnpm release` gate passes after the documentation and metadata
+  changes.
+
 ## 0.1.0 — 2026-10-22
 
 ### Added
