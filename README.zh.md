@@ -54,12 +54,14 @@ lib/types/**        类型声明
 3. 启用。
 4. 打开 **设置 → 搜索工具**，配置 SearXNG 实例。
 
-npm 发布前，先用打包产物安装：
+包已发布到 npm：`dsh-search-tools`，Web UI 会直接安装。离线安装可以用 release
+里的 tarball：
 
 ```sh
-pnpm pack
 dsh plugin --profile <profile> add ./dsh-search-tools-0.1.0.tgz
 ```
+
+tarball 附在 GitHub release 上，与 npm 产物字节一致。
 
 本地开发可以用绝对路径 overlay 加载 `src/index.ts`，具体 `--patch` 命令以 DSH checkout 文档为准。
 

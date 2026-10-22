@@ -73,12 +73,15 @@ Primary path is the Web UI:
 3. Enable it.
 4. Open **Settings → Search Tools** and configure a SearXNG instance.
 
-Before the npm release, install a packed tarball instead:
+The package is published on npm as `dsh-search-tools`; the Web UI path installs it
+directly. For an offline install, use the release tarball:
 
 ```sh
-pnpm pack
 dsh plugin --profile <profile> add ./dsh-search-tools-0.1.0.tgz
 ```
+
+The tarball is attached to the GitHub release and is byte-identical to the npm
+artifact.
 
 For local development, an absolute-path overlay can load `src/index.ts`; use the
 DSH checkout's own docs for the exact `--patch` command.
