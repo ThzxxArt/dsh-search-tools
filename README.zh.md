@@ -2,7 +2,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供 adapter-first 的网页搜索与正文抓取。
 
-> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。设置页和卡片有组件测试，且已用脚本模型驱动真实 DSH loop 跑通 `web_research` 到卡片渲染（mock SearXNG + 公网正文抓取）。剩余工作是完整表单体验、真实模型选择工具，以及激活提示/空状态的视觉打磨。详见 `docs/m0-verification.md`。
+> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。设置页提供搜索/抓取内联测试、结构化结果、诊断复制/清空、键盘保存；激活提示和零实例空状态已做视觉验收。已用脚本模型驱动真实 DSH loop 跑通 `web_research` 到卡片渲染（mock SearXNG + 公网正文抓取）。剩余主要是真实模型选择工具和真实 SearXNG 实例。详见 `docs/m0-verification.md`。
 
 ## 它做什么
 
@@ -10,6 +10,7 @@
 - 第一个搜索 adapter 是 **SearXNG**，第一个抓取 adapter 是 **Readability HTTP**。
 - 新增 `web_research` 工具：一次调用完成“搜索 + 抓前 N 条正文”。
 - 在 Web GUI 注册 **设置 → 搜索工具**，所有配置在页面完成，不需要手改文件。
+- 搜索/抓取页签内置测试面板，返回结构化来源和抓取预览；高级页可复制/清空诊断信息。
 - 配置通过 DSH 原生 settings 服务写入 profile 的 YAML patch（`$DSH_HOME/profiles/<profile>/cordis.patch.yml`）。密钥走 DSH credentials，不写入 YAML。
 
 ## 新增后端

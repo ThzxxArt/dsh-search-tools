@@ -41,7 +41,7 @@ Web URL: `http://127.0.0.1:3091` (separate from the running GUI at `dsh.metona.c
 
 ## Component tests (2026-10-22)
 
-`pnpm test` now runs 41 tests across 10 files. The browser-facing additions:
+`pnpm test` now runs 51 tests across 12 files. The browser-facing additions:
 
 | File | Coverage |
 |---|---|
@@ -74,8 +74,30 @@ to see it. This is the host UI's grouping, not a missing card.
 The model here is scripted; it exercises the real loop, tool execution, event
 log, and client card, but not a real model choosing `web_research` on its own.
 
+## Form UX and visual pass (2026-10-22)
+
+The settings page now has inline test panels on the Search and Fetch tabs, not only
+on Overview. Results are structured rather than one text blob: elapsed time,
+status, safe `http(s)` source links, snippets, and fetch metadata/content.
+
+| Check | Evidence |
+|---|---|
+| Inline search test | Search tab → Test rendered `Test passed`, `Took 19ms`, two source links, and both snippets |
+| Footer/pane layout | at the bottom of the scrolled pane, the last source ended above the action footer; no sticky overlay |
+| Zero-instance empty state | after removing the instance and saving, Overview showed “No usable search backend yet” and “0 instances” |
+| Overview layout | in the 800px settings pane the two takeover cards became one column (560px), with no overlapping labels |
+| Advanced diagnostics | Version/config/cache/errors rendered; `Copy diagnostics` produced a credential-free summary; `POST /diagnostics/clear` returned `{ ok: true }` |
+| Activation hint | disabling/re-enabling the bundle showed the hint; computed style had a real border/background and a 720px width |
+| Adapter-driven rule | an external fixture adapter without an `instances` field did not trigger the instance-required error; the component test covers this |
+| Section-scoped validation | an invalid search draft did not block the Fetch tab test; search fields no longer receive fetch errors with the same key |
+| Dark theme | Settings → Search Tools rendered with the DSH dark tokens; cards, labels, inputs, and the action footer kept contrast |
+| Narrow viewport | at 700px wide the fields/cards stacked and the tabs wrapped (`Advanced` moved to a second row) instead of clipping |
+
+The activation hint sits in a slot outside the settings theme scope, so its CSS
+uses token fallbacks and an explicit `dshst-activation` width. Without the
+fallbacks the card rendered with transparent background and no border.
+
 ## Still to verify / implement
 
 - A real model choosing `web_research` after takeover (the scripted model above exercised the same loop, but not model judgment).
-- Full form UX polish (preview/diagnostics are still basic).
-- Visual pass for the `plugins.bundle.activation` hint and the zero-instance empty state.
+- A real SearXNG instance (the live search checks still use the local mock).

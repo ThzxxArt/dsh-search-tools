@@ -7,7 +7,7 @@ type ActivationHintProps = PropsRuntime<'plugins.bundle.activation'> & PropsLoca
 
 export function ActivationHint({ t, onDismiss }: ActivationHintProps): React.ReactElement {
   return (
-    <section className="dshst-card">
+    <section className="dshst-card dshst-activation">
       <div className="dshst-card-title">{t('activationTitle')}</div>
       <p className="dshst-card-desc">{t('activationHint')}</p>
       <div className="dshst-actions">

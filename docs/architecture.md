@@ -65,18 +65,20 @@ adapter's fields, and stores values in `adapters.<id>`. No page code changes whe
 a new adapter is registered.
 
 External adapters can ship their own Client UI later; the host contract does not
-require it.
+require it. Whether takeover requires a non-empty instance list is decided from
+the selected manifest's `instances` field, not a hard-coded SearXNG check.
 
 ## Host surface
 
 | Route | Purpose |
 |---|---|
-| `GET /api/dsh-search-tools/status` | provider availability, YAML path, cache, credentials, recent errors |
+| `GET /api/dsh-search-tools/status` | provider availability, YAML path, cache, credentials declared by every adapter manifest, recent errors |
 | `GET /api/dsh-search-tools/adapters` | manifests for the settings page |
 | `POST /api/dsh-search-tools/probe` | test one unsaved adapter config |
 | `POST /api/dsh-search-tools/search-preview` | run one search with draft config |
 | `POST /api/dsh-search-tools/fetch-preview` | run one fetch with draft config |
 | `POST /api/dsh-search-tools/cache/clear` | clear the selected adapter cache |
+| `POST /api/dsh-search-tools/diagnostics/clear` | clear the in-memory error ring |
 
 Every route uses `connection.requestRejection`; bodies are JSON, bounded to
 64 KiB, and secrets are never logged or returned.

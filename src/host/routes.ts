@@ -18,8 +18,6 @@ import { isRecord } from '../shared/validation.ts'
 const BASE = '/api/dsh-search-tools'
 const MAX_BODY_BYTES = 64 * 1024
 const VERSION = '0.1.0'
-const TOKEN_REF = 'SEARXNG_TOKEN'
-const BASIC_REF = 'SEARXNG_BASIC_AUTH'
 
 interface ConnectionFence {
   requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
@@ -168,12 +166,23 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
       sendJson(res, 200, { ok: true, cache: deps.search.cacheStats() })
     },
   }), 'dsh-search-tools: cache clear route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${BASE}/diagnostics/clear`,
+    handler: (req, res) => {
+      if (rejected(req, res)) return
+      if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
+      deps.diagnostics.clear()
+      sendJson(res, 200, { ok: true })
+    },
+  }), 'dsh-search-tools: diagnostics clear route')
 }
 
 async function sendStatus(ctx: Context, deps: RouteDeps, res: ServerResponse): Promise<void> {
   const state = snapshot(deps.config)
   const cache: CacheStats = deps.search.cacheStats()
-  const credentials = await describeCredentials(ctx)
+  const credentials = await describeCredentials(ctx, deps.adapters)
   const configPath = await configPathOf(ctx)
   const searchInstances = countInstances(state.search.adapters[state.search.adapter])
   const payload: StatusResponse = {
@@ -202,15 +211,18 @@ async function sendStatus(ctx: Context, deps: RouteDeps, res: ServerResponse): P
   sendJson(res, 200, payload)
 }
 
-async function describeCredentials(ctx: Context): Promise<Record<string, { configured: boolean; source?: string; writable: boolean }>> {
+async function describeCredentials(
+  ctx: Context,
+  adapters: SearchToolsService,
+): Promise<Record<string, { configured: boolean; source?: string; writable: boolean }>> {
+  const manifests = adapters.listAdapters()
+  const refs = [...new Set([...manifests.search, ...manifests.fetch]
+    .flatMap(manifest => (manifest.secretRefs ?? []).map(secret => secret.ref)))]
   const credentials = ctx.get('credentials') as CredentialsService | undefined
   if (credentials === undefined) {
-    return {
-      [TOKEN_REF]: { configured: false, writable: false },
-      [BASIC_REF]: { configured: false, writable: false },
-    }
+    return Object.fromEntries(refs.map(ref => [ref, { configured: false, writable: false }]))
   }
-  const entries = await Promise.all([TOKEN_REF, BASIC_REF].map(async ref => {
+  const entries = await Promise.all(refs.map(async ref => {
     try {
       const info = await credentials.describe(ref)
       return [ref, { configured: info.configured, ...(info.source === undefined ? {} : { source: info.source }), writable: info.writable }] as const

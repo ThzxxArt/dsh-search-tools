@@ -3,17 +3,20 @@
 import { useEffect, useId, useSyncExternalStore, useState } from 'react'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
-import { Button, Input, StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Input, StateDot, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   AdapterIssue, AdapterListResponse, AdapterManifest, JsonObject, JsonValue, LocalizedText, StatusResponse,
 } from '../core/types.ts'
 import { DEFAULT_STORED_CONFIG, type ActivationConfig, type StoredConfig } from '../shared/defaults.ts'
 import { diffSections, type ConfigSection } from '../shared/diff.ts'
 import { getPath, setPath } from '../shared/path.ts'
-import { validateManifestConfig } from '../shared/validation.ts'
+import { isRecord, validateManifestConfig } from '../shared/validation.ts'
 import { validateSearxngConfig } from '../search/adapters/searxng/schema.ts'
 import { validateReadableHttpConfig } from '../fetch/adapters/readable-http/schema.ts'
-import { clearCache, fetchAdapters, fetchStatus, previewFetch, previewSearch, probeSearch } from './api.ts'
+import {
+  clearCache, clearDiagnostics as clearDiagnosticsRequest, fetchAdapters, fetchStatus, previewFetch, previewSearch, probeSearch,
+} from './api.ts'
+import { formatDiagnostics } from './diagnostic-text.ts'
 import { issueText } from './issue-text.ts'
 import { Field, InstanceEditor, type InstanceTestResult, type InstanceValue, type Translate } from './components/Field.tsx'
 
@@ -54,6 +57,23 @@ export interface SettingsPageProps {
 type Tab = 'overview' | 'search' | 'fetch' | 'research' | 'advanced'
 type Testing = 'search' | 'fetch' | undefined
 
+const TABS: readonly Tab[] = ['overview', 'search', 'fetch', 'research', 'advanced']
+
+/** Structured result of an adapter test, rendered in place instead of a raw text blob. */
+export interface PreviewState {
+  kind: 'search' | 'fetch'
+  ok: boolean
+  elapsedMs?: number
+  sources?: Array<{ url: string; title?: string; snippet?: string }>
+  url?: string
+  statusCode?: number
+  bodyKind?: 'html' | 'text'
+  content?: string
+  chars?: number
+  truncated?: boolean
+  message?: string
+}
+
 export const SEARCH_PROVIDER = 'dsh-search-tools'
 export const FETCH_PROVIDER = 'dsh-search-tools-fetch'
 
@@ -85,7 +105,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   const [adapters, setAdapters] = useState<AdapterListResponse>({ search: [], fetch: [] })
   const [query, setQuery] = useState('DeepSeek Harness')
   const [fetchUrl, setFetchUrl] = useState('https://example.com')
-  const [preview, setPreview] = useState<string | undefined>()
+  const [preview, setPreview] = useState<PreviewState | undefined>()
   const [testing, setTesting] = useState<Testing>()
   const [credentialInfo, setCredentialInfo] = useState<Record<string, CredentialInfo>>({})
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({})
@@ -123,10 +143,18 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   const readOnly = snapshot.status !== 'ready' || snapshot.writable === false
   const currentSearch = webSnapshot.value?.searchProvider ?? ''
   const currentFetch = webSnapshot.value?.fetchProvider ?? ''
-  const errors = validateDraft(draft, adapters, t)
-  if (currentSearch === SEARCH_PROVIDER && !hasEnabledSearxngInstance(draft)) {
-    errors.push({ path: 'instances', message: t('instancesRequiredWhenActive') })
+  const searchIssues = validateSearchDraft(draft, adapters)
+  const fetchIssues = validateFetchDraft(draft, adapters)
+  const researchIssues = validateResearchDraft(draft, t)
+  const activeSearchManifest = findManifest(adapters.search, draft.search.adapter)
+  // Only adapters that actually model instances need the non-empty rule. The
+  // takeover test remains the authority for adapters configured some other way.
+  if (currentSearch === SEARCH_PROVIDER
+    && activeSearchManifest?.fields.some(field => field.kind === 'instances') === true
+    && !hasEnabledInstanceConfig(adapterConfig(draft.search, draft.search.adapter))) {
+    searchIssues.push({ path: 'instances', message: t('instancesRequiredWhenActive') })
   }
+  const errors = [...searchIssues, ...fetchIssues, ...researchIssues]
 
   const edit = (next: StoredConfig): void => {
     setDraft(next)
@@ -168,6 +196,37 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
       setMessage(error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return
+      if (!dirty || saving || readOnly || errors.length > 0) return
+      event.preventDefault()
+      void save()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => { document.removeEventListener('keydown', onKeyDown) }
+  }, [dirty, saving, readOnly, errors.length, save])
+
+  const copyDiagnostics = async (): Promise<void> => {
+    if (status === undefined) return
+    try {
+      await navigator.clipboard.writeText(formatDiagnostics(status))
+      setMessage(t('copied'))
+    } catch (error) {
+      setMessage(`${t('copyFailed')}: ${errorText(error)}`)
+    }
+  }
+
+  const clearDiagnosticEntries = async (): Promise<void> => {
+    try {
+      await clearDiagnosticsRequest()
+      await refreshStatus()
+      setMessage(t('cleared'))
+    } catch (error) {
+      setMessage(errorText(error))
     }
   }
 
@@ -241,6 +300,10 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   }
 
   const runSearchTest = async (): Promise<boolean> => {
+    if (searchIssues.length > 0) {
+      setPreview({ kind: 'search', ok: false, message: t('fixErrorsFirst') })
+      return false
+    }
     setTesting('search')
     setPreview(undefined)
     try {
@@ -248,15 +311,23 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
       const config = adapterConfig(draft.search, adapter)
       const result = await previewSearch(adapter, query, config)
       if (!result.ok) {
-        setPreview(result.message ?? result.code ?? 'Search failed')
+        setPreview({
+          kind: 'search',
+          ok: false,
+          message: result.message ?? result.code ?? t('testFail'),
+          ...(result.elapsedMs === undefined ? {} : { elapsedMs: result.elapsedMs }),
+        })
         return false
       }
-      setPreview((result.sources ?? [])
-        .map((source, index) => `${index + 1}. ${source.title ?? source.url}\n   ${source.url}`)
-        .join('\n') || 'No results.')
+      setPreview({
+        kind: 'search',
+        ok: true,
+        sources: (result.sources ?? []).filter(source => isHttpUrl(source.url)),
+        ...(result.elapsedMs === undefined ? {} : { elapsedMs: result.elapsedMs }),
+      })
       return true
     } catch (error) {
-      setPreview(error instanceof Error ? error.message : String(error))
+      setPreview({ kind: 'search', ok: false, message: errorText(error) })
       return false
     } finally {
       setTesting(undefined)
@@ -264,6 +335,10 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   }
 
   const runFetchTest = async (): Promise<boolean> => {
+    if (fetchIssues.length > 0) {
+      setPreview({ kind: 'fetch', ok: false, message: t('fixErrorsFirst') })
+      return false
+    }
     setTesting('fetch')
     setPreview(undefined)
     try {
@@ -271,13 +346,28 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
       const config = adapterConfig(draft.fetch, adapter)
       const result = await previewFetch(adapter, fetchUrl, config)
       if (!result.ok) {
-        setPreview(result.message ?? result.code ?? 'Fetch failed')
+        setPreview({
+          kind: 'fetch',
+          ok: false,
+          message: result.message ?? result.code ?? t('testFail'),
+          ...(result.elapsedMs === undefined ? {} : { elapsedMs: result.elapsedMs }),
+        })
         return false
       }
-      setPreview(`${result.url ?? fetchUrl} — HTTP ${result.statusCode ?? '?'} — ${result.chars ?? 0} ${t('chars')}\n\n${(result.content ?? '').slice(0, 4_000)}`)
+      setPreview({
+        kind: 'fetch',
+        ok: true,
+        url: result.url ?? fetchUrl,
+        ...(result.statusCode === undefined ? {} : { statusCode: result.statusCode }),
+        ...(result.kind === undefined ? {} : { bodyKind: result.kind }),
+        content: (result.content ?? '').slice(0, 4_000),
+        ...(result.chars === undefined ? {} : { chars: result.chars }),
+        ...(result.truncated === undefined ? {} : { truncated: result.truncated }),
+        ...(result.elapsedMs === undefined ? {} : { elapsedMs: result.elapsedMs }),
+      })
       return true
     } catch (error) {
-      setPreview(error instanceof Error ? error.message : String(error))
+      setPreview({ kind: 'fetch', ok: false, message: errorText(error) })
       return false
     } finally {
       setTesting(undefined)
@@ -335,6 +425,19 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
     }
   }
 
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, item: Tab): void => {
+    const index = TABS.indexOf(item)
+    let next: Tab | undefined
+    if (event.key === 'ArrowRight') next = TABS[(index + 1) % TABS.length]
+    else if (event.key === 'ArrowLeft') next = TABS[(index - 1 + TABS.length) % TABS.length]
+    else if (event.key === 'Home') next = TABS[0]
+    else if (event.key === 'End') next = TABS[TABS.length - 1]
+    if (next === undefined) return
+    event.preventDefault()
+    setTab(next)
+    document.getElementById(`dshst-tab-${next}`)?.focus()
+  }
+
   return (
     <div className="dshst-page">
       <header className="dshst-head">
@@ -351,14 +454,20 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
         </div>
       </header>
 
-      <nav className="dshst-tabs" aria-label={t('title')}>
-        {(['overview', 'search', 'fetch', 'research', 'advanced'] as const).map(item => (
+      <nav className="dshst-tabs" role="tablist" aria-label={t('title')}>
+        {TABS.map(item => (
           <button
             key={item}
             type="button"
+            role="tab"
+            id={`dshst-tab-${item}`}
+            aria-selected={tab === item}
+            aria-controls={`dshst-panel-${item}`}
+            tabIndex={tab === item ? 0 : -1}
             className="dshst-tab"
             data-active={tab === item}
             onClick={() => { setTab(item) }}
+            onKeyDown={event => { onTabKeyDown(event, item) }}
           >
             {t(item)}
           </button>
@@ -368,159 +477,211 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
       {snapshot.status === 'loading' ? <div className="dshst-notice">{t('loading')}</div> : null}
       {snapshot.status === 'unavailable' ? <div className="dshst-notice">{t('unavailable')}</div> : null}
       {snapshot.status === 'ready' && snapshot.writable === false ? <div className="dshst-notice">{t('readOnly')}</div> : null}
-      {errors.length > 0 ? <div className="dshst-notice">{t('invalid')}<ul className="dshst-research-list">{errors.slice(0, 8).map(error => <li key={`${error.path}:${error.code ?? error.message}`}>{error.path}: {issueText(error, t)}</li>)}</ul></div> : null}
+      {errors.length > 0 ? <div className="dshst-notice" role="status">{t('invalid')}<ul className="dshst-research-list">{errors.slice(0, 8).map(error => <li key={`${error.path}:${error.code ?? error.message}`}>{error.path}: {issueText(error, t)}</li>)}</ul></div> : null}
 
       {tab === 'overview' ? (
-        <Overview
-          t={t}
-          status={status}
-          currentSearch={currentSearch}
-          currentFetch={currentFetch}
-          query={query}
-          setQuery={setQuery}
-          fetchUrl={fetchUrl}
-          setFetchUrl={setFetchUrl}
-          testing={testing}
-          preview={preview}
-          testSearch={runSearchTest}
-          testFetch={runFetchTest}
-          setProvider={setProvider}
-          onOpenSearch={() => { setTab('search') }}
-        />
+        <div role="tabpanel" id="dshst-panel-overview" aria-labelledby="dshst-tab-overview">
+          <Overview
+            t={t}
+            status={status}
+            currentSearch={currentSearch}
+            currentFetch={currentFetch}
+            query={query}
+            setQuery={setQuery}
+            fetchUrl={fetchUrl}
+            setFetchUrl={setFetchUrl}
+            testing={testing}
+            preview={preview}
+            testSearch={runSearchTest}
+            testFetch={runFetchTest}
+            setProvider={setProvider}
+            onOpenSearch={() => { setTab('search') }}
+          />
+        </div>
       ) : null}
 
       {tab === 'search' ? (
-        <section className="dshst-card">
-          <div>
-            <div className="dshst-card-title">{t('search')}</div>
-            <p className="dshst-card-desc">{t('searchTabHint')}</p>
-          </div>
-          <AdapterPicker
-            manifests={adapters.search}
-            value={draft.search.adapter}
-            text={text}
-            t={t}
-            onChange={(id) => edit({
-              ...draft,
-              search: {
-                adapter: id,
-                adapters: {
-                  ...draft.search.adapters,
-                  [id]: draft.search.adapters[id] ?? (findManifest(adapters.search, id)?.defaults as JsonObject | undefined) ?? {},
+        <div role="tabpanel" id="dshst-panel-search" aria-labelledby="dshst-tab-search">
+          <section className="dshst-card">
+            <div>
+              <div className="dshst-card-title">{t('search')}</div>
+              <p className="dshst-card-desc">{t('searchTabHint')}</p>
+            </div>
+            <AdapterPicker
+              manifests={adapters.search}
+              value={draft.search.adapter}
+              text={text}
+              t={t}
+              onChange={(id) => edit({
+                ...draft,
+                search: {
+                  adapter: id,
+                  adapters: {
+                    ...draft.search.adapters,
+                    [id]: draft.search.adapters[id] ?? (findManifest(adapters.search, id)?.defaults as JsonObject | undefined) ?? {},
+                  },
                 },
-              },
-            })}
-          />
-          <AdapterForm
-            manifest={findManifest(adapters.search, draft.search.adapter)}
-            config={adapterConfig(draft.search, draft.search.adapter)}
-            errors={errors}
-            disabled={readOnly}
-            text={text}
-            t={t}
-            onTestInstance={(instance) => { void testInstance(instance) }}
-            testingInstanceUrl={instanceTesting}
-            instanceResults={instanceResults}
-            onChange={(config) => edit({
-              ...draft,
-              search: { ...draft.search, adapters: { ...draft.search.adapters, [draft.search.adapter]: config } },
-            })}
-          />
-          <SecretFields
-            manifest={findManifest(adapters.search, draft.search.adapter)}
-            config={adapterConfig(draft.search, draft.search.adapter)}
-            info={credentialInfo}
-            drafts={secretDrafts}
-            busy={secretBusy}
-            text={text}
-            t={t}
-            onDraft={(ref, value) => setSecretDrafts(previous => ({ ...previous, [ref]: value }))}
-            onSave={(ref) => { void saveSecret(ref) }}
-            onClear={(ref) => { void clearSecret(ref) }}
-          />
-        </section>
+              })}
+            />
+            <AdapterForm
+              manifest={findManifest(adapters.search, draft.search.adapter)}
+              config={adapterConfig(draft.search, draft.search.adapter)}
+              errors={searchIssues}
+              disabled={readOnly}
+              text={text}
+              t={t}
+              onTestInstance={(instance) => { void testInstance(instance) }}
+              testingInstanceUrl={instanceTesting}
+              instanceResults={instanceResults}
+              onChange={(config) => edit({
+                ...draft,
+                search: { ...draft.search, adapters: { ...draft.search.adapters, [draft.search.adapter]: config } },
+              })}
+            />
+            <SecretFields
+              manifest={findManifest(adapters.search, draft.search.adapter)}
+              config={adapterConfig(draft.search, draft.search.adapter)}
+              info={credentialInfo}
+              drafts={secretDrafts}
+              busy={secretBusy}
+              text={text}
+              t={t}
+              onDraft={(ref, value) => setSecretDrafts(previous => ({ ...previous, [ref]: value }))}
+              onSave={(ref) => { void saveSecret(ref) }}
+              onClear={(ref) => { void clearSecret(ref) }}
+            />
+          </section>
+          <section className="dshst-card">
+            <div>
+              <div className="dshst-card-title">{t('quickSearch')}</div>
+              <p className="dshst-card-desc">{t('testSearchHint')}</p>
+            </div>
+            <div className="dshst-actions">
+              <Input aria-label={t('query')} value={query} onChange={event => { setQuery(event.target.value) }} placeholder={t('query')} />
+              <Button size="sm" variant="outline" disabled={testing !== undefined} onClick={() => { void runSearchTest() }}>{testing === 'search' ? t('testing') : t('test')}</Button>
+            </div>
+          </section>
+          <PreviewPanel preview={preview?.kind === 'search' ? preview : undefined} t={t} />
+        </div>
       ) : null}
 
       {tab === 'fetch' ? (
-        <section className="dshst-card">
-          <div>
-            <div className="dshst-card-title">{t('fetch')}</div>
-            <p className="dshst-card-desc">{t('fetchTabHint')}</p>
-          </div>
-          <AdapterPicker
-            manifests={adapters.fetch}
-            value={draft.fetch.adapter}
-            text={text}
-            t={t}
-            onChange={(id) => edit({
-              ...draft,
-              fetch: {
-                adapter: id,
-                adapters: {
-                  ...draft.fetch.adapters,
-                  [id]: draft.fetch.adapters[id] ?? (findManifest(adapters.fetch, id)?.defaults as JsonObject | undefined) ?? {},
+        <div role="tabpanel" id="dshst-panel-fetch" aria-labelledby="dshst-tab-fetch">
+          <section className="dshst-card">
+            <div>
+              <div className="dshst-card-title">{t('fetch')}</div>
+              <p className="dshst-card-desc">{t('fetchTabHint')}</p>
+            </div>
+            <AdapterPicker
+              manifests={adapters.fetch}
+              value={draft.fetch.adapter}
+              text={text}
+              t={t}
+              onChange={(id) => edit({
+                ...draft,
+                fetch: {
+                  adapter: id,
+                  adapters: {
+                    ...draft.fetch.adapters,
+                    [id]: draft.fetch.adapters[id] ?? (findManifest(adapters.fetch, id)?.defaults as JsonObject | undefined) ?? {},
+                  },
                 },
-              },
-            })}
-          />
-          <AdapterForm
-            manifest={findManifest(adapters.fetch, draft.fetch.adapter)}
-            config={adapterConfig(draft.fetch, draft.fetch.adapter)}
-            errors={errors}
-            disabled={readOnly}
-            text={text}
-            t={t}
-            onChange={(config) => edit({
-              ...draft,
-              fetch: { ...draft.fetch, adapters: { ...draft.fetch.adapters, [draft.fetch.adapter]: config } },
-            })}
-          />
-          <SecretFields
-            manifest={findManifest(adapters.fetch, draft.fetch.adapter)}
-            config={adapterConfig(draft.fetch, draft.fetch.adapter)}
-            info={credentialInfo}
-            drafts={secretDrafts}
-            busy={secretBusy}
-            text={text}
-            t={t}
-            onDraft={(ref, value) => setSecretDrafts(previous => ({ ...previous, [ref]: value }))}
-            onSave={(ref) => { void saveSecret(ref) }}
-            onClear={(ref) => { void clearSecret(ref) }}
-          />
-        </section>
+              })}
+            />
+            <AdapterForm
+              manifest={findManifest(adapters.fetch, draft.fetch.adapter)}
+              config={adapterConfig(draft.fetch, draft.fetch.adapter)}
+              errors={fetchIssues}
+              disabled={readOnly}
+              text={text}
+              t={t}
+              onChange={(config) => edit({
+                ...draft,
+                fetch: { ...draft.fetch, adapters: { ...draft.fetch.adapters, [draft.fetch.adapter]: config } },
+              })}
+            />
+            <SecretFields
+              manifest={findManifest(adapters.fetch, draft.fetch.adapter)}
+              config={adapterConfig(draft.fetch, draft.fetch.adapter)}
+              info={credentialInfo}
+              drafts={secretDrafts}
+              busy={secretBusy}
+              text={text}
+              t={t}
+              onDraft={(ref, value) => setSecretDrafts(previous => ({ ...previous, [ref]: value }))}
+              onSave={(ref) => { void saveSecret(ref) }}
+              onClear={(ref) => { void clearSecret(ref) }}
+            />
+          </section>
+          <section className="dshst-card">
+            <div>
+              <div className="dshst-card-title">{t('quickFetch')}</div>
+              <p className="dshst-card-desc">{t('testFetchHint')}</p>
+            </div>
+            <div className="dshst-actions">
+              <Input aria-label={t('url')} value={fetchUrl} onChange={event => { setFetchUrl(event.target.value) }} placeholder={t('url')} />
+              <Button size="sm" variant="outline" disabled={testing !== undefined} onClick={() => { void runFetchTest() }}>{testing === 'fetch' ? t('testing') : t('test')}</Button>
+            </div>
+          </section>
+          <PreviewPanel preview={preview?.kind === 'fetch' ? preview : undefined} t={t} />
+        </div>
       ) : null}
 
       {tab === 'research' ? (
-        <section className="dshst-card">
-          <div>
-            <div className="dshst-card-title">{t('research')}</div>
-            <p className="dshst-card-desc">{t('researchHint')}</p>
-          </div>
-          <BooleanRow t={t} label={t('researchEnabled')} checked={draft.research.enabled} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, enabled: value } })} />
-          <NumberRow label={t('researchMaxResults')} value={draft.research.maxResults} min={1} max={20} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, maxResults: value } })} />
-          <NumberRow label={t('researchMaxFetch')} value={draft.research.maxFetch} min={1} max={10} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, maxFetch: value } })} />
-          <NumberRow label={t('researchDefaultFetchTop')} value={draft.research.defaultFetchTop} min={0} max={10} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, defaultFetchTop: value } })} />
-          <NumberRow label={t('researchMaxCharsPerPage')} value={draft.research.maxCharsPerPage} min={1000} max={200000} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, maxCharsPerPage: value } })} />
-          <NumberRow label={t('researchMaxTotalChars')} value={draft.research.maxTotalChars} min={1000} max={500000} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, maxTotalChars: value } })} />
-          <NumberRow label={t('researchConcurrency')} value={draft.research.concurrency} min={1} max={8} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, concurrency: value } })} />
-          <NumberRow label={t('researchTimeout')} value={draft.research.timeoutMs} min={5000} max={600000} step={1000} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, timeoutMs: value } })} />
-        </section>
+        <div role="tabpanel" id="dshst-panel-research" aria-labelledby="dshst-tab-research">
+          <section className="dshst-card">
+            <div>
+              <div className="dshst-card-title">{t('research')}</div>
+              <p className="dshst-card-desc">{t('researchHint')}</p>
+            </div>
+            <BooleanRow label={t('researchEnabled')} checked={draft.research.enabled} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, enabled: value } })} />
+            <NumberRow label={t('researchMaxResults')} value={draft.research.maxResults} min={1} max={20} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, maxResults: value } })} />
+            <NumberRow label={t('researchMaxFetch')} value={draft.research.maxFetch} min={1} max={10} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, maxFetch: value } })} />
+            <NumberRow label={t('researchDefaultFetchTop')} value={draft.research.defaultFetchTop} min={0} max={10} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, defaultFetchTop: value } })} />
+            <NumberRow label={t('researchMaxCharsPerPage')} value={draft.research.maxCharsPerPage} min={1000} max={200000} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, maxCharsPerPage: value } })} />
+            <NumberRow label={t('researchMaxTotalChars')} value={draft.research.maxTotalChars} min={1000} max={500000} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, maxTotalChars: value } })} />
+            <NumberRow label={t('researchConcurrency')} value={draft.research.concurrency} min={1} max={8} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, concurrency: value } })} />
+            <NumberRow label={t('researchTimeout')} value={draft.research.timeoutMs} min={5000} max={600000} step={1000} disabled={readOnly} onChange={(value) => edit({ ...draft, research: { ...draft.research, timeoutMs: value } })} />
+          </section>
+        </div>
       ) : null}
 
       {tab === 'advanced' ? (
-        <section className="dshst-card">
-          <div>
-            <div className="dshst-card-title">{t('advanced')}</div>
-            <p className="dshst-card-desc">{t('configPathHint')}</p>
-          </div>
-          <div className="dshst-row"><label>{t('configPath')}</label><code>{status?.configPath ?? '—'}</code></div>
-          <div className="dshst-row"><label>{t('cache')}</label><div className="dshst-actions"><Tag>{t('entries', { n: status?.cache.size ?? 0 })}</Tag><Button size="sm" variant="outline" onClick={() => { void clearCache().then(() => fetchStatus()).then(setStatus) }}>{t('clearCache')}</Button></div></div>
-          <div className="dshst-row"><label>{t('lastErrors')}</label><div>{status?.lastErrors.length ? status.lastErrors.map(error => <p key={`${error.time}:${error.code}`} className="dshst-hint">{error.time} · {error.code} · {error.message}</p>) : <p className="dshst-hint">{t('noErrors')}</p>}</div></div>
-        </section>
+        <div role="tabpanel" id="dshst-panel-advanced" aria-labelledby="dshst-tab-advanced">
+          <section className="dshst-card">
+            <div>
+              <div className="dshst-card-title">{t('advanced')}</div>
+              <p className="dshst-card-desc">{t('configPathHint')}</p>
+            </div>
+            <div className="dshst-row"><label>{t('version')}</label><code>{status?.version ?? '—'}</code></div>
+            <div className="dshst-row"><label>{t('configPath')}</label><code>{status?.configPath ?? '—'}</code></div>
+            <div className="dshst-row"><label>{t('cache')}</label><div className="dshst-actions"><Tag>{t('entries', { n: status?.cache.size ?? 0 })}</Tag><Button size="sm" variant="outline" onClick={() => { void clearCache().then(() => fetchStatus()).then(setStatus) }}>{t('clearCache')}</Button></div></div>
+            <div className="dshst-row">
+              <label>{t('lastErrors')}</label>
+              <div>
+                {status?.lastErrors.length ? (
+                  <ul className="dshst-research-list">
+                    {status.lastErrors.map(error => (
+                      <li key={`${error.time}:${error.code}`}>
+                        {error.time} · {error.code}{error.host === undefined ? '' : ` · ${error.host}`} · {error.message}
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="dshst-hint">{t('noErrors')}</p>}
+                <div className="dshst-actions">
+                  <Button size="sm" variant="outline" disabled={status === undefined} onClick={() => { void copyDiagnostics() }}>{t('copyDiagnostics')}</Button>
+                  <Button size="sm" variant="ghost" disabled={status?.lastErrors.length === 0} onClick={() => { void clearDiagnosticEntries() }}>{t('clearErrors')}</Button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       <footer className="dshst-save">
-        <span className="dshst-hint">{dirty ? t('dirty') : message ?? t('clean')}</span>
+        <span className="dshst-hint" role="status" aria-live="polite">
+          {dirty ? `${t('dirty')}${message === undefined ? '' : ` · ${message}`}` : message ?? t('clean')}
+        </span>
         <div className="dshst-actions">
           <Button variant="ghost" disabled={!dirty || saving} onClick={() => { setDraft(normalize(snapshot.value)); setDirty(false); setMessage(undefined) }}>{t('discard')}</Button>
           <Button variant="primary" disabled={!dirty || saving || errors.length > 0 || readOnly} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
@@ -540,7 +701,7 @@ function Overview({ t, status, currentSearch, currentFetch, query, setQuery, fet
   fetchUrl: string
   setFetchUrl: (value: string) => void
   testing: Testing
-  preview: string | undefined
+  preview: PreviewState | undefined
   testSearch: () => Promise<boolean>
   testFetch: () => Promise<boolean>
   setProvider: (kind: 'search' | 'fetch', enabled: boolean) => Promise<void>
@@ -565,12 +726,12 @@ function Overview({ t, status, currentSearch, currentFetch, query, setQuery, fet
           <Button size="sm" variant={currentSearch === SEARCH_PROVIDER ? 'outline' : 'primary'} onClick={() => { void setProvider('search', currentSearch !== SEARCH_PROVIDER) }}>{currentSearch === SEARCH_PROVIDER ? t('restore') : t('takeover')}</Button>
           <Tag tone={currentSearch === SEARCH_PROVIDER ? 'info' : 'outline'}>{currentSearch === SEARCH_PROVIDER ? t('searchTakeoverTag') : t('defaultProvider')}</Tag>
         </div>
-        <div className="dshst-details">
+        <details className="dshst-details">
           <summary>{t('status')}</summary>
           <p className="dshst-hint">
             {status?.search.available ? t('configured') : t('notConfigured')} · {status?.search.instances === 1 ? t('oneInstance') : t('instancesCount', { n: status?.search.instances ?? 0 })} · {t('cache')} {status?.cache.size ?? 0}
           </p>
-        </div>
+        </details>
       </section>
       <section className="dshst-card">
         <div className="dshst-card-title">{t('takeoverFetch')}</div>
@@ -583,12 +744,51 @@ function Overview({ t, status, currentSearch, currentFetch, query, setQuery, fet
       </section>
       <section className="dshst-card" style={{ gridColumn: '1 / -1' }}>
         <div className="dshst-card-title">{t('quickSearch')}</div>
-        <div className="dshst-actions"><Input value={query} onChange={event => { setQuery(event.target.value) }} placeholder={t('query')} /><Button size="sm" variant="outline" disabled={testing !== undefined} onClick={() => { void testSearch() }}>{testing === 'search' ? t('testing') : t('test')}</Button></div>
+        <div className="dshst-actions"><Input aria-label={t('query')} value={query} onChange={event => { setQuery(event.target.value) }} placeholder={t('query')} /><Button size="sm" variant="outline" disabled={testing !== undefined} onClick={() => { void testSearch() }}>{testing === 'search' ? t('testing') : t('test')}</Button></div>
         <div className="dshst-card-title" style={{ marginTop: 8 }}>{t('quickFetch')}</div>
-        <div className="dshst-actions"><Input value={fetchUrl} onChange={event => { setFetchUrl(event.target.value) }} placeholder={t('url')} /><Button size="sm" variant="outline" disabled={testing !== undefined} onClick={() => { void testFetch() }}>{testing === 'fetch' ? t('testing') : t('test')}</Button></div>
+        <div className="dshst-actions"><Input aria-label={t('url')} value={fetchUrl} onChange={event => { setFetchUrl(event.target.value) }} placeholder={t('url')} /><Button size="sm" variant="outline" disabled={testing !== undefined} onClick={() => { void testFetch() }}>{testing === 'fetch' ? t('testing') : t('test')}</Button></div>
       </section>
-      {preview === undefined ? null : <section className="dshst-card" style={{ gridColumn: '1 / -1' }}><div className="dshst-card-title">{t('preview')}</div><pre className="dshst-pre">{preview}</pre></section>}
+      {preview === undefined ? null : <div style={{ gridColumn: '1 / -1' }}><PreviewPanel preview={preview} t={t} /></div>}
     </div>
+  )
+}
+
+function PreviewPanel({ preview, t }: { preview: PreviewState | undefined; t: Translate }): React.ReactElement | null {
+  if (preview === undefined) return null
+  const title = t('preview')
+  return (
+    <section className="dshst-card" aria-live="polite">
+      <div className="dshst-actions">
+        <div className="dshst-card-title">{title}</div>
+        <Tag tone={preview.ok ? 'success' : 'danger'}>{preview.ok ? t('testOk') : t('testFail')}</Tag>
+        {preview.elapsedMs === undefined ? null : <span className="dshst-hint">{t('elapsedMs', { ms: preview.elapsedMs })}</span>}
+      </div>
+      {preview.message === undefined ? null : <p className="dshst-error">{preview.message}</p>}
+      {preview.kind === 'search' ? (
+        (preview.sources ?? []).length === 0 ? <p className="dshst-hint">{t('noResults')}</p> : (
+          <ul className="dshst-preview-results">
+            {(preview.sources ?? []).map((source, index) => (
+              <li key={`${source.url}:${index}`}>
+                <a href={source.url} target="_blank" rel="noreferrer noopener">{source.title ?? source.url}</a>
+                <div className="dshst-hint">{source.url}</div>
+                {source.snippet === undefined ? null : <p className="dshst-hint">{source.snippet}</p>}
+              </li>
+            ))}
+          </ul>
+        )
+      ) : (
+        <div>
+          <p className="dshst-hint">
+            {preview.url ?? ''}
+            {preview.statusCode === undefined ? '' : ` · HTTP ${preview.statusCode}`}
+            {preview.bodyKind === undefined ? '' : ` · ${preview.bodyKind}`}
+            {preview.chars === undefined ? '' : ` · ${preview.chars} ${t('chars')}`}
+            {preview.truncated === true ? ` · ${t('truncated')}` : ''}
+          </p>
+          {preview.content === undefined ? null : <pre className="dshst-pre">{preview.content}</pre>}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -599,14 +799,20 @@ function AdapterPicker({ manifests, value, text, t, onChange }: {
   t: Translate
   onChange: (id: string) => void
 }): React.ReactElement {
+  const selected = manifests.find(manifest => manifest.id === value)
+  const missing = value.length > 0 && selected === undefined
   return (
     <div className="dshst-row">
       <label htmlFor="dshst-adapter">{t('adapter')}</label>
       <div>
         <select id="dshst-adapter" value={value} onChange={event => { onChange(event.target.value) }}>
-          {manifests.length === 0 ? <option value={value}>{value}</option> : null}
+          {missing ? <option value={value}>{t('adapterNotInstalled', { id: value })}</option> : null}
           {manifests.map(manifest => <option key={manifest.id} value={manifest.id}>{text(manifest.label)}</option>)}
         </select>
+        {selected === undefined ? null : <p className="dshst-hint">{text(selected.description)}</p>}
+        {selected?.capabilities === undefined || selected.capabilities.length === 0 ? null : (
+          <div className="dshst-tags">{selected.capabilities.map(capability => <Tag key={capability}>{capability}</Tag>)}</div>
+        )}
         <p className="dshst-hint">{t('adapterHint')}</p>
       </div>
     </div>
@@ -639,6 +845,7 @@ function AdapterForm({ manifest, config, errors, disabled, text, t, onTestInstan
                 <InstanceEditor
                   value={getPath(config, field.key)}
                   disabled={disabled}
+                  invalid={error !== undefined}
                   t={t}
                   onTest={onTestInstance}
                   testingUrl={testingInstanceUrl}
@@ -724,15 +931,17 @@ function SecretFields({ manifest, config, info, drafts, busy, text, t, onDraft, 
   )
 }
 
-function BooleanRow({ t, label, checked, disabled, onChange }: {
-  t: Translate
+function BooleanRow({ label, checked, disabled, onChange }: {
   label: string
   checked: boolean
   disabled: boolean
   onChange: (value: boolean) => void
 }): React.ReactElement {
   return (
-    <div className="dshst-row"><label>{label}</label><div><Button size="sm" variant={checked ? 'primary' : 'outline'} onClick={() => { onChange(!checked) }} disabled={disabled}>{checked ? t('on') : t('off')}</Button></div></div>
+    <div className="dshst-row">
+      <label>{label}</label>
+      <div><Switch checked={checked} label={label} onChange={onChange} disabled={disabled} /></div>
+    </div>
   )
 }
 
@@ -794,29 +1003,56 @@ function findManifest(list: readonly AdapterManifest[], id: string): AdapterMani
   return list.find(manifest => manifest.id === id)
 }
 
-function hasEnabledSearxngInstance(draft: StoredConfig): boolean {
-  const raw = draft.search.adapters.searxng as { instances?: unknown } | undefined
-  if (!Array.isArray(raw?.instances)) return false
-  return raw.instances.some(entry => typeof entry === 'object' && entry !== null
-    && (entry as { enabled?: unknown }).enabled !== false
-    && typeof (entry as { url?: unknown }).url === 'string'
-    && (entry as { url: string }).url.trim().length > 0)
+function hasEnabledInstanceConfig(raw: JsonObject): boolean {
+  const instances = raw.instances
+  if (!Array.isArray(instances)) return false
+  return instances.some(entry => isRecord(entry)
+    && entry.enabled !== false
+    && typeof entry.url === 'string'
+    && entry.url.trim().length > 0)
 }
 
-function validateDraft(draft: StoredConfig, adapters: AdapterListResponse, t: Translate): AdapterIssue[] {
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function validateSearchDraft(draft: StoredConfig, adapters: AdapterListResponse): AdapterIssue[] {
   const issues: AdapterIssue[] = []
-  const searxng = validateSearxngConfig(draft.search.adapters.searxng ?? {})
-  if (draft.search.adapter === 'searxng') issues.push(...searxng.issues)
-  const searchManifest = findManifest(adapters.search, draft.search.adapter)
-  if (searchManifest !== undefined && searchManifest.id !== 'searxng') {
-    issues.push(...validateManifestConfig(searchManifest, adapterConfig(draft.search, draft.search.adapter)).issues)
+  if (draft.search.adapter === 'searxng') {
+    issues.push(...validateSearxngConfig(draft.search.adapters.searxng ?? {}).issues)
+    return issues
   }
-  const readable = validateReadableHttpConfig(draft.fetch.adapters['readable-http'] ?? {})
-  if (draft.fetch.adapter === 'readable-http') issues.push(...readable.issues)
-  const fetchManifest = findManifest(adapters.fetch, draft.fetch.adapter)
-  if (fetchManifest !== undefined && fetchManifest.id !== 'readable-http') {
-    issues.push(...validateManifestConfig(fetchManifest, adapterConfig(draft.fetch, draft.fetch.adapter)).issues)
+  const manifest = findManifest(adapters.search, draft.search.adapter)
+  if (manifest !== undefined) {
+    issues.push(...validateManifestConfig(manifest, adapterConfig(draft.search, draft.search.adapter)).issues)
   }
+  return issues
+}
+
+function validateFetchDraft(draft: StoredConfig, adapters: AdapterListResponse): AdapterIssue[] {
+  const issues: AdapterIssue[] = []
+  if (draft.fetch.adapter === 'readable-http') {
+    issues.push(...validateReadableHttpConfig(draft.fetch.adapters['readable-http'] ?? {}).issues)
+    return issues
+  }
+  const manifest = findManifest(adapters.fetch, draft.fetch.adapter)
+  if (manifest !== undefined) {
+    issues.push(...validateManifestConfig(manifest, adapterConfig(draft.fetch, draft.fetch.adapter)).issues)
+  }
+  return issues
+}
+
+function validateResearchDraft(draft: StoredConfig, t: Translate): AdapterIssue[] {
+  const issues: AdapterIssue[] = []
   if (draft.research.defaultFetchTop > draft.research.maxFetch) issues.push({ path: 'research.defaultFetchTop', message: t('researchFetchTopTooLarge') })
   if (draft.research.maxTotalChars < draft.research.maxCharsPerPage) issues.push({ path: 'research.maxTotalChars', message: t('researchTotalCharsTooSmall') })
   return issues

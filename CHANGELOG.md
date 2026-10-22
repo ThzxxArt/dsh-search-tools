@@ -31,6 +31,30 @@
   presentation-meta projection.
 - The research card reports successful fetches separately when some pages fail
   (`1/2 fetched`) instead of counting attempts as successes.
+- Search and Fetch tabs now have inline test panels. Results are structured:
+  elapsed time, safe `http(s)` source links, snippets, and fetch metadata/content,
+  instead of the previous single text blob. Tests refuse to run while the draft
+  has validation errors.
+- Advanced diagnostics can copy a credential-free summary and clear the in-memory
+  error ring (`POST /api/dsh-search-tools/diagnostics/clear`).
+- Search and Fetch validation is section-scoped: a broken search draft no longer
+  blocks a fetch test, and fetch errors no longer attach to search fields that
+  happen to share a key.
+- Tab semantics (`role=tablist/tab/tabpanel`, arrow/Home/End navigation),
+  `aria-invalid` on invalid fields, an aria-live save/diagnostic status, and
+  `Cmd/Ctrl+S` save.
+- The active-takeover instance rule is driven by the selected manifest's
+  `instances` field rather than a hard-coded SearXNG check. External adapters
+  without instances no longer produce a false save error.
+- `/status` lists credential refs declared by every registered adapter manifest,
+  not just SearXNG's two refs.
+- The settings footer is no longer sticky, so it cannot cover a long test result
+  in the 800px settings pane. Overview cards use `auto-fit` columns to avoid
+  label overlap at that width.
+- Activation-hint and takeover-warning cards use token fallbacks, so they render
+  with a real border/background outside the settings theme scope.
+- Adapter picker shows the selected manifest's description/capabilities and keeps
+  a visible “not installed” option for orphaned config.
 
 ### Verified
 
@@ -43,8 +67,15 @@
   GUI: the tool executed against a mock SearXNG, fetched two public pages, wrote
   a `tool/result` with presentation meta, and rendered the card in the
   conversation (`2 sources`, `2 fetched`, source links, fetched details).
-- 41 tests across 10 files, including settings-page, research-card,
-  takeover-warning, and `web_research` pipeline tests (`pnpm test`).
+- 51 tests across 12 files, including settings-page, activation-hint,
+  research-card, takeover-warning, diagnostics text, and `web_research` pipeline
+  tests (`pnpm test`).
+- A live Web GUI pass on the new form UX: inline search test rendered two
+  structured sources, the footer no longer covered the result, the zero-instance
+  empty state and one-column Overview layout rendered correctly, `Copy
+  diagnostics`/`diagnostics/clear` worked, and the activation hint rendered as a
+  bordered card after disabling/re-enabling the bundle. Dark theme and a 700px
+  narrow viewport also rendered correctly; tabs wrap instead of clipping.
 
 ### Fixed during M0
 

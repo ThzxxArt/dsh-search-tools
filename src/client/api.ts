@@ -59,6 +59,10 @@ export async function clearCache(): Promise<{ ok: boolean }> {
   return await postJson<{ ok: boolean }>('cache/clear', {}, undefined)
 }
 
+export async function clearDiagnostics(): Promise<{ ok: boolean }> {
+  return await postJson<{ ok: boolean }>('diagnostics/clear', {}, undefined)
+}
+
 /** Stable default adapter manifest lookup. */
 export function findManifest(list: readonly AdapterManifest[], id: string): AdapterManifest | undefined {
   return list.find(manifest => manifest.id === id)

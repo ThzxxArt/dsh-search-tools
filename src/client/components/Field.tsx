@@ -44,6 +44,7 @@ export function Field({
             id={`dshst-${field.key}`}
             value={typeof value === 'string' ? value : String(field.default ?? '')}
             disabled={disabled}
+            aria-invalid={error !== undefined}
             onChange={event => onChange(event.target.value)}
           >
             {field.options.map(option => <option key={option.value} value={option.value}>{text(option.label)}</option>)}
@@ -67,6 +68,7 @@ export function Field({
             step={field.step}
             value={typeof value === 'number' ? String(value) : ''}
             disabled={disabled}
+            aria-invalid={error !== undefined}
             onChange={(event) => {
               const next = Number(event.target.value)
               onChange(Number.isFinite(next) ? next : (field.default ?? 0))
@@ -92,6 +94,7 @@ export function Field({
           placeholder={field.placeholder}
           value={typeof value === 'string' ? value : ''}
           disabled={disabled || (field.kind === 'password' && field.secretRef !== undefined && secretWritable === false)}
+          aria-invalid={error !== undefined}
           onChange={event => onChange(event.target.value)}
         />
         {field.kind === 'password' && field.secretRef !== undefined ? (
@@ -132,6 +135,7 @@ function TagsField({ field, value, disabled, error, text, t, onChange }: FieldPr
             value={draft}
             placeholder={'placeholder' in field ? field.placeholder : undefined}
             disabled={disabled}
+            aria-invalid={error !== undefined}
             onChange={event => { setDraft(event.target.value) }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') { event.preventDefault(); add() }
@@ -158,9 +162,10 @@ export interface InstanceTestResult {
   latencyMs?: number
 }
 
-export function InstanceEditor({ value, disabled, t, onTest, testingUrl, results = {}, onChange }: {
+export function InstanceEditor({ value, disabled, invalid, t, onTest, testingUrl, results = {}, onChange }: {
   value: unknown
   disabled?: boolean
+  invalid?: boolean | undefined
   t: Translate
   onTest?: ((instance: InstanceValue) => void) | undefined
   testingUrl?: string | undefined
@@ -184,6 +189,7 @@ export function InstanceEditor({ value, disabled, t, onTest, testingUrl, results
               placeholder="https://searxng.example.com"
               value={instance.url}
               disabled={disabled}
+              aria-invalid={invalid === true}
               onChange={event => update(index, { url: event.target.value })}
             />
             <Input
