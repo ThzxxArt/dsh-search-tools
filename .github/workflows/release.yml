@@ -23,7 +23,6 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile --registry=https://registry.npmjs.org
       - run: pnpm release
-      - run: pnpm pack --pack-destination dist
       - name: Publish to npm
         run: |
           package=$(node -p "require('./package.json').name")
@@ -47,6 +46,21 @@ jobs:
           exit 1
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Download the published npm tarball
+        run: |
+          package=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          mkdir -p dist
+          for attempt in 1 2 3 4 5 6; do
+            url=$(npm view "$package@$version" dist.tarball --registry=https://registry.npmjs.org)
+            if [ -n "$url" ] && curl --fail --silent --show-error --location "$url" --output "dist/$package-$version.tgz"; then
+              echo "Downloaded the registry tarball: $url"
+              exit 0
+            fi
+            echo "Waiting for the npm tarball (attempt $attempt/6)..."
+            sleep 10
+          done
+          exit 1
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*.tgz

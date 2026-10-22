@@ -49,8 +49,9 @@ git push origin main --follow-tags
 ```
 
 The tag runs `.github/workflows/release.yml`, which repeats the release gate,
-publishes with provenance using `NPM_TOKEN`, and attaches the tarball to the
-GitHub release.
+publishes with provenance using `NPM_TOKEN`, downloads the published registry
+tarball, and attaches that exact file to the GitHub release. The release asset
+therefore matches the npm artifact byte for byte.
 
 ## Post-publish smoke test
 
