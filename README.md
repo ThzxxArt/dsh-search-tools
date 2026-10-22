@@ -2,10 +2,11 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
 
-> **Status: skeleton / v0.1.0 in progress.** The host and client bundles build, the
-> adapter registry and stable dispatchers are wired, and the settings section and
-> `web_research` card are present. Real SearXNG and Readability integration tests,
-> the full form UX, and the live DSH GUI smoke test are the next milestones.
+> **Status: v0.1.0 in progress, M0 verified.** The host and client bundles build,
+> Settings → Search Tools appears in the real Web GUI, Save writes YAML,
+> authenticated routes work, search/fetch takeover and restore work, and
+> credentials stay out of YAML. See `docs/m0-verification.md`. Remaining work is
+> the full form UX, the `web_research` card replay, and end-to-end model tests.
 
 ## What it does
 
@@ -78,8 +79,12 @@ src/research/             web_research pipeline, render, tool
 src/host/                 authenticated settings routes
 src/client/               Settings → Search Tools + tool card
 src/shared/               config, validation, diff, URL helpers
-tests/                    config, diff, URL, SearXNG parsing
+tests/                    config, diff, URL, SearXNG parsing, dispatcher/auth
 ```
+
+Readability uses `linkedom`, not `jsdom`: jsdom's `tr46` dependency calls
+`createRequire(...).resolve.paths`, which DSH's profile-resolution hook does not
+implement. linkedom is smaller and works inside the Host.
 
 ## Security
 

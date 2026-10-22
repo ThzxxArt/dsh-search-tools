@@ -1,6 +1,7 @@
 /** Conversation card for `web_research`; falls back to a compact row on bad meta. */
 
 import { StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 
 interface ResearchMeta {
@@ -11,7 +12,10 @@ interface ResearchMeta {
   truncated?: boolean
 }
 
-export function ResearchCard(props: ToolCallViewProps): React.ReactElement {
+type ResearchCardProps = ToolCallViewProps & PropsLocale<'dsh-search-tools'>
+
+export function ResearchCard(props: ResearchCardProps): React.ReactElement {
+  const { t } = props
   const block = props.block as unknown as { args?: unknown; meta?: unknown }
   const args = typeof block.args === 'object' && block.args !== null ? block.args as { query?: unknown } : {}
   const meta = normalizeMeta(block.meta)
@@ -23,7 +27,7 @@ export function ResearchCard(props: ToolCallViewProps): React.ReactElement {
       <div className="dshst-research-head">
         <StateDot state={phase === 'preparing' ? 'ongoing' : 'ongoing'} />
         <span>{query}</span>
-        <Tag tone="outline">搜索 + 抓取</Tag>
+        <Tag tone="outline">{t('researchCardSearchFetch')}</Tag>
       </div>
     )
   }
@@ -33,10 +37,10 @@ export function ResearchCard(props: ToolCallViewProps): React.ReactElement {
       <div className="dshst-research-head">
         <StateDot state={meta.fetched?.some(page => page.error !== undefined) ? 'warning' : 'done'} />
         <strong>{query}</strong>
-        <Tag tone="outline">{meta.sourceCount ?? meta.sources?.length ?? 0} sources</Tag>
-        <Tag tone="outline">{meta.fetched?.length ?? 0} fetched</Tag>
-        {meta.truncated === true ? <Tag tone="warning">truncated</Tag> : null}
-        <Tag tone="quiet">外部内容不可信</Tag>
+        <Tag tone="outline">{t('researchCardSources', { n: meta.sourceCount ?? meta.sources?.length ?? 0 })}</Tag>
+        <Tag tone="outline">{t('researchCardFetched', { n: meta.fetched?.length ?? 0 })}</Tag>
+        {meta.truncated === true ? <Tag tone="warning">{t('researchCardTruncated')}</Tag> : null}
+        <Tag tone="quiet">{t('researchCardUntrusted')}</Tag>
       </div>
       {meta.sources !== undefined && meta.sources.length > 0 ? (
         <ul className="dshst-research-list">
@@ -51,11 +55,11 @@ export function ResearchCard(props: ToolCallViewProps): React.ReactElement {
       ) : null}
       {meta.fetched !== undefined && meta.fetched.length > 0 ? (
         <details className="dshst-details">
-          <summary>抓取详情</summary>
+          <summary>{t('researchCardDetails')}</summary>
           <ul className="dshst-research-list">
             {meta.fetched.map(page => (
               <li key={page.url}>
-                {page.title ?? page.url} · {page.chars ?? 0} chars
+                {page.title ?? page.url} · {page.chars ?? 0} {t('researchCardChars')}
                 {page.error === undefined ? null : <span className="dshst-error"> · {page.error}</span>}
               </li>
             ))}

@@ -1,4 +1,6 @@
-/** Lazy Readability extraction over jsdom. Host-only. */
+/** Lazy Readability extraction over linkedom. Host-only. */
+
+import { parseHTML } from 'linkedom'
 
 export interface ReadableOptions {
   minArticleChars: number
@@ -17,10 +19,16 @@ export interface ReadableExtraction {
   publishedTime?: string
 }
 
-let jsdomPromise: Promise<typeof import('jsdom')> | undefined
 let readabilityPromise: Promise<typeof import('@mozilla/readability')> | undefined
 
-/** Extract the main article. Returns undefined when the input is not an article. */
+/**
+ * Extract the main article. Returns undefined when the input is not an article.
+ *
+ * linkedom is used instead of jsdom because jsdom's `tr46` dependency calls
+ * `createRequire(...).resolve.paths`, which DSH's profile-resolution hook does
+ * not implement. linkedom is smaller, has no native deps, and is sufficient
+ * for Readability's DOM traversal.
+ */
 export async function extractReadable(
   html: string,
   url: string,
@@ -29,15 +37,16 @@ export async function extractReadable(
   if (html.length > options.maxBodyChars) return undefined
   if (html.includes('data-dsh-readable="1"')) return undefined
 
-  const [{ JSDOM }, { Readability }] = await Promise.all([loadJsdom(), loadReadability()])
-  let dom: import('jsdom').JSDOM
+  const { Readability } = await loadReadability()
+  let document: Document
   try {
-    dom = new JSDOM(html, { url })
+    const withBase = addBase(html, url)
+    document = parseHTML(withBase).document as unknown as Document
   } catch {
     return undefined
   }
   try {
-    const article = new Readability(dom.window.document, {
+    const article = new Readability(document, {
       charThreshold: options.minArticleChars,
     }).parse()
     if (article === null) return undefined
@@ -63,14 +72,16 @@ export async function extractReadable(
     }
   } catch {
     return undefined
-  } finally {
-    dom.window.close()
   }
 }
 
-async function loadJsdom(): Promise<typeof import('jsdom')> {
-  jsdomPromise ??= import('jsdom')
-  return jsdomPromise
+/** Give relative links a usable base without changing the article body. */
+function addBase(html: string, url: string): string {
+  const href = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  if (/<head[\s>]/i.test(html)) {
+    return html.replace(/<head([^>]*)>/i, `<head$1><base href="${href}">`)
+  }
+  return `<head><base href="${href}"></head>${html}`
 }
 
 async function loadReadability(): Promise<typeof import('@mozilla/readability')> {

@@ -968,7 +968,7 @@ inner.fetch(url)
 
 - 返回干净 HTML，让内置 `web_fetch` 的 turndown 保留结构。
 - 加 `data-dsh-readable="1"` 标记，`web_research` 跳过二次提取。
-- `jsdom` 懒加载；失败则永久透传并 warn 一次。
+- `linkedom` 懒加载；失败则原样透传并 warn 一次。**不要用 jsdom**：它的 `tr46` 依赖会调用 `createRequire(...).resolve.paths`，被 DSH 的 profile resolution hook 打断；linkedom 足够 Readability 使用，且安装体积小得多。
 - 内网地址由 `HttpFetchProvider` 的 SSRF 防护拒绝。
 
 ### 5.3 未来 fetch adapter
@@ -1288,7 +1288,7 @@ dsh-search-tools/
     "@joplin/turndown-plugin-gfm": "^1.0.67",
     "@mozilla/readability": "^0.6.0",
     "cheerio": "^1.1.2",
-    "jsdom": "^26.1.0",
+    "linkedom": "^0.18.13",
     "lru-cache": "^11.2.2",
     "normalize-url": "^8.1.0",
     "turndown": "^7.2.0",
@@ -1309,12 +1309,10 @@ dsh-search-tools/
     "@deepseek-ai/dsh-web-fetch-http": "^0.0.1-rc.1",
     "@deepseek-ai/schemastery": "^3.18.5",
     "@testing-library/react": "^16.0.0",
-    "@types/jsdom": "^21.1.7",
     "@types/node": "^22.15.0",
     "@types/react": "^18.3.0",
     "@types/turndown": "^5.0.6",
     "@vitest/coverage-v8": "^4.1.11",
-    "jsdom": "^26.1.0",
     "publint": "^0.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -1479,7 +1477,7 @@ M0 是硬门槛：
 | 停用/卸载后 `web.searchProvider` 悬空 | 内置搜索报错 | 详情页警告 + 关闭接管；README；不自动 dispose 写入 |
 | 第三方 adapter 包与核心版本不匹配 | 注册失败 | contract version + peer semver；日志/页面提示 |
 | DSH preview API 变化 | 页面/配置失效 | `engines.dsh` + 适配层 + CI 固定基线 |
-| `jsdom` 体积/CPU | 安装大、卡顿 | 懒加载；2MB 上限；可关 Readability |
+| `linkedom` 解析差异 | 个别页面提取不完整 | 懒加载；2MB 上限；可关 Readability；fixture 回归 |
 | SearXNG 主题变化 | HTML 回退失效 | fixture + 多选择器 |
 | 配置被 home patch 覆盖 | 页面只读 | 显示 Host 原话；不假装成功 |
 

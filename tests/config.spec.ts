@@ -16,6 +16,11 @@ describe('adapter config defaults', () => {
     expect(result.issues.some(issue => issue.path.includes('instances'))).toBe(true)
   })
 
+  it('allows an empty list so the plugin can stay installed but unconfigured', () => {
+    const result = validateSearxngConfig({ instances: [] })
+    expect(result.ok).toBe(true)
+  })
+
   it('rejects duplicate instances', () => {
     const result = validateSearxngConfig({
       instances: [

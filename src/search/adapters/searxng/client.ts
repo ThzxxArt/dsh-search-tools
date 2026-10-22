@@ -1,6 +1,7 @@
 /** SearXNG runtime: auth, failover, retries, cache, JSON/HTML parsing. */
 
 import { LRUCache } from 'lru-cache'
+import { ProxyAgent } from 'undici'
 import type { AdapterContext } from '../../../core/host-types.ts'
 import type {
   CacheStats, ProbeResult, SearchAdapterRuntime, SearchRequest, SearchResult,
@@ -18,7 +19,9 @@ const TOKEN_REF = 'SEARXNG_TOKEN'
 const BASIC_REF = 'SEARXNG_BASIC_AUTH'
 
 export class SearxngRuntime implements SearchAdapterRuntime {
-  private readonly cache: LRUCache<string, SearchResult>
+  private cache: LRUCache<string, SearchResult> | undefined
+  private cacheMax = -1
+  private cacheTtl = -1
   private hits = 0
   private misses = 0
   private readonly startedAt = Date.now()
@@ -27,14 +30,26 @@ export class SearxngRuntime implements SearchAdapterRuntime {
   constructor(
     private readonly ctx: AdapterContext,
     private readonly getRawConfig: () => unknown,
-  ) {
-    this.cache = new LRUCache({ max: 200, ttl: 300_000 })
-  }
+  ) {}
 
   private config(): SearxngConfig {
-    // TODO(M1): recreate the LRU when cacheMaxEntries/cacheTtlMs changes;
-    // LRUCache v11 exposes both as read-only after construction.
     return normalizeSearxngConfig(this.getRawConfig())
+  }
+
+  /** Rebuild the LRU when the live config changes its bounds. */
+  private cacheFor(config: SearxngConfig): LRUCache<string, SearchResult> | undefined {
+    if (config.cacheMaxEntries <= 0) {
+      this.cache = undefined
+      this.cacheMax = config.cacheMaxEntries
+      this.cacheTtl = config.cacheTtlMs
+      return undefined
+    }
+    if (this.cache === undefined || this.cacheMax !== config.cacheMaxEntries || this.cacheTtl !== config.cacheTtlMs) {
+      this.cache = new LRUCache({ max: config.cacheMaxEntries, ttl: config.cacheTtlMs })
+      this.cacheMax = config.cacheMaxEntries
+      this.cacheTtl = config.cacheTtlMs
+    }
+    return this.cache
   }
 
   available(): boolean {
@@ -65,7 +80,8 @@ export class SearxngRuntime implements SearchAdapterRuntime {
       includeDomains: config.includeDomains,
       excludeDomains: config.excludeDomains,
     })
-    const cached = this.cache.get(key)
+    const cache = this.cacheFor(config)
+    const cached = cache?.get(key)
     if (cached !== undefined) {
       this.hits++
       return cached
@@ -80,7 +96,7 @@ export class SearxngRuntime implements SearchAdapterRuntime {
       if (remaining <= 0) break
       try {
         const result = await this.searchInstance(instance, request.query, limit, config, signal, remaining)
-        this.cache.set(key, result)
+        cache?.set(key, result)
         return result
       } catch (error) {
         lastError = error
@@ -101,13 +117,16 @@ export class SearxngRuntime implements SearchAdapterRuntime {
   }
 
   clearCache(): void {
-    this.cache.clear()
+    this.cache = undefined
+    this.cacheMax = -1
+    this.cacheTtl = -1
     this.hits = 0
     this.misses = 0
   }
 
   cacheStats(): CacheStats {
-    return { size: this.cache.size, hits: this.hits, misses: this.misses }
+    const cache = this.cacheFor(this.config())
+    return { size: cache?.size ?? 0, hits: this.hits, misses: this.misses }
   }
 
   /** Visible for tests. */
@@ -294,7 +313,7 @@ async function authHeaders(ctx: AdapterContext, type: SearxngAuthType): Promise<
 }
 
 async function resolveCredential(ctx: AdapterContext, ref: string): Promise<string | undefined> {
-  const stored = await ctx.credentials?.resolve(ref)
+  const stored = await ctx.getCredentials()?.resolve(ref)
   if (stored !== undefined && stored.value.length > 0) return stored.value
   const env = ctx.env[ref]
   return env !== undefined && env.length > 0 ? env : undefined
@@ -362,10 +381,14 @@ async function sleep(ms: number, signal: AbortSignal | undefined): Promise<void>
   })
 }
 
-/** Lazy proxy dispatcher; kept out of the hot path when no proxy is configured. */
-function proxyDispatcher(proxy: string): unknown {
-  // Skeleton: wiring `undici.ProxyAgent` is completed with the first network
-  // integration test. Returning undefined keeps direct requests working.
-  void proxy
-  return undefined
+const proxyAgents = new Map<string, ProxyAgent>()
+
+/** Lazy, per-URL proxy dispatcher; no agent is created when proxy is empty. */
+function proxyDispatcher(proxy: string): ProxyAgent {
+  let agent = proxyAgents.get(proxy)
+  if (agent === undefined) {
+    agent = new ProxyAgent(proxy)
+    proxyAgents.set(proxy, agent)
+  }
+  return agent
 }

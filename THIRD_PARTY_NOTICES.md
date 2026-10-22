@@ -3,7 +3,7 @@
 This package is MIT-licensed. It depends on:
 
 - `@mozilla/readability` — Apache-2.0
-- `jsdom` — MIT
+- `linkedom` — MIT
 - `cheerio` — MIT
 - `lru-cache` — ISC
 - `normalize-url` — MIT

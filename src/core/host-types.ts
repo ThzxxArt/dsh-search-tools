@@ -21,7 +21,8 @@ export interface CredentialLookup {
 /** Host services an adapter may use without importing Cordis or DSH. */
 export interface AdapterContext {
   logger: AdapterLogger
-  credentials?: CredentialLookup
+  /** Resolved per call: credentials may mount after this plugin applies. */
+  getCredentials(): CredentialLookup | undefined
   env: Record<string, string | undefined>
   fetch: FetchLike
   now: () => number

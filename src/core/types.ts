@@ -8,6 +8,13 @@ export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
 export type JsonObject = { [key: string]: JsonValue }
 
+/**
+ * User-facing text that an adapter can ship in more than one language.
+ * Mirrors DSH's package-manifest `LocalizedText`: English is the required
+ * fallback, every other key is a lowercase locale id.
+ */
+export type LocalizedText = string | { readonly en: string; readonly [locale: string]: string }
+
 /** A search source in the portable shape DSH's `ctx.web` consumes. */
 export interface SearchSource {
   url: string
@@ -73,8 +80,8 @@ export type AdapterField = TextField | NumberField | BooleanField | SelectField 
 
 export interface FieldBase {
   key: string
-  label: string
-  description?: string
+  label: LocalizedText
+  description?: LocalizedText
   required?: boolean
 }
 
@@ -102,7 +109,7 @@ export interface BooleanField extends FieldBase {
 export interface SelectField extends FieldBase {
   kind: 'select'
   default?: string
-  options: readonly { value: string; label: string }[]
+  options: readonly { value: string; label: LocalizedText }[]
 }
 
 export interface TagsField extends FieldBase {
@@ -122,8 +129,8 @@ export type AdapterCapability = 'json' | 'html' | 'probe' | 'cache' | 'paginatio
 export interface AdapterManifest {
   kind: 'search' | 'fetch'
   id: string
-  label: string
-  description: string
+  label: LocalizedText
+  description: LocalizedText
   fields: readonly AdapterField[]
   defaults: JsonObject
   capabilities?: readonly AdapterCapability[]
@@ -131,8 +138,8 @@ export interface AdapterManifest {
   secretRefs?: readonly {
     key: string
     ref: string
-    label: string
-    description?: string
+    label: LocalizedText
+    description?: LocalizedText
     authType?: 'bearer' | 'basic'
   }[]
 }

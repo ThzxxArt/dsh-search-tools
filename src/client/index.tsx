@@ -14,8 +14,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { StoredConfig } from '../shared/defaults.ts'
+import { ActivationHint } from './ActivationHint.tsx'
 import { ResearchCard } from './ResearchCard.tsx'
 import { SettingsPage, type WebSelection } from './SettingsPage.tsx'
+import { TakeoverWarning } from './TakeoverWarning.tsx'
 import { NS, en, zh } from './locales.ts'
 import { STYLES } from './styles.ts'
 
@@ -33,7 +35,7 @@ export const inject = ['slots', 'locale', 'remote', 'remote.credentials', 'confi
 
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-search-tools: dictionaries')
-  const t = ctx.locale.bind(NS) as (key: string) => string
+  const t = ctx.locale.bind(NS) as (key: string, params?: Record<string, unknown>) => string
 
   ctx.effect(() => {
     if (typeof document === 'undefined') return () => {}
@@ -55,7 +57,23 @@ export function apply(ctx: ClientContext): void {
         order: 16,
         label: () => t('nav'),
         locale: NS,
-      }, () => createElement(SettingsPage, { form, web, t })))), 'dsh-search-tools: settings page')
+      }, () => createElement(SettingsPage, {
+        form, web, t, locale: ctx.locale, credentials: ctx.remote.credentials,
+      })))), 'dsh-search-tools: settings page')
+
+  ctx.slots.inject('plugins.bundle.activation', () =>
+    ctx.slots.register({
+      name: 'plugins.bundle.activation',
+      key: 'dsh-search-tools',
+      locale: NS,
+    }, ActivationHint))
+
+  ctx.slots.inject('plugins.detail.section', () =>
+    ctx.slots.register({
+      name: 'plugins.detail.section',
+      id: 'search-tools-takeover',
+      locale: NS,
+    }, (props) => createElement(TakeoverWarning, { ...props, form, web })))
 
   ctx.slots.inject('tool.call.toolview', () =>
     ctx.slots.register({

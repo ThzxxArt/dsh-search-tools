@@ -137,9 +137,6 @@ export function validateSearxngConfig(raw: unknown): AdapterValidation {
       issues.push(issue(`instances[${index}].url`, error instanceof Error ? error.message : '实例 URL 无效'))
     }
   })
-  if (instances.every(entry => !isRecord(entry) || readBoolean(entry.enabled, true) === false || readString(entry.url, '').trim() === '')) {
-    issues.push(issue('instances', '至少需要一个启用的实例'))
-  }
   const auth = isRecord(value.auth) ? readString(value.auth.type, 'none') : 'none'
   if (!AUTH_TYPES.has(auth)) issues.push(issue('auth.type', '认证类型无效'))
   const requestTimeoutMs = readNumber(value.requestTimeoutMs, 12_000)
@@ -156,7 +153,7 @@ export function validateSearxngConfig(raw: unknown): AdapterValidation {
       issues.push(issue('proxy', '代理必须是 http(s) URL'))
     }
   }
-  const userAgent = readString(value.userAgent, '').trim()
+  const userAgent = readString(value.userAgent, DEFAULT_SEARXNG_CONFIG.userAgent).trim()
   if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行'))
   return result(issues)
 }

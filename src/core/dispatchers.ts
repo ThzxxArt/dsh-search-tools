@@ -7,7 +7,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { WebError, type WebFetchProvider, type WebFetchRequest, type WebFetchResult, type WebSearchProvider, type WebSearchRequest, type WebSearchResult } from '@deepseek-ai/dsh-web'
 import type { Config } from '../config.ts'
 import { snapshot } from '../config.ts'
-import type { AdapterContext, FetchAdapter, SearchAdapter } from './host-types.ts'
+import type { AdapterContext, CredentialLookup, FetchAdapter, SearchAdapter } from './host-types.ts'
 import { Diagnostics } from './diagnostics.ts'
 import { SearchToolsService } from './service.ts'
 import type { AdapterListResponse, CacheStats, ProbeResult } from './types.ts'
@@ -18,10 +18,10 @@ export const FETCH_PROVIDER_ID = 'dsh-search-tools-fetch'
 
 /** Build the host services an adapter is allowed to use. */
 export function createAdapterContext(ctx: Context): AdapterContext {
-  const credentials = ctx.get('credentials') as AdapterContext['credentials']
   return {
     logger: ctx.logger,
-    ...(credentials === undefined ? {} : { credentials }),
+    // Resolve at call time: credentials can mount after this plugin applies.
+    getCredentials: () => ctx.get('credentials') as CredentialLookup | undefined,
     env: process.env,
     fetch: globalThis.fetch.bind(globalThis),
     now: () => Date.now(),
