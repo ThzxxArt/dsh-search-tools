@@ -2,10 +2,11 @@
 
 Date: 2026-10-22  
 Package: `dsh-search-tools@0.1.0`  
+npm: https://www.npmjs.com/package/dsh-search-tools
 DSH target: `0.2.1-rc.2` (`>=0.2.1-rc.2 <0.3.0`)  
 Node target: `^22.19.0 || >=24.0.0`
 
-Status: **release candidate; local checks pass, publication pending.**
+Status: **published to npm on 2026-10-22.**
 
 ## What ships
 
