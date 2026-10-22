@@ -84,6 +84,14 @@
   credentials stayed out of YAML (`Source: env`). With the instance's default
   engines suspended, the preview showed `Search notes`; selecting `bing` returned
   real results. Details: `docs/m0-verification.md`.
+- A real OpenAI-compatible model (`agnes-3.0-flash`) called `web_research`,
+  built-in `web_search`, and built-in `web_fetch` through the live Web GUI. The
+  research turn returned 8 real SearXNG sources and fetched 2 pages (1,792 and
+  868 chars); `web_search` used the taken-over provider; `web_fetch` returned
+  HTTP 200 for example.com. The provider key stayed in the process environment,
+  with no secret in YAML, the repository, or the three test-session logs (the
+  chat transcript that supplied it is separate and should be treated as exposed).
+  Details: `docs/m0-verification.md`.
 
 ### Fixed during M0
 

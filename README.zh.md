@@ -2,7 +2,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供 adapter-first 的网页搜索与正文抓取。
 
-> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。设置页提供搜索/抓取内联测试、结构化结果、诊断复制/清空、键盘保存；激活提示和零实例空状态已做视觉验收。已用脚本模型驱动真实 DSH loop 跑通 `web_research` 到卡片渲染（mock SearXNG + 公网正文抓取）。剩余主要是真实模型选择工具和真实 SearXNG 实例。详见 `docs/m0-verification.md`。
+> **状态：v0.1.0 开发中，M0 已验证。** Host 与客户端 bundle 已可构建，设置里的「搜索工具」在真实 Web GUI 中出现，保存会写入 YAML，认证路由可用，搜索/抓取接管与恢复可用，密钥不落 YAML。设置页提供搜索/抓取内联测试、结构化结果、诊断复制/清空、键盘保存；激活提示和零实例空状态已做视觉验收。真实模型已通过 OpenAI 兼容网关分别调用 `web_research`、内置 `web_search` 和内置 `web_fetch`，搜索走真实 SearXNG，卡片正常渲染；密钥只放在进程环境。剩余是 provider picker、研究提示词预览等产品打磨。详见 `docs/m0-verification.md`。
 
 ## 它做什么
 

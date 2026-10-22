@@ -7,10 +7,12 @@ Adapter-first web search and readable page fetching for [DeepSeek Harness](https
 > authenticated routes work, search/fetch takeover and restore work, and
 > credentials stay out of YAML. The settings page has inline search/fetch tests
 > with structured results, diagnostics copy/clear, and keyboard save; the
-> activation hint and zero-instance empty state have had a visual pass. A
-> scripted model drove `web_research` through the real DSH loop into a rendered
-> card (mock SearXNG + public-page fetch). Remaining work is a real-model tool
-> choice and a real SearXNG instance. See `docs/m0-verification.md`.
+> activation hint and zero-instance empty state have had a visual pass. A real
+> model (via an OpenAI-compatible gateway) called `web_research`, built-in
+> `web_search`, and built-in `web_fetch`; search used a real SearXNG instance and
+> the research card rendered. The provider key stayed in the process environment.
+> Remaining work is product polish such as the provider picker and research-prompt
+> preview. See `docs/m0-verification.md`.
 
 ## What it does
 

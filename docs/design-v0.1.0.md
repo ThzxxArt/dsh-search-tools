@@ -2,7 +2,7 @@
 
 > 状态：**v3 方案已确认，工程骨架已开工（2026-10-22）**
 >
-> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型驱动的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型选择工具、真实 SearXNG 实例仍需后续。架构速查见 [architecture.md](architecture.md)。
+> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。剩余是 provider picker、研究提示词预览等产品打磨。架构速查见 [architecture.md](architecture.md)。
 >
 > 目标仓库：`https://github.com/ThzxxArt/dsh-search-tools`
 >

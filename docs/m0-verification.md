@@ -115,7 +115,35 @@ The default-engine empty result was initially indistinguishable from a genuinely
 empty search. `parseSearxngJson` now carries `unresponsive_engines` as notes and
 the settings preview renders them under **Search notes**.
 
-## Still to verify / implement
+## Live real-model validation (2026-10-22)
 
-- A real model choosing `web_research` after takeover (the scripted model above exercised the same loop, but not model judgment).
-- Search takeover and a full `web_search` turn against the real instance (the real adapter was verified through the settings preview, not through the model-facing provider).
+A real OpenAI-compatible model (`agnes-3.0-flash`, 512K context / 64K output)
+drove three tool turns in the test profile. The provider used `apiKeyEnv`, so the
+key stayed in the process environment and never entered YAML, the repository, or
+the three test-session logs. (The chat message that supplied the key is a
+separate transcript; treat that credential as exposed and rotate it.) The model's
+`request/header` recorded `provider: agnes, model: agnes-3.0-flash`; the exposed
+web tools were `web_fetch`, `web_research`, and `web_search`.
+
+| Turn | Prompt | Evidence |
+|---|---|---|
+| `web_research` | search “DeepSeek Harness GitHub”, fetch the top 2 pages, then summarize | assistant emitted `web_research` with `{"query":"DeepSeek Harness GitHub","fetch_top":2}`; `tool/result` meta had `sourceCount: 8`, two `fetched` entries (`deepseek.com` 1,792 chars, download page 868 chars), `truncated: true` |
+| `web_search` | use `web_search`, not `web_research`, for “DeepSeek Harness release notes” | built-in `web_search` emitted `{"queries":["DeepSeek Harness release notes"]}`; result meta contained 8 normalized sources from the real SearXNG instance |
+| `web_fetch` | use `web_fetch`, not `web_research`, on `https://example.com` | built-in `web_fetch` emitted `{"url":"https://example.com"}`; result was HTTP 200, 290 chars, and the answer quoted `Example Domain` |
+
+The research card rendered under **Called tools** with `8 sources`, `2 fetched`,
+`truncated`, all source links, and the `Fetched details` disclosure. The three
+turns completed in 29s, 14s, and 7s respectively; no provider error event was
+logged.
+
+The prompts named the tool under test, so this validates tool availability,
+argument shape, real provider routing, and the UI end to end — not autonomous
+tool selection under an ambiguous request. The provider key and the SearXNG
+address/credentials are intentionally absent from this repository.
+
+## Still to implement (not validation gaps)
+
+- Profile-level provider picker as cards rather than a native `<select>`.
+- A research-prompt preview on the settings page.
+- `publint` still flags `lib/client.js` as CJS under a `"type": "module"` package;
+  this is the DSH lazy-CJS client shape, not a runtime failure.
