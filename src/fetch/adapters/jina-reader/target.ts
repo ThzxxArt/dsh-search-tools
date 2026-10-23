@@ -121,9 +121,19 @@ function stripIpv6Brackets(hostname: string): string {
 function raceWithSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) return Promise.reject(abortError(signal))
   return new Promise<T>((resolve, reject) => {
-    const abort = (): void => { reject(abortError(signal)) }
+    let settled = false
+    const finish = (callback: () => void): void => {
+      if (settled) return
+      settled = true
+      signal.removeEventListener('abort', abort)
+      callback()
+    }
+    const abort = (): void => { finish(() => { reject(abortError(signal)) }) }
     signal.addEventListener('abort', abort, { once: true })
-    promise.then(resolve, reject).finally(() => { signal.removeEventListener('abort', abort) })
+    promise.then(
+      value => { finish(() => { resolve(value) }) },
+      error => { finish(() => { reject(error) }) },
+    )
   })
 }
 

@@ -5,7 +5,10 @@ import type {
   FetchAdapterRuntime, FetchRequest, FetchResult, ProbeResult,
 } from '../../../core/types.ts'
 import { SearchToolsError, errorCode, errorMessage } from '../../../shared/errors.ts'
-import { normalizeJinaEndpoint, normalizeJinaReaderConfig, type JinaReaderConfig } from './schema.ts'
+import {
+  normalizeJinaEndpoint, normalizeJinaReaderConfig,
+  type JinaReaderConfig, type JinaResponseMode,
+} from './schema.ts'
 import { resolveJinaTarget } from './target.ts'
 
 const API_KEY_REF = 'JINA_API_KEY'
@@ -52,7 +55,7 @@ export class JinaReaderRuntime implements FetchAdapterRuntime {
       const target = await resolveJinaTarget(request.url, requestSignal)
       if (requestSignal.aborted) throw requestSignal.reason ?? new Error('aborted')
       const endpoint = safeEndpoint(config.endpoint)
-      const headers = await this.headers(config)
+      const headers = await this.headers(config, requestSignal)
       const body = new URLSearchParams({ url: target.toString() }).toString()
       const response = await this.ctx.fetch(endpoint, {
         method: 'POST',
@@ -62,10 +65,12 @@ export class JinaReaderRuntime implements FetchAdapterRuntime {
         signal: requestSignal,
       })
       if (response.status === 401 || response.status === 403) {
+        await discard(response)
         throw new SearchToolsError(`Jina Reader rejected the credentials (HTTP ${response.status})`, 'JINA_AUTH')
       }
       if (response.status === 429) {
         const after = retryAfterMs(response)
+        await discard(response)
         throw new SearchToolsError(
           'Jina Reader rate limit exceeded',
           'JINA_RATE_LIMIT',
@@ -73,25 +78,37 @@ export class JinaReaderRuntime implements FetchAdapterRuntime {
         )
       }
       if (!response.ok) {
+        await discard(response)
         throw new SearchToolsError(`Jina Reader returned HTTP ${response.status}`, 'JINA_HTTP')
       }
 
       const raw = await readResponseText(response, config.maxResponseBytes)
-      const payload = parsePayload(raw)
+      const payload = parsePayload(raw, retryAfterMs(response))
       const statusCode = targetStatus(payload)
       const data = isRecord(payload.data) ? payload.data : {}
-      const modeField = config.responseMode === 'html' ? 'html' : config.responseMode === 'text' ? 'text' : 'content'
+      const modeField = responseField(config.responseMode)
+      const returnedUrl = returnedUrlOf(data.url, target)
       const content = data[modeField]
       if (typeof content !== 'string') {
+        // Jina derives target warnings from its content branch. If a target
+        // failed hard enough that no selected-mode body exists, preserve the
+        // target status instead of mislabeling it as a Reader protocol error.
+        if (statusCode >= 300) {
+          return {
+            url: returnedUrl,
+            statusCode,
+            body: { kind: responseKind(config.responseMode), content: '' },
+            truncated: false,
+          }
+        }
         throw new SearchToolsError(`Jina Reader response has no data.${modeField}`, 'JINA_BAD_RESPONSE')
       }
-      const returnedUrl = typeof data.url === 'string' && isHttpUrl(data.url) ? data.url : target.toString()
       const clipped = clipCodePoints(content, config.maxBodyChars, config.responseMode === 'html')
       return {
         url: returnedUrl,
         statusCode,
         body: {
-          kind: config.responseMode === 'html' ? 'html' : 'text',
+          kind: responseKind(config.responseMode),
           content: clipped.text,
         },
         truncated: clipped.truncated,
@@ -132,7 +149,7 @@ export class JinaReaderRuntime implements FetchAdapterRuntime {
     }
   }
 
-  private async headers(config: JinaReaderConfig): Promise<Record<string, string>> {
+  private async headers(config: JinaReaderConfig, signal: AbortSignal): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       accept: 'application/json',
       'content-type': 'application/x-www-form-urlencoded',
@@ -144,7 +161,7 @@ export class JinaReaderRuntime implements FetchAdapterRuntime {
       'x-retain-images': config.retainImages,
       'x-retain-links': config.retainLinks,
     }
-    const key = await this.resolveApiKey()
+    const key = await this.resolveApiKey(signal)
     if (key !== undefined) headers.authorization = `Bearer ${key}`
     if (config.engine !== 'auto') headers['x-engine'] = config.engine
     if (config.waitForSelector.length > 0) headers['x-wait-for-selector'] = config.waitForSelector
@@ -160,12 +177,61 @@ export class JinaReaderRuntime implements FetchAdapterRuntime {
     return headers
   }
 
-  private async resolveApiKey(): Promise<string | undefined> {
-    const stored = await this.ctx.getCredentials()?.resolve(API_KEY_REF)
+  private async resolveApiKey(signal: AbortSignal): Promise<string | undefined> {
+    // Credential services are local but may mount late or hang. Race them with
+    // the same hard deadline as the network request so the timeout is complete.
+    const pending = Promise.resolve(this.ctx.getCredentials()?.resolve(API_KEY_REF))
+    const stored = await withAbort(pending, signal)
     if (stored !== undefined && stored.value.length > 0) return stored.value
     const env = this.ctx.env[API_KEY_REF]
     return env !== undefined && env.length > 0 ? env : undefined
   }
+}
+
+function responseField(mode: JinaResponseMode): 'content' | 'html' | 'text' {
+  return mode === 'html' ? 'html' : mode === 'text' ? 'text' : 'content'
+}
+
+function responseKind(mode: JinaResponseMode): 'html' | 'text' {
+  return mode === 'html' ? 'html' : 'text'
+}
+
+function returnedUrlOf(value: unknown, fallback: URL): string {
+  if (typeof value !== 'string') return fallback.toString()
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback.toString()
+    // Reader output is display data; never echo credentials that were not in
+    // the original (credential-bearing targets are rejected earlier).
+    url.username = ''
+    url.password = ''
+    return url.toString()
+  } catch {
+    return fallback.toString()
+  }
+}
+
+async function discard(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => {})
+}
+
+function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortError(signal))
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const finish = (callback: () => void): void => {
+      if (settled) return
+      settled = true
+      signal.removeEventListener('abort', onAbort)
+      callback()
+    }
+    const onAbort = (): void => { finish(() => { reject(abortError(signal)) }) }
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(
+      value => { finish(() => { resolve(value) }) },
+      error => { finish(() => { reject(error) }) },
+    )
+  })
 }
 
 function safeEndpoint(raw: string): string {
@@ -187,6 +253,7 @@ function abortError(signal: AbortSignal | undefined): SearchToolsError {
 async function readResponseText(response: Response, maxBytes: number): Promise<string> {
   const declared = Number(response.headers.get('content-length') ?? '')
   if (Number.isFinite(declared) && declared > maxBytes) {
+    await response.body?.cancel().catch(() => {})
     throw new SearchToolsError(`Jina Reader response exceeds ${maxBytes} bytes`, 'JINA_RESPONSE_TOO_LARGE')
   }
   if (response.body === null) return ''
@@ -232,14 +299,20 @@ function clipCodePoints(value: string, max: number, html = false): { text: strin
   return { text: value.slice(0, end), truncated: true }
 }
 
-function parsePayload(raw: string): Record<string, unknown> {
+function parsePayload(raw: string, retryAfter: number | undefined): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(raw)
     if (!isRecord(parsed)) throw new Error('not an object')
     const code = parsed.code
     if (typeof code === 'number' && code >= 400) {
       if (code === 401 || code === 403) throw new SearchToolsError('Jina Reader rejected the credentials', 'JINA_AUTH')
-      if (code === 429) throw new SearchToolsError('Jina Reader rate limit exceeded', 'JINA_RATE_LIMIT')
+      if (code === 429) {
+        throw new SearchToolsError(
+          'Jina Reader rate limit exceeded',
+          'JINA_RATE_LIMIT',
+          retryAfter === undefined ? undefined : { retryAfterMs: retryAfter },
+        )
+      }
       throw new SearchToolsError(`Jina Reader returned code ${code}`, 'JINA_HTTP')
     }
     return parsed
@@ -251,15 +324,24 @@ function parsePayload(raw: string): Record<string, unknown> {
 
 function targetStatus(payload: Record<string, unknown>): number {
   const data = isRecord(payload.data) ? payload.data : {}
-  // Jina's official FormattedPage uses `warning`; statusCode is accepted only
-  // as an optional self-hosted compatibility field.
+  // Jina's official FormattedPage adds target failures to `warning` and also
+  // exposes `httpStatus`. If a self-hosted compatibility field is present too,
+  // the warning must win: some compatible servers always set statusCode to 200
+  // while warning carries the real target failure.
+  if (typeof data.warning === 'string') {
+    const match = /Target URL returned error (\d{3})/i.exec(data.warning)
+    if (match?.[1] !== undefined) {
+      const code = Number(match[1])
+      if (code >= 100 && code <= 599) return code
+    }
+  }
+  if (typeof data.httpStatus === 'number' && Number.isInteger(data.httpStatus)
+    && data.httpStatus >= 100 && data.httpStatus <= 599) {
+    return data.httpStatus
+  }
   if (typeof data.statusCode === 'number' && Number.isInteger(data.statusCode)
     && data.statusCode >= 100 && data.statusCode <= 599) {
     return data.statusCode
-  }
-  if (typeof data.warning === 'string') {
-    const match = /Target URL returned error (\d{3})/i.exec(data.warning)
-    if (match?.[1] !== undefined) return Number(match[1])
   }
   return 200
 }
@@ -274,15 +356,6 @@ function retryAfterMs(response: Response): number | undefined {
   const date = Date.parse(raw)
   if (Number.isFinite(date)) return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, date - Date.now()))
   return undefined
-}
-
-function isHttpUrl(raw: string): boolean {
-  try {
-    const url = new URL(raw)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

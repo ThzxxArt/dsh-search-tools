@@ -153,8 +153,10 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
         const adapter = typeof body.adapter === 'string' ? body.adapter : snapshot(deps.config).fetch.adapter
         const config = isRecord(body.config) ? body.config as JsonObject : {}
         const result = await deps.fetch.preview(adapter, config, { url }, AbortSignal.timeout(fetchPreviewTimeoutMs(config)))
+        const ok = result.statusCode >= 200 && result.statusCode < 300
         sendJson(res, 200, {
-          ok: result.statusCode >= 200 && result.statusCode < 300,
+          ok,
+          ...(ok ? {} : { message: `HTTP ${result.statusCode}` }),
           url: result.url,
           statusCode: result.statusCode,
           kind: result.body.kind,

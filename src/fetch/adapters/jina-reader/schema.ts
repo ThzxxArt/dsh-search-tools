@@ -63,7 +63,9 @@ const SELECTOR_MAX_CHARS = 1_000
 const USER_AGENT_MAX_CHARS = 512
 
 const NUMBER_FIELDS: readonly { key: keyof JinaReaderConfig; label: string; min: number; max: number }[] = [
-  { key: 'timeoutMs', label: 'Timeout', min: 1_000, max: 180_000 },
+  // X-Timeout is sent in whole seconds and is intentionally one second below
+  // the local deadline. A 1s minimum would make both equal, so require 2s.
+  { key: 'timeoutMs', label: 'Timeout', min: 2_000, max: 180_000 },
   { key: 'maxResponseBytes', label: 'Maximum response bytes', min: 1_024, max: 50_000_000 },
   { key: 'maxBodyChars', label: 'Maximum decoded characters', min: 1_024, max: 20_000_000 },
 ]
@@ -75,7 +77,7 @@ export function normalizeJinaReaderConfig(raw: unknown): JinaReaderConfig {
     endpoint: endpointOrDefault(value.endpoint),
     engine: readEnum(value.engine, ENGINES, DEFAULT_JINA_READER_CONFIG.engine),
     responseMode: readEnum(value.responseMode, RESPONSE_MODES, DEFAULT_JINA_READER_CONFIG.responseMode),
-    timeoutMs: clampInt(readNumber(value.timeoutMs, DEFAULT_JINA_READER_CONFIG.timeoutMs), 1_000, 180_000),
+    timeoutMs: clampInt(readNumber(value.timeoutMs, DEFAULT_JINA_READER_CONFIG.timeoutMs), 2_000, 180_000),
     maxResponseBytes: clampInt(readNumber(value.maxResponseBytes, DEFAULT_JINA_READER_CONFIG.maxResponseBytes), 1_024, 50_000_000),
     maxBodyChars: clampInt(readNumber(value.maxBodyChars, DEFAULT_JINA_READER_CONFIG.maxBodyChars), 1_024, 20_000_000),
     waitForSelector: selectorOrDefault(value.waitForSelector),

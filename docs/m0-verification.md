@@ -336,8 +336,10 @@ synthetic `data.content`; it is not a hosted Jina success claim.
 |---|---|
 | Version / tabs | Diagnostics reports `v0.1.5`; Overview/Search/Fetch/Research/Diagnostics render. |
 | Adapter discovery | Fetch tab shows `Readability HTTP` and `Jina Reader`; Jina cards show `browser`, `pdf`, `probe`; the manifest notice is visible. |
-| Jina request | Fake Reader saw `POST /`, `accept: application/json`, `content-type: application/x-www-form-urlencoded`, `user-agent: dsh-search-tools/0.1.5…`, `x-engine: browser`, `x-respond-with: markdown`, `x-timeout: 59` (local timeout 60000 minus one second), `x-no-cache: true`, `x-robots-txt: dsh-search-tools`, and body `url=https%3A%2F%2Fexample.com%2F`. |
-| Response modes | Real GUI switched Response format through HTML, text, and Markdown; all three returned `Test passed` with the corresponding `data.html` / `data.text` / `data.content` payload. Contract tests also cover missing mode fields → `JINA_BAD_RESPONSE`. |
+| Jina request | Fake Reader saw `POST /`, `accept: application/json`, `content-type: application/x-www-form-urlencoded`, `user-agent: dsh-search-tools/0.1.5…`, `x-engine: browser`, `x-timeout: 59` (local timeout 60000 minus one second), `x-no-cache: true`, `x-robots-txt: dsh-search-tools`, and body `url=https%3A%2F%2Fexample.com%2F`. Markdown sent `x-respond-with: markdown`; HTML/text sent `html` and `text` (no content companion). |
+| Response modes | Real GUI switched Response format through HTML, text, and Markdown; all three returned `Test passed` with the corresponding `data.html` / `data.text` / `data.content` payload. Contract tests cover warning/httpStatus/statusCode precedence, missing mode fields, and non-2xx empty-body status preservation. |
+| Non-2xx target | GUI test of `https://example.com/missing` returned `Test failed` with `HTTP 404`; fake Reader saw `x-respond-with: html`; no console/page errors. |
+| Real DSH tool | A scripted mock LLM called the real `web_fetch` tool; the session rendered `Fetch https://example.com/`, the fake Reader saw `x-respond-with: markdown`, and the final text was `DONE`; no console/page errors. This is a tool-chain check, not a real-model or hosted-Jina success claim. |
 | Jina result | Real GUI shows `Test passed`, HTTP 200, text, 113 chars, and the rendered `# Fake Jina Reader` reader card; no console/page errors. |
 | API key chain | Saved `test-jina-key` in the UI; fake Reader saw `authorization: Bearer test-jina-key`; the value did not enter the config form; clearing the secret returned the field to `Not configured`. |
 | Config persistence | Changed Reader timeout to 61000, saved, reloaded; the field read back 61000. |
@@ -347,15 +349,17 @@ synthetic `data.content`; it is not a hosted Jina success claim.
 | Host timeout wiring | Slow fake path (31s) with draft `timeoutMs=60000`: GUI returns `Test passed` after 31,200ms; a 30s fixed route would have failed. |
 | Live Jina reachability | Switching the draft endpoint to `https://r.jina.ai/` and testing anonymous yields `Jina Reader rejected the credentials (HTTP 401)` in 588ms; this validates error mapping, not success. |
 | Responsive | 700px and 560px: `scrollWidth === clientWidth` (700/700, 560/560); no horizontal overflow. |
-| Tests | `pnpm test`: 155 tests / 22 files, pass. Coverage includes Markdown/HTML/text mode fields, missing-mode errors, blocked-target/no-fetch, content-length oversize, Retry-After dates, mid-resolution timeout, Jina → `web_research` clipping, `JINA_API_KEY` status, and the documented `curl` engine. |
+| Tests | `pnpm test`: 163 tests / 22 files, pass. Coverage includes Markdown/HTML/text mode fields, warning/httpStatus/statusCode precedence, missing-field non-2xx status, host preview HTTP status messaging, blocked-target/no-fetch including CGNAT/link-local/ULA/mapped-loopback, content-length oversize, Retry-After dates and JSON-code 429, mid-resolution timeout, hanging credential lookup, Jina → `web_research` clipping, `JINA_API_KEY` status, and the documented `curl` engine. |
 | Typecheck / build / pack | `pnpm typecheck`, `pnpm build`, `pnpm pack:check`, and `pnpm release` pass. |
 
 `X-Timeout` is a Reader wait budget, not a hard deadline; the adapter sends it
 one second below `timeoutMs`, while the local `AbortController` enforces the
-actual deadline. Target 404 preservation depends on a Reader-supplied
-`data.warning` (primarily Markdown mode). Redirect/browser-navigation hops after
-the pre-flight guard are Reader-side residual risk; self-hosted Reader egress
-must be restricted.
+actual deadline. Target 404/5xx is recovered from `data.warning` first, then
+the official `data.httpStatus`; HTML/text rely on those fields without an extra
+content companion. The optional `data.statusCode` is the last compatibility
+fallback; only when all three are absent is the target status unrecoverable.
+Redirect and browser-navigation hops after the pre-flight guard are Reader-side
+residual risk; self-hosted Reader egress must be restricted.
 
 The local fake and unit tests cover the protocol, UI, security guard, key
 handling, response modes, and timeout chain. **Not covered:** hosted Jina HTTP

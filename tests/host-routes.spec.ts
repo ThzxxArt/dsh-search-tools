@@ -150,4 +150,32 @@ describe('fetch route timeout wiring', () => {
     expect(timeouts).toEqual([65_000, 65_000])
     timeoutSpy.mockRestore()
   })
+
+  it('surfaces a non-2xx target status as the fetch test message', async () => {
+    const fetch = {
+      preview: async () => ({
+        url: 'https://target.example/missing',
+        statusCode: 404,
+        body: { kind: 'html' as const, content: '<h1>Missing</h1>' },
+        truncated: false,
+      }),
+    } as unknown as FetchDispatcher
+    const deps: RouteDeps = {
+      config: configOf(),
+      search: {} as unknown as SearchDispatcher,
+      fetch,
+      adapters: { listAdapters: () => ({ search: [], fetch: [] }) } as unknown as SearchToolsService,
+      diagnostics: new Diagnostics(),
+    }
+    const { ctx, handlers } = fakeContext()
+    registerRoutes(ctx, deps)
+    const response = responseOf()
+    await handlers.get(`${BASE}/fetch-preview`)!(requestOf({
+      adapter: 'jina-reader',
+      url: 'https://target.example/missing',
+      config: { timeoutMs: 60_000 },
+    }), response)
+    const body = JSON.parse(response.body) as { ok: boolean; statusCode: number; message?: string }
+    expect(body).toMatchObject({ ok: false, statusCode: 404, message: 'HTTP 404' })
+  })
 })

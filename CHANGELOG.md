@@ -20,12 +20,20 @@
   30s/30s, plus 5s, capped at 190s), so a 60s Jina draft no longer dies at 30s.
 - `X-Timeout` is sent one second below the local `timeoutMs` (Reader wait budget,
   not a hard deadline); HTML/text modes read `data.html`/`data.text` and Markdown
-  reads `data.content`.
+  reads `data.content`. Target status is read from `data.warning`, then official
+  `data.httpStatus`, then the optional `data.statusCode` fallback; HTML/text do
+  not request a duplicate content companion.
 - IPv4-compatible IPv6 transition addresses are rejected by the public-target
-  guard, and `JINA_RATE_LIMIT` retry hints are bounded to one hour.
+  guard, `JINA_RATE_LIMIT` retry hints are bounded to one hour, hanging
+  credential lookups share the request deadline, and non-2xx targets with no
+  selected-mode body preserve their status instead of becoming
+  `JINA_BAD_RESPONSE`.
 - Contract tests for request headers/body, key isolation, target 404 mapping,
-  401/403/429/5xx, timeout/abort, clipping, response caps, bad JSON, probe, UI
-  notice/validation/credential write, defaults, and host timeout wiring.
+  warning/httpStatus/statusCode precedence, non-2xx empty-body status
+  preservation, 401/403/429/5xx, JSON-code 429 retry hints, timeout/abort,
+  hanging credentials, clipping, response caps, bad JSON, probe, CGNAT/link-local/
+  ULA/mapped-loopback guards, UI notice/validation/credential write, defaults,
+  and host timeout wiring.
 
 ### Changed
 
@@ -53,13 +61,15 @@
 
 ### Verified
 
-- `pnpm release`: 155 tests / 22 files, typecheck, build, pack, and publint pass.
+- `pnpm release`: 163 tests / 22 files, typecheck, build, pack, and publint pass.
 - Real DSH GUI with a local fake Jina Reader: adapter cards/notice, request
-  shape including `x-timeout=59` for a 60s local deadline, Markdown/HTML/text
-  response modes, key write/read/clear, config save/reload (timeout 61000),
-  adapter switch persistence, private-target rejection, invalid-endpoint
-  blocking, 31s success with `timeoutMs=60000`, 700/560 layout, and version
-  `0.1.5` all pass; no page/console errors.
+  shape including `x-timeout=59` for a 60s local deadline, Markdown `markdown`
+  and HTML/text `html`/`text` request modes, non-2xx `HTTP 404` failure display,
+  key write/read/clear, config save/reload (timeout 61000), adapter switch
+  persistence, private-target rejection, invalid-endpoint blocking, 31s success
+  with `timeoutMs=60000`, 700/560 layout, and version `0.1.5` all pass; no
+  page/console errors. A scripted mock LLM also called the real `web_fetch`
+  tool through DSH and finished with `DONE`.
 - Hosted `r.jina.ai` anonymous request returns HTTP 401 in 588ms through the
   real GUI, mapped to `JINA_AUTH`; this proves reachability and error mapping,
   not a successful hosted run. A real key/self-hosted success path remains an

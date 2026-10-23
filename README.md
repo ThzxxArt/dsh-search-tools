@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **仓库版本：0.1.5（2026-10-23，尚未发布到 npm/GitHub Release）。** 新增可选的 **Jina Reader** 抓取 adapter：浏览器渲染、PDF/Office、选择器、iframe/Shadow DOM、`no-cache` 和自托管端点；默认仍是 `readable-http`，稳定 provider id 不变。Jina 目标 URL 会发给配置的 Reader 端点（自托管时留在本地），设置页和 README 都会明确提示；`readable-http` 的 DSH 安全 HTTP/SSRF 边界不变。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
+> **仓库版本：0.1.5（2026-10-23，尚未发布到 npm/GitHub Release）。** 新增可选的 **Jina Reader** 抓取 adapter：浏览器渲染、PDF/Office、选择器、iframe/Shadow DOM、`no-cache` 和自托管端点；默认仍是 `readable-http`，稳定 provider id 不变。Jina 目标 URL 会发给配置的 Reader 端点（只有本地自托管 Reader 才留在本机；远程自托管仍会出网），设置页和 README 都会明确提示；`readable-http` 的 DSH 安全 HTTP/SSRF 边界不变。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
 
 ---
 
@@ -481,7 +481,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 | `endpoint` | `https://r.jina.ai/` | http(s) URL | 托管服务或自托管 Reader；远程必须 HTTPS，http 仅允许 loopback |
 | `engine` | `auto` | `auto` / `browser` / `curl` | `browser` 强制无头浏览器；`curl` 使用轻量 HTTP，适合静态页 |
 | `responseMode` | `markdown` | `markdown` / `html` / `text` | `html` 会映射为 `body.kind=html`，交给本地 Readability |
-| `timeoutMs` | `25000` | 1000–180000 | 本地硬超时；发给 Reader 的 `X-Timeout` 会少 1 秒作为等待预算，避免两边同时到点。超过 30000 还需调高 DSH `tool-web.fetchTimeoutMs` |
+| `timeoutMs` | `25000` | 2000–180000 | 本地硬超时；发给 Reader 的 `X-Timeout` 会少 1 秒作为等待预算，最小值 2000 保证它仍短于本地截止。超过 30000 还需调高 DSH `tool-web.fetchTimeoutMs` |
 | `maxResponseBytes` | `5000000` | 1024–50000000 | Reader 返回的 JSON 包体上限；超限返回 `JINA_RESPONSE_TOO_LARGE` |
 | `maxBodyChars` | `200000` | 1024–20000000 | 按响应模式截断 `data.content` / `data.html` / `data.text`，并置 `truncated=true` |
 | `waitForSelector` | 空 | CSS 选择器 | 等元素出现后再提取 |
@@ -499,10 +499,10 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 
 行为与错误：
 
-- 请求固定为 `POST <endpoint>/`，`Content-Type: application/x-www-form-urlencoded`，body 为 `url=<目标>`；`Accept: application/json`，并带 `X-Respond-With`、`X-Timeout` 等头。
+- 请求固定为 `POST <endpoint>/`，`Content-Type: application/x-www-form-urlencoded`，body 为 `url=<目标>`；`Accept: application/json`，并带 `X-Respond-With`、`X-Timeout` 等头。Markdown 请求 `markdown`；HTML/text 请求 `<mode>,content`，因为 Jina 把目标站错误warning 放在 content 分支。
 - 目标 URL 在发出前经过公网目标守卫：只允许 `http(s)`、禁止 URL 内凭据、拒绝 loopback/私有/链路本地地址及 IPv4-compatible 等过渡地址，并要求 DNS 解析结果全部为公网地址。错误码为 `JINA_INVALID_TARGET` / `JINA_TARGET_BLOCKED` / `JINA_TARGET_UNRESOLVED`。
-- 401/403 → `JINA_AUTH`；429 → `JINA_RATE_LIMIT`（有 `Retry-After` 时带 `retryAfterMs`，最多 1 小时）；5xx/其他 → `JINA_HTTP`；网络失败 → `JINA_NETWORK`；超时 → `JINA_TIMEOUT`；非法 JSON/缺少当前模式的字段（`data.content`、`data.html` 或 `data.text`）→ `JINA_BAD_RESPONSE`；超限 → `JINA_RESPONSE_TOO_LARGE`。
-- Reader 返回的目标页 404 只在它提供 `data.warning` 时保留为 `statusCode=404`；该字段通常由 Markdown 模式返回，HTML/text 模式可能没有。可选的 `data.statusCode` 仅作为自托管兼容字段读取。
+- 401/403 → `JINA_AUTH`；429 → `JINA_RATE_LIMIT`（有 `Retry-After` 时带 `retryAfterMs`，最多 1 小时）；5xx/其他 → `JINA_HTTP`；网络失败 → `JINA_NETWORK`；超时 → `JINA_TIMEOUT`；非法 JSON/缺少当前模式的字段（`data.content`、`data.html` 或 `data.text`）→ `JINA_BAD_RESPONSE`（若目标状态已是非 2xx，则返回空正文并保留状态码）；超限 → `JINA_RESPONSE_TOO_LARGE`。
+- Reader 返回的目标页 404/5xx 优先从 `data.warning` 恢复，其次读官方 `data.httpStatus`；HTML/text 不再附加 content companion，直接依赖这两个官方字段。可选的 `data.statusCode` 作为自托管兼容字段最后兜底，且 warning/httpStatus 优先；只有三者都缺失时才无法恢复目标状态。
 - **残余风险：** Reader 服务端会重新解析目标 DNS，并可能跟随目标页重定向/浏览器跳转；本插件无法像 `HttpFetchProvider` 那样 pin 住连接，所以这是 best-effort 守卫，不是 DSH 级别的 SSRF 保证。自托管时请限制 Reader 容器的网络出口。
 - HTML 模式的 `maxBodyChars` 截断优先落在完整标签边界，但仍可能留下不完整文档；需要 token 预算时优先用 Markdown/text。
 - **自托管：** Jina Reader 开源版可运行在本机/内网；把 `endpoint` 设为 `http://127.0.0.1:3000/`（或 HTTPS 反代）。托管 Jina 的 API key 只发给你配置的 endpoint，并保存在 DSH credentials。

@@ -168,6 +168,98 @@ describe('Jina Reader response and failure mapping', () => {
     expect(result.body).toEqual({ kind: 'text', content: 'not found' })
   })
 
+  it('ignores an out-of-range warning status instead of emitting an invalid HTTP status', async () => {
+    const fake = capture(async () => response({
+      data: { content: 'body', url: 'https://target.example/', warning: 'Target URL returned error 999' },
+    }))
+    const result = await runtime({}, fake.fetch).fetch({ url: 'https://target.example/' })
+    expect(result.statusCode).toBe(200)
+  })
+
+  it('strips credentials from a Reader-returned URL', async () => {
+    const fake = capture(async () => response({
+      data: {
+        content: 'body',
+        url: 'https://reader-user:reader-pass@target.example/final?q=1',
+      },
+    }))
+    const result = await runtime({}, fake.fetch).fetch({ url: 'https://target.example/' })
+    expect(result.url).toBe('https://target.example/final?q=1')
+  })
+
+  it('prefers a target warning over a misleading statusCode compatibility field', async () => {
+    const fake = capture(async () => response({
+      data: {
+        content: 'missing',
+        url: 'https://target.example/missing',
+        statusCode: 200,
+        warning: 'Target URL returned error 404: Not Found',
+      },
+    }))
+    const result = await runtime({}, fake.fetch).fetch({ url: 'https://target.example/missing' })
+    expect(result.statusCode).toBe(404)
+  })
+
+  it('uses httpStatus for an HTML target error without a content companion', async () => {
+    const fake = capture(async () => response({
+      data: {
+        html: '<h1>Missing</h1>',
+        httpStatus: 404,
+        httpStatusText: 'Not Found',
+        url: 'https://target.example/missing',
+      },
+    }))
+    const result = await runtime({ responseMode: 'html' }, fake.fetch)
+      .fetch({ url: 'https://target.example/missing' })
+    expect(result).toMatchObject({
+      statusCode: 404,
+      body: { kind: 'html', content: '<h1>Missing</h1>' },
+    })
+    expect((fake.captured[0]!.init?.headers as Record<string, string>)['x-respond-with'])
+      .toBe('html')
+  })
+
+  it('reads the official httpStatus fallback when warning is absent', async () => {
+    const fake = capture(async () => response({
+      data: {
+        content: 'missing without warning',
+        url: 'https://target.example/missing',
+        httpStatus: 404,
+        httpStatusText: 'Not Found',
+      },
+    }))
+    const result = await runtime({}, fake.fetch).fetch({ url: 'https://target.example/missing' })
+    expect(result).toMatchObject({
+      statusCode: 404,
+      body: { kind: 'text', content: 'missing without warning' },
+    })
+  })
+
+  it('preserves target status for HTML/text errors even when the selected field is absent', async () => {
+    const html = await runtime({ responseMode: 'html' }, async () => response({
+      data: {
+        content: 'reader content branch',
+        warning: 'Target URL returned error 404: Not Found',
+        url: 'https://target.example/missing',
+      },
+    })).fetch({ url: 'https://target.example/missing' })
+    expect(html).toMatchObject({
+      statusCode: 404,
+      body: { kind: 'html', content: '' },
+    })
+
+    const text = await runtime({ responseMode: 'text' }, async () => response({
+      data: {
+        warning: 'Target URL returned error 500: Server Error',
+        url: 'https://target.example/broken',
+      },
+    })).fetch({ url: 'https://target.example/broken' })
+    expect(text).toMatchObject({
+      statusCode: 500,
+      body: { kind: 'text', content: '' },
+    })
+  })
+
   it('maps authentication, rate limit, and server failures to stable codes', async () => {
     await expect(runtime({}, async () => response({ code: 401, message: 'bad key' }, 401)).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_AUTH' })
@@ -180,6 +272,8 @@ describe('Jina Reader response and failure mapping', () => {
       .rejects.toMatchObject({ code: 'JINA_RATE_LIMIT', retryAfterMs: expect.any(Number) })
     await expect(runtime({}, async () => response({ code: 429 }, 429, { 'retry-after': '999999999' })).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_RATE_LIMIT', retryAfterMs: 3_600_000 })
+    await expect(runtime({}, async () => response({ code: 429 }, 200, { 'retry-after': '2' })).fetch({ url: 'https://target.example/' }))
+      .rejects.toMatchObject({ code: 'JINA_RATE_LIMIT', retryAfterMs: 2_000 })
     await expect(runtime({}, async () => response({ message: 'boom' }, 503)).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_HTTP' })
   })
@@ -245,7 +339,7 @@ describe('Jina Reader response and failure mapping', () => {
       const signal = _captured.init?.signal
       signal?.addEventListener('abort', () => { reject(signal.reason) }, { once: true })
     }))
-    await expect(runtime({ timeoutMs: 1_000 }, fake.fetch).fetch({ url: 'https://target.example/' }))
+    await expect(runtime({ timeoutMs: 2_000 }, fake.fetch).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_TIMEOUT' })
   })
 
@@ -254,7 +348,19 @@ describe('Jina Reader response and failure mapping', () => {
       signal?.addEventListener('abort', () => { reject(new Error('aborted')) }, { once: true })
     }))
     const fake = capture(async () => response({ data: { content: 'must not run', url: 'https://target.example/' } }))
-    await expect(runtime({ timeoutMs: 1_000 }, fake.fetch).fetch({ url: 'https://target.example/' }))
+    await expect(runtime({ timeoutMs: 2_000 }, fake.fetch).fetch({ url: 'https://target.example/' }))
+      .rejects.toMatchObject({ code: 'JINA_TIMEOUT' })
+    expect(fake.captured).toHaveLength(0)
+  })
+
+  it('bounds a hanging credential lookup by the same request deadline', async () => {
+    const fake = capture(async () => response({ data: { content: 'must not run', url: 'https://target.example/' } }))
+    const ctx = context(fake.fetch)
+    ctx.getCredentials = () => ({
+      resolve: async () => await new Promise<never>(() => {}),
+    })
+    const reader = new JinaReaderRuntime(ctx, () => normalizeJinaReaderConfig({ timeoutMs: 2_000 }))
+    await expect(reader.fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_TIMEOUT' })
     expect(fake.captured).toHaveLength(0)
   })

@@ -31,8 +31,11 @@ requires registry credentials and was not performed in this workspace.**
   Reader wait budget, not a hard deadline; the local AbortController enforces
   the actual deadline.
 - `responseMode=html` reads `data.html` and `responseMode=text` reads
-  `data.text`; Markdown reads `data.content`. Target 404 preservation depends on
-  a Reader-supplied `data.warning` and is primarily Markdown-mode evidence.
+  `data.text`; Markdown reads `data.content`. HTML/text request
+  the selected mode only. Target status comes from `data.warning`, then the
+  official `data.httpStatus`, then the optional `data.statusCode`; a warning or
+  `httpStatus` wins over a misleading compatibility field, and only
+  all-three-missing is unrecoverable.
 - Target redirects/navigations are a residual Reader-side risk; self-hosted
   Reader egress must be restricted.
 - Default fetch adapter remains `readable-http`; stable provider ids unchanged.
@@ -48,7 +51,7 @@ pnpm release
 | Check | Result |
 |---|---|
 | `pnpm typecheck` | pass |
-| `pnpm test` | 155 tests / 22 files, pass |
+| `pnpm test` | 163 tests / 22 files, pass |
 | `pnpm build` | host, client, declarations pass |
 | `pnpm pack --dry-run` | package includes Jina adapter declarations and READMEs |
 | `pnpm check:publint` | no issues |
@@ -65,7 +68,10 @@ Playwright, fake Reader at `127.0.0.1:8898` (synthetic content).
 | Adapter cards | `Readability HTTP` and `Jina Reader`; Jina has `browser`, `pdf`, `probe` and the data-boundary notice |
 | Fetch success | `Test passed`, HTTP 200, text, 113 chars, synthetic reader card |
 | Request shape | `POST /`; correct `accept`, content-type, UA, `x-engine: browser`, `x-respond-with: markdown`, `x-timeout: 59` (local timeout 60000 minus one second), `x-no-cache: true`, `x-robots-txt`, and `url=...` body |
-| Response modes | GUI switched HTML/text/Markdown; all three `Test passed`; provider tests verify `data.html`/`data.text`/`data.content` and missing-field errors |
+| Response modes | GUI switched HTML/text/Markdown; all three `Test passed`; provider tests verify `data.html`/`data.text`/`data.content`, warning/httpStatus/statusCode precedence, and missing-field errors |
+| Request modes | Markdown sent `x-respond-with: markdown`; HTML/text sent `html`/`text` with no content companion |
+| Non-2xx target | GUI `https://example.com/missing` showed `Test failed` with `HTTP 404` |
+| Real DSH tool | Scripted mock LLM called the real `web_fetch`; the UI rendered `Fetch https://example.com/` and completed with `DONE` |
 | Key write/read | `JINA_API_KEY` wrote via credentials; fake saw `authorization: Bearer test-jina-key`; clearing returned to `Not configured` |
 | Config persistence | Changed Reader timeout to 61000 and saved; after full page reload it read back 61000 |
 | Adapter switch | Switched to `Readability HTTP`, saved, reloaded (selected); switched back to `Jina Reader`, saved, reloaded (selected + notice) |

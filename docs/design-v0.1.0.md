@@ -1149,7 +1149,7 @@ ctx.slots.inject('settings.section', () =>
 - 不记录请求体；日志只记 adapter id、code、host、耗时。
 - `secretDrafts` 只允许所选 adapter 的 `manifest.secretRefs` 声明的 ref；其他 ref 一律拒绝，避免测试接口变成任意凭据读取口。
 - 非 loopback 的 HTTP 页面显示 token 警告；远程必须 HTTPS。
-- `probe` 允许用户显式配置的内网 SearXNG；`fetch-preview` 受 SSRF 防护，内网会被拒。
+- `probe` 允许用户显式配置的内网 SearXNG；`readable-http` 的 `fetch-preview` 受 DSH SSRF 防护，内网会被拒；`jina-reader` 只做公网目标预检，实际由 Reader 抓取，不能视为连接级 SSRF 防护。
 - 页面 fetch 用 `new URL('api/...', document.baseURI)`，兼容 `--public-url`。
 
 ---
@@ -1408,7 +1408,7 @@ dsh-search-tools/
 | `dispatcher` | adapter 选择；未安装；配置无效；available；缓存实例复用；信号转发 |
 | `manifest-form` | 每种字段类型；visibleWhen；tags suggestions；list 增删排序；未知字段类型 |
 | `searxng-adapter` | JSON/HTML；auth；failover；round-robin；分页；过滤；缓存；probe |
-| `fetch-adapter` | Readability/回退；标记；SSRF 由 inner 覆盖；failOpen |
+| `fetch-adapter` | Readability/回退；标记；SSRF 由 inner 覆盖；failOpen；Jina 公网目标守卫/协议映射/状态与超时 |
 | `research` | 部分失败；并发；字符预算；动态启停 |
 | `routes` | 认证；方法；content-type；body 限制；adapters/status/probe/search/fetch |
 | `apply` | 注册 dispatcher；外部 adapter 注册；dispose |
@@ -1703,7 +1703,7 @@ Search 内部分为 Connection / Search behavior 两个子页；当前后端在�
 
 ### F.2 Fetch reader
 
-Fetch 结果使用 DSH `CodeBlock`，支持 Copy content、Hide content / Show content；每次新 preview 自动展开并重置复制状态。原始正文和 reader 都只来自已通过 DSH SSRF 防护的抓取结果。
+Fetch 结果使用 DSH `CodeBlock`，支持 Copy content、Hide content / Show content；每次新 preview 自动展开并重置复制状态。`readable-http` 的原始正文和 reader 来自 DSH SSRF 防护的抓取结果；`jina-reader` 的目标页由 Reader 服务抓取，只经过公网目标预检，不享有同一连接级保证，自托管时必须限制 Reader 出口。
 
 ### F.3 状态与拆分
 

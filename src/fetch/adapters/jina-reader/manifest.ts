@@ -80,7 +80,10 @@ export const jinaReaderManifest: AdapterManifest = {
       kind: 'select',
       key: 'responseMode',
       label: lt('Response format', '响应格式'),
-      description: lt('Markdown is the default; HTML keeps markup for local Readability.', '默认 Markdown；HTML 保留标记供本地 Readability 使用。'),
+      description: lt(
+        'Markdown is the default; HTML keeps markup for local Readability. Target errors are read from data.warning, then the official data.httpStatus.',
+        '默认 Markdown；HTML 保留标记供本地 Readability 使用。目标站错误优先从 data.warning 读取，其次读官方 data.httpStatus。',
+      ),
       default: 'markdown',
       options: [
         { value: 'markdown', label: lt('Markdown', 'Markdown') },
@@ -93,10 +96,10 @@ export const jinaReaderManifest: AdapterManifest = {
       key: 'timeoutMs',
       label: lt('Reader timeout (ms)', 'Reader 超时（ms）'),
       description: lt(
-        'Local hard deadline. The Reader wait budget is sent one second shorter. Default 25s stays below the DSH web_fetch 30s tool timeout; raising it above 30s also requires raising the DSH tool timeout.',
-        '本地硬超时；发给 Reader 的等待预算会少 1 秒。默认 25 秒，低于 DSH web_fetch 的 30 秒工具超时。超过 30 秒还需同时调高 DSH 工具超时。',
+        'Local hard deadline. The Reader wait budget is sent one second shorter, so the minimum is 2s. Default 25s stays below the DSH web_fetch 30s tool timeout; raising it above 30s also requires raising the DSH tool timeout.',
+        '本地硬超时；发给 Reader 的等待预算会少 1 秒，因此最小值是 2 秒。默认 25 秒，低于 DSH web_fetch 的 30 秒工具超时。超过 30 秒还需同时调高 DSH 工具超时。',
       ),
-      min: 1_000,
+      min: 2_000,
       max: 180_000,
       step: 500,
       default: 25_000,

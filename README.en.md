@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Repository version: 0.1.5 (2026-10-23; not yet published to npm/GitHub Releases).** Adds an optional **Jina Reader** fetch adapter: browser rendering, PDF/Office, selectors, iframe/Shadow DOM, `no-cache`, and self-hosted endpoints. The default remains `readable-http` and the stable provider ids are unchanged. Jina sends the target URL to the configured Reader endpoint (self-hosting keeps it local); the settings page and README state this boundary explicitly. `readable-http` keeps the DSH safe-HTTP/SSRF boundary. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
+> **Repository version: 0.1.5 (2026-10-23; not yet published to npm/GitHub Releases).** Adds an optional **Jina Reader** fetch adapter: browser rendering, PDF/Office, selectors, iframe/Shadow DOM, `no-cache`, and self-hosted endpoints. The default remains `readable-http` and the stable provider ids are unchanged. Jina sends the target URL to the configured Reader endpoint (only a local self-hosted Reader keeps it on-machine; a remote self-hosted Reader still leaves the machine); the settings page and README state this boundary explicitly. `readable-http` keeps the DSH safe-HTTP/SSRF boundary. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
 
 ---
 
@@ -481,7 +481,7 @@ Behavior:
 | `endpoint` | `https://r.jina.ai/` | http(s) URL | Hosted or self-hosted; remote must be HTTPS, HTTP is loopback-only |
 | `engine` | `auto` | `auto` / `browser` / `curl` | `browser` forces a headless browser; `curl` is the lightweight HTTP engine for static pages |
 | `responseMode` | `markdown` | `markdown` / `html` / `text` | `html` maps to `body.kind=html` for local Readability |
-| `timeoutMs` | `25000` | 1000–180000 | Local hard deadline; the Reader `X-Timeout` is one second shorter as a wait budget. Above 30000 also raise DSH `tool-web.fetchTimeoutMs` |
+| `timeoutMs` | `25000` | 2000–180000 | Local hard deadline; the Reader `X-Timeout` is one second shorter as a wait budget, and the 2s minimum keeps it shorter than the deadline. Above 30000 also raise DSH `tool-web.fetchTimeoutMs` |
 | `maxResponseBytes` | `5000000` | 1024–50000000 | Reader JSON envelope cap; overflow returns `JINA_RESPONSE_TOO_LARGE` |
 | `maxBodyChars` | `200000` | 1024–20000000 | Clip the mode field (`data.content`, `data.html`, or `data.text`) and set `truncated=true` |
 | `waitForSelector` | empty | CSS selector | Wait before extraction |
@@ -499,10 +499,10 @@ Behavior:
 
 Behavior and errors:
 
-- The request is `POST <endpoint>/` with `Content-Type: application/x-www-form-urlencoded`, body `url=<target>`, `Accept: application/json`, and `X-Respond-With` / `X-Timeout` / selector headers.
+- The request is `POST <endpoint>/` with `Content-Type: application/x-www-form-urlencoded`, body `url=<target>`, `Accept: application/json`, and `X-Respond-With` / `X-Timeout` / selector headers. Markdown requests `markdown`; HTML/text request `<mode>,content` because Jina attaches target warnings to its content branch.
 - Before sending, a target guard allows only `http(s)`, rejects embedded credentials, loopback/private/link-local and transition addresses such as IPv4-compatible IPv6, and requires every DNS answer to be public. Errors are `JINA_INVALID_TARGET` / `JINA_TARGET_BLOCKED` / `JINA_TARGET_UNRESOLVED`.
-- 401/403 → `JINA_AUTH`; 429 → `JINA_RATE_LIMIT` (with `retryAfterMs` when available, capped at 1 hour); 5xx/other → `JINA_HTTP`; network → `JINA_NETWORK`; timeout → `JINA_TIMEOUT`; malformed JSON or the missing mode field (`data.content`, `data.html`, or `data.text`) → `JINA_BAD_RESPONSE`; oversize → `JINA_RESPONSE_TOO_LARGE`.
-- A target 404 stays `statusCode=404` only when the Reader supplies `data.warning`; that field is typically present in Markdown mode and may be absent in HTML/text mode. The optional `data.statusCode` is read only as a self-hosted compatibility field.
+- 401/403 → `JINA_AUTH`; 429 → `JINA_RATE_LIMIT` (with `retryAfterMs` when available, capped at 1 hour); 5xx/other → `JINA_HTTP`; network → `JINA_NETWORK`; timeout → `JINA_TIMEOUT`; malformed JSON or the missing mode field (`data.content`, `data.html`, or `data.text`) → `JINA_BAD_RESPONSE` (when the target status is already non-2xx, return an empty body and preserve the status); oversize → `JINA_RESPONSE_TOO_LARGE`.
+- A target 404/5xx is recovered from `data.warning` first, then the official `data.httpStatus`; HTML/text no longer request a content companion and rely on those two fields. The optional `data.statusCode` is a self-hosted compatibility fallback after those two fields. Only when all three are absent is the target status unrecoverable.
 - **Residual risk:** the Reader resolves the target again and may follow redirects or browser navigations, so this adapter cannot pin the connection like `HttpFetchProvider`; the guard is best-effort, not a DSH-level SSRF guarantee. Restrict a self-hosted Reader container's egress.
 - In HTML mode, `maxBodyChars` prefers a complete tag boundary but can still leave a partial document; use Markdown/text when a token budget matters.
 - **Self-hosting:** run the open-source Jina Reader locally or behind HTTPS; set `endpoint` to `http://127.0.0.1:3000/` (loopback HTTP) or the HTTPS URL. The hosted API key is only sent to the configured endpoint and stored in DSH credentials.
