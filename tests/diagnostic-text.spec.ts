@@ -3,10 +3,10 @@ import type { StatusResponse } from '../src/core/types.ts'
 import { formatDiagnostics } from '../src/client/diagnostic-text.ts'
 
 const status: StatusResponse = {
-  version: '0.1.3',
+  version: '0.1.4',
   configPath: '/home/user/.dsh/profiles/demo/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0 },
-  fetch: { enabled: true, registered: true, adapter: 'readable-http' },
+  fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
   research: { enabled: true, registered: true },
   credentials: {
     SEARXNG_TOKEN: { configured: true, source: 'file', writable: true },

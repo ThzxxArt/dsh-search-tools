@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Current version: 0.1.3 (2026-10-23).** This closes the 0.1.2 gaps: Search has Connection / Search behavior sub-tabs, Fetch has a copyable and collapsible content reader, conflict and credential failures have field-level states, the settings page is split into five tab components, the action bar reserves its own height, and the 560px, failure, read-only, and keyboard evidence is recorded. Search, fetch, takeover, and credential semantics are unchanged. 0.1.0 was verified against a real DSH instance, a real SearXNG instance, real model tool turns, and the Web GUI; build, test, pack, and publint gates pass. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
+> **Current version: 0.1.4 (2026-10-23).** This is the configuration-contract and search/fetch correctness release: `search.userAgent`, `research.timeoutMs`, and fetch `/probe` are wired; `cacheTtlMs=0` really disables the cache; the search deadline covers retries, pagination, backoff, and `Retry-After`; the host validates live config, drafts, probes, and previews before use; partial pagination, `auto` JSON→HTML fallback, and probe fallback are tested; fetch `truncated` follows extracted-text semantics and HTML truncation stays structurally valid; research timeout, front-loaded budgets, and Markdown escaping are complete. No second adapter was added and the stable provider ids and SSRF boundary are unchanged. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
 
 ---
 
@@ -174,7 +174,7 @@ dsh plugin --profile <profile> add dsh-search-tools
 ### Post-install checks
 
 - **Settings → Search Tools** shows all five tabs.
-- **Advanced** shows the version, config path, and cache stats.
+- **Diagnostics** shows the version, config path, live fetch/research state, and cache stats.
 - The model should see `web_research` when the tool is enabled.
 - Enable search takeover only after the search test passes.
 
@@ -271,12 +271,13 @@ The result contains `sources`, `fetched`, and `truncated`; the conversation card
 
 - Enable/disable `web_research`.
 - Default result count, max fetch count, default fetch count, per-page/total character budgets, concurrency, timeout.
-- **Model-facing tool prompt** preview generated from the current draft.
+- **Model-facing tool prompt** preview generated from the current draft; copyable.
 - Disabling `web_research` removes the tool from the model after saving.
 
-### Advanced
+### Diagnostics
 
 - Config file path.
+- Live runtime state for search, fetch (`fetch.available`), and research (`research.registered`).
 - Cache size and hit/miss counts.
 - Clear cache.
 - Recent errors (ring buffer).
@@ -331,7 +332,7 @@ The shape is roughly:
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -347,7 +348,7 @@ The shape is roughly:
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
     research:
       enabled: true
@@ -404,11 +405,14 @@ Secret fields are write-only: the page shows only configured/unconfigured state 
 Behavior:
 
 - **Failover**: a failed instance falls through to the next; an error is raised only when all fail.
-- **Retries and budget**: retries are bounded by `retries` and `deadlineMs`; no new instance is attempted after the budget expires.
-- **JSON / HTML**: `auto` inspects the response, then falls back to HTML for instances that return an HTML challenge with HTTP 200.
+- **Retries and budget**: retries are bounded by `retries` and `deadlineMs`; no new instance is attempted after the budget expires. A `Retry-After` (delta-seconds or HTTP date) on 429/5xx takes precedence over exponential backoff and is also bounded by the deadline.
+- **Host validation**: the search/fetch dispatchers call the adapter's `validate()` before live config, draft preview/probe, and runtime work. Invalid numbers, enums, arrays, or cross-field values return `SEARCH_CONFIG_INVALID` / `FETCH_CONFIG_INVALID` instead of being silently clamped.
+- **Preview and probe**: the Search test preview uses the draft `maxResults`; the search probe uses `requestTimeoutMs` and the configured `GET` / `POST` method.
+- **JSON / HTML**: `auto` requests JSON first; on 403/415/406 or a JSON parse failure it retries HTML on the same instance. 401 remains an authentication failure, not a format problem.
 - **Search notes**: SearXNG `unresponsive_engines` are preserved as notes. Zero results often means suspended engines or CAPTCHA, not a truly empty query.
-- **Cache key**: query, instance list, engines, categories, language, safe search, time range, pages, strategy, method, format, and domain filters. Changing those naturally invalidates entries.
+- **Cache key**: query, instance list, engines, categories, language, safe search, time range, pages, strategy, method, format, auth type, proxy, UA, and domain filters. Changing those naturally invalidates entries; clear the cache after credential rotation.
 - **Domain filters**: applied before results become `sources`; `example.com` also matches `www.example.com`.
+- **Partial pagination**: one failed page no longer discards successful pages; failed pages become `notes`, and only an all-pages failure raises an error.
 
 ### Readability HTTP fetch settings
 
@@ -417,7 +421,7 @@ Behavior:
 | `enabled` | `true` | boolean | Disables the adapter |
 | `readability` | `true` | boolean | Use Readability for article extraction |
 | `minArticleChars` | `200` | 0–100000 | Below this is not considered article text |
-| `maxArticleChars` | `200000` | 1000–5000000 | Article cap; must be at least the minimum |
+| `maxArticleChars` | `200000` | 1000–5000000 | Extracted **text** cap, not an HTML-length cap; must be at least `minArticleChars` and no larger than `maxBodyChars` |
 | `maxResponseBytes` | `5000000` | 1024–50000000 | Response byte cap |
 | `maxBodyChars` | `2000000` | 1024–20000000 | Decoded character cap; must be at least the article minimum |
 | `timeoutMs` | `20000` | 1000–120000 | Fetch timeout |
@@ -431,7 +435,10 @@ Fetch behavior:
 - Handles `http(s)` URLs only.
 - Parses text/HTML only; PDFs, images, and binaries are not converted to article text.
 - Does not execute JavaScript; client-rendered pages may have no readable body.
+- `maxArticleChars` caps extracted article text, not raw HTML. `truncated` now comes from the extractor, so short text with long HTML is not misreported.
+- When HTML must be cut, it is truncated by block nodes; if that is unsafe, the extractor returns text instead of a half-open tag.
 - With `failOpen=true`, a Readability failure returns raw text/HTML instead of failing the whole fetch.
+- The `readable-http` `/probe` performs a real fetch and reports HTTP status/content kind; the manifest's `probe` capability is no longer declaration-only.
 
 ### web_research settings
 
@@ -446,9 +453,9 @@ Fetch behavior:
 | `concurrency` | `3` | 1–8 | Concurrent fetches |
 | `timeoutMs` | `120000` | 5000–600000 | Tool timeout budget |
 
-`web_research` clamps model arguments to these bounds and distributes `maxTotalChars` across pages. A failed page does not fail the whole call; it carries an `error` field, and the card still shows sources and successful fetches.
+`web_research` clamps model arguments to these bounds and distributes `maxTotalChars` across pages. `defaultFetchTop > maxFetch` or `maxCharsPerPage > maxTotalChars` is rejected with `RESEARCH_CONFIG_INVALID` before execution. A failed page does not fail the whole call; it carries an `error` field, and the card still shows sources and successful fetches.
 
-> **Timeout note:** the current `timeoutMs` value is used in the tool prompt preview; the registered tool timeout is fixed at `120000` ms. This is listed under known limitations.
+> **Timeout note:** `timeoutMs` drives both the declared tool timeout and the internal `runResearch` signal. When it fires, search/fetch are cancelled and the call returns `WEB_RESEARCH_TIMEOUT`; it is no longer just a prompt-preview value.
 
 ### Takeover settings
 
@@ -654,7 +661,7 @@ Readability runs inside the Host. `jsdom`'s `tr46` dependency calls `createRequi
 
 Before releasing:
 
-- `package.json` version is `0.1.3`;
+- `package.json` version is `0.1.4`;
 - `CHANGELOG.md` has the matching entry;
 - `pnpm release` passes;
 - the worktree is clean;
@@ -671,7 +678,7 @@ pnpm pack --pack-destination dist
 Tag and push:
 
 ```sh
-git tag -a v0.1.3 -m "dsh-search-tools v0.1.3"
+git tag -a v0.1.4 -m "dsh-search-tools v0.1.4"
 git push origin main --follow-tags
 ```
 
@@ -688,7 +695,7 @@ Manual publish:
 npm publish --provenance --access public
 ```
 
-After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run search and fetch tests, and make one `web_research` call. See the [v0.1.3 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.3.md).
+After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run search and fetch tests, and make one `web_research` call. See the [v0.1.4 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.4.md).
 
 ## Troubleshooting
 
@@ -707,13 +714,13 @@ After publishing, smoke-test a fresh profile: install, enable, configure SearXNG
 | Config is read-only | Higher layer overrides it | The page explains; edit the overriding layer or remove it |
 | Duplicate instance URL | Same URL after normalization | Remove the duplicate; trailing `/search`, query, and hash are stripped |
 | Proxy validation error | Not `http(s)`, or contains credentials | Use `http(s)://host:port` without username/password |
-| Cache results are stale | TTL not expired | Clear cache on Advanced, or wait for TTL |
+| Cache results are stale | TTL not expired | Clear cache on Diagnostics, or wait for TTL |
 | No `web_research` after install | Tool disabled; model has not refreshed tools | Enable and save; start a new session or reload |
 | npm install fails | Registry/network/peer mismatch | Check DSH/Node versions and npm registry; use the offline tarball |
 
 Suggested diagnosis order:
 
-1. **Settings → Advanced → Recent errors**;
+1. **Settings → Diagnostics → Recent errors**;
 2. **Search notes** (engine-level errors);
 3. reproduce with **Test**, not only a model turn;
 4. confirm takeover state and the active provider;
@@ -727,8 +734,7 @@ Suggested diagnosis order:
 - **No browser rendering.** No JavaScript execution, login state, SPA, paywall, or CAPTCHA handling.
 - **Text/HTML only.** PDFs, images, audio, and video are not converted to article text.
 - **`web_research` is not a crawler.** It fetches the top N results only; no site traversal, graph deduplication, or deep crawling.
-- **The research prompt preview is read-only.** No copy button; the tool description stays English to match what the model sees.
-- **The research timeout field is not wired to tool registration.** `research.timeoutMs` currently appears only in the prompt budget preview; the actual `web_research` registration timeout is fixed at `120000` ms. Deployments that need a different timeout must wait for a later release or patch the code.
+- **The research prompt preview is copyable.** The tool description stays English to match what the model sees; preview values follow the current draft.
 - **Takeover is a global provider switch.** It affects every `ctx.web` consumer in the DSH profile, not only this plugin.
 - **Cache is in-process memory.** It is lost on restart and not shared across processes.
 - **Narrow DSH preview compatibility.** Pinned to the `0.2.1-rc.2` line; run a regression before upgrading DSH.

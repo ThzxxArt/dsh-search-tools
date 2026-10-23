@@ -51,7 +51,7 @@ describe('web_research pipeline', () => {
     expect(value.sources).toHaveLength(2)
     expect(value.fetched[0]?.content).toContain('Composable plugins')
     expect(value.fetched[0]?.content.length).toBeLessThanOrEqual(500)
-    expect(value.fetched[0]?.truncated).toBe(false)
+    expect(value.fetched[0]?.truncated).toBe(true)
     expect(value.fetched[1]?.truncated).toBe(true)
     expect(value.fetched.reduce((sum, page) => sum + page.content.length, 0)).toBeLessThanOrEqual(700)
     expect(value.fetched.every(page => page.error === undefined)).toBe(true)
@@ -89,6 +89,20 @@ describe('web_research pipeline', () => {
     const meta = researchMeta(value) as { fetched: Array<{ error?: string; chars: number }> }
     expect(meta.fetched[0]?.error).toContain('HTTP 404')
     expect(meta.fetched[0]?.chars).toBe(0)
+  })
+
+  it('rejects invalid research cross-field limits before searching', async () => {
+    const ctx = contextOf(async () => { throw new Error('fetch must not run') })
+    await expect(runResearch(ctx, configOf({
+      ...DEFAULT_STORED_CONFIG,
+      research: { ...DEFAULT_RESEARCH_CONFIG, maxCharsPerPage: 5_000, maxTotalChars: 1_000 },
+    }), { query: 'budget' }, new AbortController().signal))
+      .rejects.toMatchObject({ code: 'RESEARCH_CONFIG_INVALID' })
+    await expect(runResearch(ctx, configOf({
+      ...DEFAULT_STORED_CONFIG,
+      research: { ...DEFAULT_RESEARCH_CONFIG, defaultFetchTop: 3, maxFetch: 2 },
+    }), { query: 'fetch' }, new AbortController().signal))
+      .rejects.toMatchObject({ code: 'RESEARCH_CONFIG_INVALID' })
   })
 
   it('refuses to run while disabled', async () => {

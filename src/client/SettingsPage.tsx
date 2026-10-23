@@ -562,9 +562,9 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
             title={currentSearch === SEARCH_PROVIDER ? t('searchTakeoverTag') : t('defaultProvider')}
           />
           <StatusChip
-            tone={status === undefined ? 'neutral' : status.fetch.registered ? 'success' : 'warning'}
+            tone={status === undefined ? 'neutral' : status.fetch.available ? 'success' : 'warning'}
             loading={status === undefined}
-            label={`${t('fetch')}: ${status === undefined ? t('loading') : status.fetch.registered ? t('available') : t('notAvailable')}`}
+            label={`${t('fetch')}: ${status === undefined ? t('loading') : status.fetch.available ? t('available') : t('notAvailable')}`}
           />
           <StatusChip
             tone={status === undefined ? 'neutral' : status.research.enabled ? 'success' : 'neutral'}

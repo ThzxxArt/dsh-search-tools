@@ -9,4 +9,7 @@ export const readableHttpAdapter: FetchAdapter = {
   create(ctx, getConfig) {
     return new ReadableHttpRuntime(ctx, getConfig)
   },
+  async probe(ctx, config, url, signal) {
+    return await new ReadableHttpRuntime(ctx, () => config).probe(url, signal)
+  },
 }

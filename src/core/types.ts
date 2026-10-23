@@ -62,6 +62,10 @@ export interface ProbeResult {
   html?: boolean
   engines?: string[]
   categories?: string[]
+  /** Fetch probe details: HTTP status and decoded body kind. */
+  statusCode?: number
+  contentType?: 'html' | 'text'
+  readable?: boolean
 }
 
 export interface CacheStats {
@@ -211,6 +215,7 @@ export interface StatusResponse {
   fetch: {
     enabled: boolean
     registered: boolean
+    available: boolean
     adapter: string
   }
   research: {

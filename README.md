@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **当前版本：0.1.3（2026-10-23）。** 这是 0.1.2 的缺口补齐版：Search 增加 Connection / Search behavior 子页，Fetch 升级为可复制、可折叠的正文 reader，补齐冲突与凭据字段级错误，设置页拆成五个 tab 组件，操作条留出等高空间，并补上 560px、失败态、只读态和键盘证据。搜索、抓取、接管和凭据语义不变。0.1.0 已完成真实 DSH、真实 SearXNG、真实模型工具回合和 Web GUI 验收；构建、测试、打包与 publint 门禁通过。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
+> **当前版本：0.1.4（2026-10-23）。** 这是配置契约与搜索/抓取正确性版本：`search.userAgent`、`research.timeoutMs` 和 fetch `/probe` 真正接通；`cacheTtlMs=0` 现在确实关闭缓存；搜索 deadline 覆盖重试、分页、退避和 `Retry-After`；host 在 live 配置、草稿、probe 和 preview 前强制校验；分页部分成功、`auto` 的 JSON→HTML 回退和 probe 回退都有测试；抓取 `truncated` 按正文语义计算，HTML 截断保持合法结构；研究超时、预算前置和 Markdown 转义完成。没有新增第二个 adapter，也没有改变稳定 provider id 或 SSRF 边界。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
 
 ---
 
@@ -174,7 +174,7 @@ dsh plugin --profile <profile> add dsh-search-tools
 ### 安装后检查
 
 - **设置 → 搜索工具** 能看到五个页签。
-- **高级** 里能看到版本号、配置文件路径、缓存统计。
+- **诊断** 里能看到版本号、配置文件路径、抓取/研究运行状态和缓存统计。
 - 如果模型工具已启用，会话里应能看到 `web_research`。
 - 搜索测试通过后，才建议开启搜索接管。
 
@@ -271,12 +271,13 @@ dsh plugin --profile <profile> add dsh-search-tools
 
 - 启用/关闭 `web_research`；
 - 默认结果数、最大抓取条数、默认抓取条数、单页/总字符预算、并发、超时；
-- **模型看到的工具提示** 预览：描述、参数名、默认值与范围都来自当前草稿；
+- **模型看到的工具提示** 预览：描述、参数名、默认值与范围都来自当前草稿；可一键复制；
 - 关闭 `web_research` 后，保存后模型将看不到这个工具。
 
-### 高级（Advanced）
+### 诊断（Diagnostics）
 
 - 配置文件路径；
+- 搜索后端、抓取后端、研究工具的真实运行状态（`fetch.available` / `research.registered`）；
 - 缓存条数与命中/未命中统计；
 - 清空缓存；
 - 最近错误（环形缓冲）；
@@ -331,7 +332,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -347,7 +348,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
     research:
       enabled: true
@@ -404,11 +405,14 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 行为说明：
 
 - **多实例故障转移**：一个实例失败会尝试下一个；全部失败才报错。
-- **重试与预算**：单实例重试受 `retries` 和 `deadlineMs` 共同约束；预算耗尽后不再尝试新实例。
-- **JSON / HTML**：`auto` 会先看响应是否像 JSON；部分实例会返回 200 的 HTML 挑战页，此时回退 HTML 解析。
+- **重试与预算**：单实例重试受 `retries` 和 `deadlineMs` 共同约束；预算耗尽后不再尝试新实例。429/5xx 的 `Retry-After`（秒或 HTTP 日期）优先于指数退避，且同样不超过剩余 deadline。
+- **host 校验**：搜索/抓取 dispatcher 在 live 配置、页面草稿、probe 和 preview 前调用 adapter 的 `validate()`；非法数字、枚举、数组或跨字段配置返回 `SEARCH_CONFIG_INVALID` / `FETCH_CONFIG_INVALID`，不会静默 clamp。
+- **预览与 probe**：Search 测试预览使用当前草稿的 `maxResults`；搜索 probe 使用 `requestTimeoutMs` 和配置的 `GET` / `POST` 方法。
+- **JSON / HTML**：`auto` 先请求 JSON；遇到 403/415/406 或 JSON 解析失败时，同实例再请求一次 HTML。401 仍按认证失败处理，不会误判成格式问题。
 - **Search notes**：SearXNG 的 `unresponsive_engines` 会被保留为提示。看到 0 条结果时先看这里，可能是引擎被限流/CAPTCHA，而不是查询真的没有结果。
-- **缓存键**：包含查询、实例列表、引擎、分类、语言、安全搜索、时间范围、分页、策略、方法、格式、域名过滤；修改这些会自然失效。
+- **缓存键**：包含查询、实例列表、引擎、分类、语言、安全搜索、时间范围、分页、策略、方法、格式、认证类型、代理、UA 和域名过滤；修改这些会自然失效。凭据轮换不会自动改键，建议清空缓存。
 - **域名过滤**：在结果进入 `sources` 前过滤，支持 `example.com` 匹配 `www.example.com`。
+- **分页部分成功**：一页失败不会丢弃其他成功页；失败页写入 `notes`，全部失败才报错。
 
 ### Readability HTTP 抓取配置
 
@@ -417,7 +421,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 | `enabled` | `true` | boolean | 关闭后该抓取 adapter 不可用 |
 | `readability` | `true` | boolean | 是否用 Readability 提取正文 |
 | `minArticleChars` | `200` | 0–100000 | 低于此长度不视为文章正文 |
-| `maxArticleChars` | `200000` | 1000–5000000 | 正文最大字符数，不能小于下限 |
+| `maxArticleChars` | `200000` | 1000–5000000 | 提取后正文的**文本**最大字符数，不是 HTML 长度；不能小于 `minArticleChars`，也不能大于 `maxBodyChars` |
 | `maxResponseBytes` | `5000000` | 1024–50000000 | 响应体最大字节数 |
 | `maxBodyChars` | `2000000` | 1024–20000000 | 解码后最大字符数，不能小于正文下限 |
 | `timeoutMs` | `20000` | 1000–120000 | 抓取超时 |
@@ -431,7 +435,10 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 - 只处理 `http(s)` URL；
 - 只解析文本/HTML；PDF、图片、二进制不会变成正文；
 - 不执行 JavaScript，因此纯前端渲染页面可能抓不到实际内容；
-- Readability 失败且 `failOpen=true` 时返回原始文本/HTML，而不是让整个抓取失败。
+- `maxArticleChars` 限制的是提取后的正文文本，不是原始 HTML；`truncated` 由提取器返回，短正文配长 HTML 不会再误报；
+- 需要截断 HTML 时按块级节点处理；无法安全截断时退回纯文本，保证不会返回半截标签；
+- Readability 失败且 `failOpen=true` 时返回原始文本/HTML，而不是让整个抓取失败；
+- `readable-http` 的 `/probe` 会真实发起一次抓取并返回 HTTP 状态/内容类型，manifest 的 `probe` capability 不再只是声明。
 
 ### web_research 配置
 
@@ -446,9 +453,9 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 | `concurrency` | `3` | 1–8 | 并发抓取数 |
 | `timeoutMs` | `120000` | 5000–600000 | 工具超时预算 |
 
-`web_research` 会把模型参数夹到这些边界内，并按 `maxTotalChars` 在多个页面之间分配剩余预算。某个页面抓取失败不会让整次调用失败；失败页会带 `error` 字段，卡片仍会显示来源和成功抓取数。
+`web_research` 会把模型参数夹到这些边界内，并按 `maxTotalChars` 在多个页面之间分配剩余预算。`defaultFetchTop > maxFetch` 或 `maxCharsPerPage > maxTotalChars` 会在执行前返回 `RESEARCH_CONFIG_INVALID`。某个页面抓取失败不会让整次调用失败；失败页会带 `error` 字段，卡片仍会显示来源和成功抓取数。
 
-> **超时字段说明：** 当前 `timeoutMs` 用于工具提示里的预算展示；实际注册的工具超时固定为 `120000` ms。该差异记录在“已知限制”中。
+> **超时字段说明：** `timeoutMs` 同时进入工具注册的声明超时和 `runResearch` 的内部 signal；到点后搜索/抓取会被取消并返回 `WEB_RESEARCH_TIMEOUT`，不再只是提示词里的展示值。
 
 ### 接管配置
 
@@ -658,7 +665,7 @@ Readability 运行在 Host 内。`jsdom` 的 `tr46` 依赖会调用 `createRequi
 
 发布前确认：
 
-- `package.json` 版本是 `0.1.3`；
+- `package.json` 版本是 `0.1.4`；
 - `CHANGELOG.md` 有对应条目；
 - `pnpm release` 全绿；
 - 工作区干净；
@@ -675,7 +682,7 @@ pnpm pack --pack-destination dist
 打 tag 并推送：
 
 ```sh
-git tag -a v0.1.3 -m "dsh-search-tools v0.1.3"
+git tag -a v0.1.4 -m "dsh-search-tools v0.1.4"
 git push origin main --follow-tags
 ```
 
@@ -692,7 +699,7 @@ git push origin main --follow-tags
 npm publish --provenance --access public
 ```
 
-发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、搜索测试、抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.3 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.3.md)。
+发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、搜索测试、抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.4 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.4.md)。
 
 ## 故障排查
 
@@ -711,13 +718,13 @@ npm publish --provenance --access public
 | 配置只读 | 被更高层配置覆盖 | 页面顶部会说明；到覆盖层修改，或移除覆盖 |
 | 实例 URL 重复 | 规范化后相同 | 去掉重复实例；URL 会去掉末尾 `/search`、query、hash |
 | 代理配置报错 | 不是 http(s)，或包含用户名/密码 | 改成无凭据的 `http(s)://host:port` |
-| 缓存结果不更新 | TTL 未到 | 在高级页清空缓存，或等 TTL 过期 |
+| 缓存结果不更新 | TTL 未到 | 在诊断页清空缓存，或等 TTL 过期 |
 | 安装后没有 `web_research` | 研究工具关闭；模型未刷新工具列表 | 启用并保存；开新会话或重新加载页面 |
 | npm 安装失败 | registry/网络/peer 不匹配 | 检查 DSH 版本、Node 版本、npm registry；用 tarball 离线安装 |
 
 诊断顺序建议：
 
-1. 看 **设置 → 高级 → 最近错误**；
+1. 看 **设置 → 诊断 → 最近错误**；
 2. 看 **Search notes**（引擎级错误）；
 3. 用 **测试** 复现，不要只看模型回合；
 4. 确认是否开启了接管，以及当前 provider 是哪一个；
@@ -731,8 +738,7 @@ npm publish --provenance --access public
 - **不做浏览器渲染。** 不执行 JS，不处理登录态；SPA/付费墙/验证码页面可能抓不到正文。
 - **只处理文本/HTML。** PDF、图片、音视频不会转成正文。
 - **`web_research` 不是爬虫。** 只抓前 N 条结果，不做站点遍历、去重图谱或深度抓取。
-- **研究提示词预览是只读的。** 不提供复制按钮；工具描述保持英文，与模型实际看到的内容一致。
-- **研究超时字段尚未接到工具注册。** `research.timeoutMs` 目前只用于提示词预算展示；实际 `web_research` 注册超时固定为 `120000` ms。需要更长/更短超时的部署应等待后续版本或改代码。
+- **研究提示词预览可复制。** 工具描述保持英文，与模型实际看到的内容一致；预览数值跟随当前草稿。
 - **接管是全局 provider 切换。** 它会影响该 DSH profile 中所有使用 `ctx.web` 的调用，不只本插件。
 - **缓存是进程内内存。** 重启后丢失；多进程不共享。
 - **DSH preview 兼容范围窄。** 当前锁在 `0.2.1-rc.2` 线，升级 DSH 前先跑回归。

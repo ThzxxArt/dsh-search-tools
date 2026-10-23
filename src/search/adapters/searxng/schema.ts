@@ -62,7 +62,7 @@ export const DEFAULT_SEARXNG_CONFIG: SearxngConfig = {
   retries: 1,
   cacheTtlMs: 300_000,
   cacheMaxEntries: 200,
-  userAgent: 'dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)',
+  userAgent: 'dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)',
   proxy: '',
   includeDomains: [],
   excludeDomains: [],
@@ -73,6 +73,30 @@ const TIME_RANGES = new Set(['', 'day', 'week', 'month', 'year'])
 const STRATEGIES = new Set(['ordered', 'round-robin'])
 const FORMATS = new Set(['auto', 'json', 'html'])
 const METHODS = new Set(['GET', 'POST'])
+
+const NUMBER_FIELDS: readonly {
+  key: string
+  label: string
+  min: number
+  max: number
+  integer?: boolean
+}[] = [
+  { key: 'safesearch', label: 'Safe search', min: 0, max: 2 },
+  { key: 'pages', label: 'Pages', min: 1, max: 3 },
+  { key: 'maxResults', label: 'Results per search', min: 1, max: 20 },
+  { key: 'requestTimeoutMs', label: 'Request timeout', min: 1_000, max: 120_000 },
+  { key: 'deadlineMs', label: 'Total deadline', min: 1_000, max: 300_000 },
+  { key: 'retries', label: 'Retries', min: 0, max: 5 },
+  { key: 'cacheTtlMs', label: 'Cache TTL', min: 0, max: 86_400_000 },
+  { key: 'cacheMaxEntries', label: 'Cache entries', min: 0, max: 10_000 },
+]
+
+const STRING_ARRAY_FIELDS: readonly { key: string; label: string }[] = [
+  { key: 'engines', label: 'Engines' },
+  { key: 'categories', label: 'Categories' },
+  { key: 'includeDomains', label: 'Include domains' },
+  { key: 'excludeDomains', label: 'Exclude domains' },
+]
 
 /** Merge defaults, normalise instances/tags, and keep unknown keys for forward compatibility. */
 export function normalizeSearxngConfig(raw: unknown): SearxngConfig {
@@ -116,12 +140,24 @@ export function normalizeSearxngConfig(raw: unknown): SearxngConfig {
 export function validateSearxngConfig(raw: unknown): AdapterValidation {
   const value = isRecord(raw) ? raw : {}
   const issues: AdapterIssue[] = []
+  if (value.instances !== undefined && !Array.isArray(value.instances)) {
+    issues.push(issue('instances', '实例必须是数组', 'field.instances', { label: 'Instances' }))
+  }
+  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') {
+    issues.push(issue('enabled', '启用状态必须是布尔值', 'field.boolean', { label: 'Enabled' }))
+  }
   const instances = Array.isArray(value.instances) ? value.instances : []
   const seen = new Set<string>()
   instances.forEach((entry, index) => {
     if (!isRecord(entry)) {
       issues.push(issue(`instances[${index}]`, '实例必须是对象', 'instances.invalid'))
       return
+    }
+    if (entry.enabled !== undefined && typeof entry.enabled !== 'boolean') {
+      issues.push(issue(`instances[${index}].enabled`, '实例启用状态必须是布尔值', 'field.boolean', { label: 'Enabled' }))
+    }
+    if (entry.label !== undefined && typeof entry.label !== 'string') {
+      issues.push(issue(`instances[${index}].label`, '实例备注必须是字符串', 'field.string', { label: 'Label' }))
     }
     const url = readString(entry.url, '').trim()
     const enabled = readBoolean(entry.enabled, true)
@@ -142,11 +178,27 @@ export function validateSearxngConfig(raw: unknown): AdapterValidation {
       ))
     }
   })
-  const auth = isRecord(value.auth) ? readString(value.auth.type, 'none') : 'none'
-  if (!AUTH_TYPES.has(auth)) issues.push(issue('auth.type', '认证类型无效', 'auth.typeInvalid'))
+  if (value.auth !== undefined) {
+    if (!isRecord(value.auth)) {
+      issues.push(issue('auth', '认证必须是对象', 'auth.typeInvalid'))
+    } else if (!AUTH_TYPES.has(readString(value.auth.type, 'none'))) {
+      issues.push(issue('auth.type', '认证类型无效', 'auth.typeInvalid'))
+    }
+  }
+  for (const field of NUMBER_FIELDS) validateNumber(value, field, issues)
+  for (const field of STRING_ARRAY_FIELDS) validateStringArray(value, field, issues)
+  validateEnum(value, 'timeRange', 'Time range', TIME_RANGES, issues)
+  validateEnum(value, 'strategy', 'Instance strategy', STRATEGIES, issues)
+  validateEnum(value, 'method', 'Request method', METHODS, issues)
+  validateEnum(value, 'format', 'Response format', FORMATS, issues)
+  validateText(value, 'language', 'Language', issues)
+  validateText(value, 'userAgent', 'User-Agent', issues)
+  validateText(value, 'proxy', 'Proxy', issues)
+
   const requestTimeoutMs = readNumber(value.requestTimeoutMs, 12_000)
   const deadlineMs = readNumber(value.deadlineMs, 45_000)
   if (deadlineMs < requestTimeoutMs) issues.push(issue('deadlineMs', '总预算不能小于单次请求超时', 'deadline.beforeRequest'))
+
   const proxy = readString(value.proxy, '').trim()
   if (proxy.length > 0) {
     try {
@@ -159,8 +211,62 @@ export function validateSearxngConfig(raw: unknown): AdapterValidation {
     }
   }
   const userAgent = readString(value.userAgent, DEFAULT_SEARXNG_CONFIG.userAgent).trim()
-  if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行', 'userAgent.invalid'))
+  if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) {
+    issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行', 'userAgent.invalid'))
+  }
   return result(issues)
+}
+
+function validateNumber(
+  value: Record<string, unknown>,
+  field: { key: string; label: string; min: number; max: number; integer?: boolean },
+  issues: AdapterIssue[],
+): void {
+  const raw = value[field.key]
+  if (raw === undefined) return
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || (field.integer !== false && !Number.isInteger(raw))) {
+    issues.push(issue(field.key, `${field.label}必须是数字`, 'field.number', { label: field.label }))
+    return
+  }
+  if (raw < field.min) issues.push(issue(field.key, `${field.label}不能小于 ${field.min}`, 'field.min', { label: field.label, min: field.min }))
+  if (raw > field.max) issues.push(issue(field.key, `${field.label}不能大于 ${field.max}`, 'field.max', { label: field.label, max: field.max }))
+}
+
+function validateStringArray(
+  value: Record<string, unknown>,
+  field: { key: string; label: string },
+  issues: AdapterIssue[],
+): void {
+  const raw = value[field.key]
+  if (raw === undefined) return
+  if (!Array.isArray(raw) || raw.some(entry => typeof entry !== 'string')) {
+    issues.push(issue(field.key, `${field.label}必须是字符串数组`, 'field.stringArray', { label: field.label }))
+  }
+}
+
+function validateText(
+  value: Record<string, unknown>,
+  key: string,
+  label: string,
+  issues: AdapterIssue[],
+): void {
+  const raw = value[key]
+  if (raw === undefined) return
+  if (typeof raw !== 'string') issues.push(issue(key, `${label}必须是字符串`, 'field.string', { label }))
+}
+
+function validateEnum(
+  value: Record<string, unknown>,
+  key: string,
+  label: string,
+  allowed: ReadonlySet<string>,
+  issues: AdapterIssue[],
+): void {
+  const raw = value[key]
+  if (raw === undefined) return
+  if (typeof raw !== 'string' || !allowed.has(raw)) {
+    issues.push(issue(key, `${label}不是允许的选项`, 'field.option', { label }))
+  }
 }
 
 function readStringArray(value: unknown): string[] {

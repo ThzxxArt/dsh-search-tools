@@ -41,7 +41,11 @@ export const readableHttpManifest: AdapterManifest = {
     {
       kind: 'number',
       key: 'maxArticleChars',
-      label: lt('Maximum article characters', '正文最大字符数'),
+      label: lt('Maximum article text characters', '正文文本最大字符数'),
+      description: lt(
+        'Caps the extracted article text, not the raw HTML length. HTML is kept only when it can be safely truncated.',
+        '限制提取后的正文文本字符数，不是原始 HTML 长度；只有能安全截断时才保留 HTML。',
+      ),
       min: 1_000,
       max: 5_000_000,
       step: 1_000,

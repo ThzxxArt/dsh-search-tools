@@ -7,8 +7,9 @@ import type { Config } from '../config.ts'
 import { snapshot } from '../config.ts'
 import type { SearchSource } from '../core/types.ts'
 import { extractReadable } from '../fetch/adapters/readable-http/readability.ts'
+import { errorMessage, SearchToolsError } from '../shared/errors.ts'
 import { clip, mapLimit } from '../shared/limit.ts'
-import { errorMessage } from '../shared/errors.ts'
+import { readNumber } from '../shared/validation.ts'
 
 export interface ResearchArgs {
   query: string
@@ -51,61 +52,123 @@ export async function runResearch(
 ): Promise<ResearchValue> {
   const state = snapshot(config)
   if (!state.research.enabled) throw new Error('web_research is disabled')
+  if (state.research.defaultFetchTop > state.research.maxFetch) {
+    throw new SearchToolsError('research.defaultFetchTop must not exceed research.maxFetch', 'RESEARCH_CONFIG_INVALID')
+  }
+  if (state.research.maxCharsPerPage > state.research.maxTotalChars) {
+    throw new SearchToolsError('research.maxCharsPerPage must not exceed research.maxTotalChars', 'RESEARCH_CONFIG_INVALID')
+  }
   const query = args.query.trim()
   if (query.length === 0) throw new Error('query must not be empty')
   const maxResults = clamp(args.max_results ?? state.research.maxResults, 1, state.research.maxResults)
   const fetchTop = clamp(args.fetch_top ?? state.research.defaultFetchTop, 0, state.research.maxFetch)
   const maxChars = clamp(args.max_chars ?? state.research.maxCharsPerPage, 1_000, state.research.maxCharsPerPage)
+  const timeoutMs = state.research.timeoutMs
 
-  const search = await ctx.web.search({ query, maxResults }, signal)
-  const selected = search.sources.slice(0, fetchTop)
-  const pages = await mapLimit(selected, state.research.concurrency, async source => {
-    try {
-      const result = await ctx.web.fetch({ url: source.url }, signal)
-      if (result.statusCode < 200 || result.statusCode >= 300) {
-        return { url: source.url, ...(source.title === undefined ? {} : { title: source.title }), content: '', truncated: false, error: `HTTP ${result.statusCode}` }
+  const timeout = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    timeout.abort()
+  }, timeoutMs)
+  timer.unref?.()
+  const runSignal = AbortSignal.any([signal, timeout.signal])
+
+  try {
+    const search = await ctx.web.search({ query, maxResults }, runSignal)
+    const selected = search.sources.slice(0, fetchTop)
+    const fetchConfig = state.fetch.adapters[state.fetch.adapter]
+    const maxBodyChars = readNumber(fetchConfig?.maxBodyChars, 2_000_000)
+    const minArticleChars = readNumber(fetchConfig?.minArticleChars, 200)
+
+    // Reserve each page's worst-case budget before fetching. This keeps the
+    // total work bounded even when extraction or Markdown conversion is slow;
+    // pages that receive no budget are not fetched at all.
+    let remainingTotal = state.research.maxTotalChars
+    const pages = await mapLimit(selected, state.research.concurrency, async (source) => {
+      const budget = Math.max(0, Math.min(maxChars, remainingTotal))
+      remainingTotal -= budget
+      if (budget <= 0) {
+        return {
+          url: source.url,
+          ...(source.title === undefined ? {} : { title: source.title }),
+          content: '',
+          truncated: true,
+        }
       }
-      if (result.body.kind === 'text') {
-        const clipped = clip(result.body.content, maxChars)
-        return { url: source.url, ...(source.title === undefined ? {} : { title: source.title }), content: clipped.text, truncated: result.truncated || clipped.truncated }
+      try {
+        const result = await ctx.web.fetch({ url: source.url }, runSignal)
+        if (result.statusCode < 200 || result.statusCode >= 300) {
+          return {
+            url: source.url,
+            ...(source.title === undefined ? {} : { title: source.title }),
+            content: '',
+            truncated: false,
+            error: `HTTP ${result.statusCode}`,
+          }
+        }
+        if (result.body.kind === 'text') {
+          const clipped = clip(result.body.content, budget)
+          return {
+            url: source.url,
+            ...(source.title === undefined ? {} : { title: source.title }),
+            content: clipped.text,
+            truncated: result.truncated || clipped.truncated,
+          }
+        }
+        const readable = await extractReadable(result.body.content, result.url, {
+          minArticleChars,
+          maxArticleChars: budget,
+          maxBodyChars,
+        }).catch(() => undefined)
+        const html = readable?.html ?? result.body.content
+        const markdown = turndown.turndown(html)
+        const clipped = clip(markdown, budget)
+        return {
+          url: source.url,
+          ...((readable?.title ?? source.title) === undefined ? {} : { title: readable?.title ?? source.title }),
+          content: clipped.text,
+          truncated: result.truncated || readable?.truncated === true || clipped.truncated,
+        }
+      } catch (error) {
+        if (timedOut || signal.aborted) throw error
+        return {
+          url: source.url,
+          ...(source.title === undefined ? {} : { title: source.title }),
+          content: '',
+          truncated: false,
+          error: errorMessage(error),
+        }
       }
-      const readable = await extractReadable(result.body.content, result.url, {
-        minArticleChars: 200,
-        maxArticleChars: state.research.maxCharsPerPage,
-        maxBodyChars: state.fetch.adapters['readable-http']?.maxBodyChars as number | undefined ?? 2_000_000,
-      }).catch(() => undefined)
-      const html = readable?.html ?? result.body.content
-      const markdown = turndown.turndown(html)
-      const clipped = clip(markdown, maxChars)
-      return {
-        url: source.url,
-        ...((readable?.title ?? source.title) === undefined ? {} : { title: readable?.title ?? source.title }),
-        content: clipped.text,
-        truncated: result.truncated || clipped.truncated,
+    })
+
+    if (timedOut) throw timeoutError(timeoutMs)
+
+    let remaining = state.research.maxTotalChars
+    let truncated = search.truncated
+    const fetched = pages.map((page) => {
+      truncated ||= page.truncated
+      if (page.content.length <= remaining) {
+        remaining -= page.content.length
+        return page
       }
-    } catch (error) {
-      return { url: source.url, ...(source.title === undefined ? {} : { title: source.title }), content: '', truncated: false, error: errorMessage(error) }
+      const clipped = clip(page.content, Math.max(0, remaining))
+      remaining = 0
+      truncated ||= clipped.truncated
+      return { ...page, content: clipped.text, truncated: true }
+    })
+
+    return {
+      query,
+      sources: search.sources.slice(0, maxResults).map(source => ({ ...source })),
+      fetched,
+      truncated,
     }
-  })
-
-  let remaining = state.research.maxTotalChars
-  let truncated = search.truncated
-  const fetched = pages.map((page) => {
-    if (page.content.length <= remaining) {
-      remaining -= page.content.length
-      return page
-    }
-    const clipped = clip(page.content, Math.max(0, remaining))
-    remaining = 0
-    truncated ||= clipped.truncated
-    return { ...page, content: clipped.text, truncated: true }
-  })
-
-  return {
-    query,
-    sources: search.sources.slice(0, maxResults).map(source => ({ ...source })),
-    fetched,
-    truncated,
+  } catch (error) {
+    if (timedOut && !signal.aborted) throw timeoutError(timeoutMs)
+    throw error
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -126,6 +189,10 @@ export function researchMeta(value: ResearchValue): Record<string, unknown> {
     })),
     truncated: value.truncated,
   }
+}
+
+function timeoutError(timeoutMs: number): SearchToolsError {
+  return new SearchToolsError(`web_research timed out after ${timeoutMs} ms`, 'WEB_RESEARCH_TIMEOUT')
 }
 
 function hostOf(url: string): string {

@@ -13,11 +13,11 @@ import type { SearchToolsService } from '../core/service.ts'
 import type { Diagnostics } from '../core/diagnostics.ts'
 import type { CacheStats, JsonObject, StatusResponse } from '../core/types.ts'
 import { SearchToolsError, errorCode, errorMessage } from '../shared/errors.ts'
-import { isRecord } from '../shared/validation.ts'
+import { isRecord, readBoolean } from '../shared/validation.ts'
 
 const BASE = '/api/dsh-search-tools'
 const MAX_BODY_BYTES = 64 * 1024
-const VERSION = '0.1.3'
+const VERSION = '0.1.4'
 
 interface ConnectionFence {
   requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
@@ -45,6 +45,8 @@ export interface RouteDeps {
   fetch: FetchDispatcher
   adapters: SearchToolsService
   diagnostics: Diagnostics
+  /** True only while the `web_research` tool is actually registered. */
+  researchRegistered?: () => boolean
 }
 
 export function registerRoutes(ctx: Context, deps: RouteDeps): void {
@@ -117,7 +119,13 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
         if (query.length === 0) throw new SearchToolsError('query is required', 'BAD_REQUEST')
         const adapter = typeof body.adapter === 'string' ? body.adapter : snapshot(deps.config).search.adapter
         const config = isRecord(body.config) ? body.config as JsonObject : {}
-        const result = await deps.search.preview(adapter, config, { query, maxResults: 10 }, AbortSignal.timeout(30_000))
+        const maxResults = typeof config.maxResults === 'number' ? config.maxResults : undefined
+        const result = await deps.search.preview(
+          adapter,
+          config,
+          { query, ...(maxResults === undefined ? {} : { maxResults }) },
+          AbortSignal.timeout(30_000),
+        )
         sendJson(res, 200, { ok: true, ...result, elapsedMs: Date.now() - started })
       } catch (error) {
         sendError(res, error, started)
@@ -180,35 +188,42 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
 }
 
 async function sendStatus(ctx: Context, deps: RouteDeps, res: ServerResponse): Promise<void> {
+  sendJson(res, 200, await buildStatus(ctx, deps))
+}
+
+/** Build the same payload the wire route returns; exported for contract tests. */
+export async function buildStatus(ctx: Context, deps: RouteDeps): Promise<StatusResponse> {
   const state = snapshot(deps.config)
   const cache: CacheStats = deps.search.cacheStats()
   const credentials = await describeCredentials(ctx, deps.adapters)
   const configPath = await configPathOf(ctx)
   const searchInstances = countInstances(state.search.adapters[state.search.adapter])
-  const payload: StatusResponse = {
+  const searchEnabled = adapterEnabled(state.search.adapters[state.search.adapter])
+  const fetchEnabled = adapterEnabled(state.fetch.adapters[state.fetch.adapter])
+  return {
     version: VERSION,
     configPath,
     search: {
-      enabled: true,
-      registered: true,
+      enabled: searchEnabled,
+      registered: deps.adapters.getSearchAdapter(state.search.adapter) !== undefined,
       available: deps.search.available(),
       adapter: state.search.adapter,
       instances: searchInstances,
     },
     fetch: {
-      enabled: true,
-      registered: true,
+      enabled: fetchEnabled,
+      registered: deps.adapters.getFetchAdapter(state.fetch.adapter) !== undefined,
+      available: deps.fetch.available(),
       adapter: state.fetch.adapter,
     },
     research: {
       enabled: state.research.enabled,
-      registered: true,
+      registered: deps.researchRegistered?.() === true,
     },
     credentials,
     cache,
     lastErrors: deps.diagnostics.list(),
   }
-  sendJson(res, 200, payload)
 }
 
 async function describeCredentials(
@@ -246,6 +261,10 @@ async function configPathOf(ctx: Context): Promise<string | null> {
   if (typeof editor?.documentPath === 'string') return editor.documentPath
   const profile = ctx.get('profileContext') as ProfilePathService | undefined
   return typeof profile?.patchPath === 'string' ? profile.patchPath : null
+}
+
+function adapterEnabled(raw: unknown): boolean {
+  return isRecord(raw) ? readBoolean(raw.enabled, true) : true
 }
 
 function countInstances(raw: unknown): number {

@@ -47,7 +47,8 @@ export class SearchDispatcher implements WebSearchProvider {
   available(): boolean {
     const state = snapshot(this.config)
     const adapter = this.adapters.getSearchAdapter(state.search.adapter)
-    return adapter !== undefined && this.runtimeFor(state.search.adapter)?.available() === true
+    if (adapter === undefined || !adapter.validate(state.search.adapters[state.search.adapter] ?? {}).ok) return false
+    return this.runtimeFor(state.search.adapter)?.available() === true
   }
 
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
@@ -57,11 +58,12 @@ export class SearchDispatcher implements WebSearchProvider {
     if (adapter === undefined) {
       throw new WebError(`search adapter "${adapterId}" is not registered`, 'SEARCH_ADAPTER_MISSING')
     }
-    const runtime = this.runtimeFor(adapterId)
-    if (runtime === undefined || !runtime.available()) {
-      throw new WebError(`search adapter "${adapterId}" is unavailable`, 'SEARCH_ADAPTER_UNAVAILABLE')
-    }
     try {
+      assertSearchConfig(adapter, state.search.adapters[adapterId] ?? {}, adapterId)
+      const runtime = this.runtimeFor(adapterId)
+      if (runtime === undefined || !runtime.available()) {
+        throw new WebError(`search adapter "${adapterId}" is unavailable`, 'SEARCH_ADAPTER_UNAVAILABLE')
+      }
       return await runtime.search(request, signal) as WebSearchResult
     } catch (error) {
       this.diagnostics.record(error, 'SEARCH_FAILED', adapterId)
@@ -90,6 +92,7 @@ export class SearchDispatcher implements WebSearchProvider {
     if (adapter.probe === undefined) {
       return { ok: false, code: 'SEARCH_PROBE_UNSUPPORTED', message: 'adapter has no probe', latencyMs: 0 }
     }
+    assertSearchConfig(adapter, rawConfig, adapterId)
     return adapter.probe(this.adapterContext, rawConfig, signal ?? AbortSignal.timeout(15_000))
   }
 
@@ -102,6 +105,7 @@ export class SearchDispatcher implements WebSearchProvider {
   ): Promise<{ sources: unknown[]; content?: string; truncated: boolean; notes?: readonly string[] }> {
     const adapter = this.adapters.getSearchAdapter(adapterId)
     if (adapter === undefined) throw new WebError(`search adapter "${adapterId}" is not registered`, 'SEARCH_ADAPTER_MISSING')
+    assertSearchConfig(adapter, rawConfig, adapterId)
     const runtime = adapter.create(this.adapterContext, () => rawConfig)
     const result = await runtime.search(request, signal)
     return {
@@ -126,6 +130,30 @@ export class SearchDispatcher implements WebSearchProvider {
   }
 }
 
+function assertSearchConfig(adapter: SearchAdapter, rawConfig: JsonObject, adapterId: string): void {
+  const validation = adapter.validate(rawConfig)
+  if (!validation.ok) {
+    throw new WebError(
+      `search adapter "${adapterId}" config is invalid: ${validationSummary(validation)}`,
+      'SEARCH_CONFIG_INVALID',
+    )
+  }
+}
+
+function assertFetchConfig(adapter: FetchAdapter, rawConfig: JsonObject, adapterId: string): void {
+  const validation = adapter.validate(rawConfig)
+  if (!validation.ok) {
+    throw new WebError(
+      `fetch adapter "${adapterId}" config is invalid: ${validationSummary(validation)}`,
+      'FETCH_CONFIG_INVALID',
+    )
+  }
+}
+
+function validationSummary(validation: { issues: readonly { path: string; message: string }[] }): string {
+  return validation.issues.slice(0, 4).map(item => `${item.path}: ${item.message}`).join('; ')
+}
+
 export class FetchDispatcher implements WebFetchProvider {
   readonly id = FETCH_PROVIDER_ID
   private readonly runtimes = new Map<string, ReturnType<FetchAdapter['create']>>()
@@ -144,6 +172,8 @@ export class FetchDispatcher implements WebFetchProvider {
 
   available(): boolean {
     const state = snapshot(this.config)
+    const adapter = this.adapters.getFetchAdapter(state.fetch.adapter)
+    if (adapter === undefined || !adapter.validate(state.fetch.adapters[state.fetch.adapter] ?? {}).ok) return false
     return this.runtimeFor(state.fetch.adapter)?.available() === true
   }
 
@@ -154,11 +184,12 @@ export class FetchDispatcher implements WebFetchProvider {
     if (adapter === undefined) {
       throw new WebError(`fetch adapter "${adapterId}" is not registered`, 'FETCH_ADAPTER_MISSING')
     }
-    const runtime = this.runtimeFor(adapterId)
-    if (runtime === undefined || !runtime.available()) {
-      throw new WebError(`fetch adapter "${adapterId}" is unavailable`, 'FETCH_ADAPTER_UNAVAILABLE')
-    }
     try {
+      assertFetchConfig(adapter, state.fetch.adapters[adapterId] ?? {}, adapterId)
+      const runtime = this.runtimeFor(adapterId)
+      if (runtime === undefined || !runtime.available()) {
+        throw new WebError(`fetch adapter "${adapterId}" is unavailable`, 'FETCH_ADAPTER_UNAVAILABLE')
+      }
       return await runtime.fetch(request, signal) as WebFetchResult
     } catch (error) {
       this.diagnostics.record(error, 'FETCH_FAILED', adapterId)
@@ -178,6 +209,7 @@ export class FetchDispatcher implements WebFetchProvider {
     if (adapter.probe === undefined) {
       return { ok: false, code: 'FETCH_PROBE_UNSUPPORTED', message: 'adapter has no probe', latencyMs: 0 }
     }
+    assertFetchConfig(adapter, rawConfig, adapterId)
     return adapter.probe(this.adapterContext, rawConfig, url, signal ?? AbortSignal.timeout(20_000))
   }
 
@@ -190,6 +222,7 @@ export class FetchDispatcher implements WebFetchProvider {
   ): Promise<WebFetchResult> {
     const adapter = this.adapters.getFetchAdapter(adapterId)
     if (adapter === undefined) throw new WebError(`fetch adapter "${adapterId}" is not registered`, 'FETCH_ADAPTER_MISSING')
+    assertFetchConfig(adapter, rawConfig, adapterId)
     const runtime = adapter.create(this.adapterContext, () => rawConfig)
     return await runtime.fetch(request, signal) as WebFetchResult
   }

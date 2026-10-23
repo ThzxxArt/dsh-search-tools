@@ -44,6 +44,9 @@ export function DiagnosticsTab({ model }: { model: SettingsModel }): React.React
           <PathLabel className="dshst-path" path={status?.configPath ?? '—'} />
           <Button size="sm" variant="ghost" icon={<IconCopyOutlineRegular size={13} />} disabled={status?.configPath == null} onClick={() => { void copyPath() }} aria-label={t('copyPath')} />
         </div>
+        <p className="dshst-field-hint" data-testid="runtime-state">
+          {`${t('fetch')}: ${status?.fetch.available ? t('available') : t('notAvailable')} · ${t('research')}: ${status?.research.registered ? t('registered') : t('notRegistered')}`}
+        </p>
         <div className="dshst-actions">
           <Button size="sm" variant="outline" disabled={status === undefined} onClick={() => { void copyDiagnostics() }}>{t('copyDiagnostics')}</Button>
           <Button size="sm" variant="ghost" disabled={status === undefined} onClick={() => { void clearCache() }}>{t('clearCache')}</Button>

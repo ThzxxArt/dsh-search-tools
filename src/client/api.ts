@@ -44,10 +44,6 @@ export async function probeSearch(adapter: string, config: JsonObject, signal?: 
   return await postJson<ProbeResult>('probe', { kind: 'search', adapter, config }, signal)
 }
 
-export async function probeFetch(adapter: string, config: JsonObject, url: string, signal?: AbortSignal): Promise<ProbeResult> {
-  return await postJson<ProbeResult>('probe', { kind: 'fetch', adapter, config, url }, signal)
-}
-
 export async function previewSearch(adapter: string, query: string, config: JsonObject, signal?: AbortSignal): Promise<SearchPreviewResult> {
   return await postJson<SearchPreviewResult>('search-preview', { adapter, query, config }, signal)
 }

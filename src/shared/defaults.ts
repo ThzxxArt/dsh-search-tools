@@ -74,13 +74,5 @@ export const DEFAULT_STORED_CONFIG: StoredConfig = {
   activation: DEFAULT_ACTIVATION_CONFIG,
 }
 
-/** Read one adapter's stored object, or an empty object for a fresh adapter. */
-export function adapterConfigOf<T extends JsonObject>(
-  section: { adapters: Record<string, T> },
-  adapterId: string,
-): T {
-  return (section.adapters[adapterId] ?? {}) as T
-}
-
 /** Built-in adapter config types, re-exported for adapter implementations. */
 export type { ReadableHttpConfig, SearxngConfig }

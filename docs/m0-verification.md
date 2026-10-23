@@ -12,7 +12,7 @@ Web URL: `http://127.0.0.1:3091` (separate from the running GUI at `dsh.metona.c
 | Package installs as a bundle | `dsh plugin --profile m0web add ...tgz`; package.json lists `dsh-search-tools` in `dsh.profile.bundles` |
 | Client half loads | browser boot graph contains `dsh-search-tools/client.js`; no module-system error |
 | Settings menu appears | Settings → **Search Tools** is in the left nav |
-| Page renders | Overview / Search / Fetch / Research / Advanced tabs, adapter manifest fields, instance editor |
+| Page renders | Overview / Search / Fetch / Research / Diagnostics (named Advanced in the 0.1.0 snapshot), adapter manifest fields, instance editor |
 | YAML write | `~/.dsh/profiles/m0web/cordis.patch.yml` gained the `dsh-search-tools` entry after Save |
 | YAML survives restart | after reloading the page, instance URL and adapter config are read back |
 | Auth fence | `GET /api/dsh-search-tools/status` → 401 without cookie, 200 with cookie |
@@ -255,6 +255,59 @@ run in this round.
 - The first release run failed at the registry-download step while npm was still
   catching up. The workflow now retries the `npm view` and download together;
   the rerun succeeded.
+
+## 0.1.4 configuration and search/fetch verification (2026-10-23)
+
+Environment: real DSH `0.2.1-rc.2`, profile `m0web`, local
+`dsh-search-tools@0.1.4` tarball, Chromium via Playwright, a local SearXNG mock
+on `127.0.0.1:8899`, and `https://example.com/` for fetch.
+
+| Check | Evidence |
+|---|---|
+| Version / tabs | Diagnostics reports `v0.1.4`; Overview, Search, Fetch, Research, Diagnostics all render. |
+| Status truth | Hero chip `Fetch: available`; Diagnostics `Fetch: available · Research: registered`; `/status` returns `fetch.available=true`, `research.registered=true`. |
+| Fetch probe | `POST /api/dsh-search-tools/probe` with `kind=fetch` returns `{ok:true,statusCode:200,contentType:"html",readable:false,latencyMs:134}` for the short `example.com` page; no `FETCH_PROBE_UNSUPPORTED`. |
+| Numeric validation | Setting Pages to 4 renders two `Pages cannot be larger than 3.` alerts, `aria-invalid=true`, and disables Save. |
+| Prompt copy | Copy prompt writes the model-facing prompt to the clipboard and changes the button to Copied. |
+| Search request headers | Mock log: `ua=dsh-search-tools/0.1.4-gui`, `al=zh-CN,zh;q=0.9`, `format=json`, plus engines/categories/language/safesearch. |
+| Cache TTL 0 | Set Cache TTL to 0 in the real GUI, then run the same query twice; the mock receives exactly two requests. Restored to 300000 afterwards. |
+| Search success | Search test returns `Test passed`, one source link, and `GUI result`/`GUI snippet`; no console errors. |
+| Fetch preview | `https://example.com/` returns HTTP 200, `html`, 577 chars, Page content, Copy content, Hide content. |
+| Responsive | 700px and 560px viewports report page `scrollWidth === clientWidth` (416/416 and 276/276 content); no horizontal overflow. |
+| Console | No page errors or console errors across the GUI run. |
+| Tests | `pnpm test`: 119 tests / 19 files (109 at the first 0.1.4 round). |
+| Build | `pnpm build`: host, client, declarations pass. |
+
+Not covered in this GUI round: a real SearXNG instance (the mock validates request
+shape/headers but not engine quality), real credential-store/conflict injection,
+physical 560px device, screen reader, and non-Chromium engines. Those remain
+evidence gaps, not passes.
+
+## 0.1.4 gap-closure verification (2026-10-23)
+
+Environment: real DSH `0.2.1-rc.2`, profile `m0web`, rebuilt
+`dsh-search-tools@0.1.4` tarball, Chromium via Playwright, local SearXNG mock
+on `127.0.0.1:8899`, `https://example.com/`, and a scripted Messages-compatible
+model on `127.0.0.1:8897` for the research timeout path.
+
+| Check | Evidence |
+|---|---|
+| Version / status | Diagnostics `v0.1.4`; `Fetch: available · Research: registered`; no page/console errors |
+| Host validation | `POST /search-preview` with draft `pages:4` returns `ok:false`, `code:"SEARCH_CONFIG_INVALID"`, message `pages: Pages不能大于 3`; the dispatcher rejects before creating a runtime |
+| Draft result cap | `POST /search-preview` with draft `maxResults:17` against a 20-result mock returns exactly 17 sources and `truncated:true` |
+| Format fallback | Search test with query `format-fallback` shows `Format fallback result`; mock log records JSON 403 followed by an HTML request |
+| Research timeout | Real DSH loop + scripted model, `timeoutMs=5000`; session `c1096f01-a269-402e-a623-5319f37a2027` records `tool/result` `Error: tool call timed out after 5000ms` with error `TOOL_TIMEOUT`; internal `WEB_RESEARCH_TIMEOUT` is covered by `tests/research-timeout.spec.ts` |
+| Search probe | `probeSearxng` integration tests cover configured POST and a hanging request bounded by `requestTimeoutMs` |
+| Tests | `pnpm test`: 119 tests / 19 files, pass |
+| Build | `pnpm build`: host, client, declarations pass |
+
+The research timeout evidence uses a scripted model to exercise the real DSH
+tool loop and event log; it is not a real-model selection run. The timeout
+observed at the GUI boundary is the tool-wrapper `TOOL_TIMEOUT`; the pipeline's
+own abort path is separately asserted to return `WEB_RESEARCH_TIMEOUT`.
+
+Still not covered: real SearXNG engine quality, real credential/conflict
+injection, physical 560px device, screen reader, and non-Chromium engines.
 
 ## Remaining
 

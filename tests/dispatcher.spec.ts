@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Config } from '../src/config.ts'
-import type { AdapterContext, CredentialLookup, SearchAdapter } from '../src/core/host-types.ts'
-import { createAdapterContext, SearchDispatcher } from '../src/core/dispatchers.ts'
+import type { AdapterContext, CredentialLookup, FetchAdapter, SearchAdapter } from '../src/core/host-types.ts'
+import { createAdapterContext, FetchDispatcher, SearchDispatcher } from '../src/core/dispatchers.ts'
 import { Diagnostics } from '../src/core/diagnostics.ts'
 import type { SearchToolsService } from '../src/core/service.ts'
 import { DEFAULT_ACTIVATION_CONFIG, DEFAULT_RESEARCH_CONFIG } from '../src/shared/defaults.ts'
@@ -107,6 +107,98 @@ describe('SearXNG runtime credentials and cache', () => {
     const runtime = new SearxngRuntime(ctx, () => baseConfig({ auth: { type: 'basic' } }))
     await runtime.search({ query: 'q', maxResults: 1 })
     expect(seen[0]?.authorization).toBe(`Basic ${Buffer.from('user:pass').toString('base64')}`)
+  })
+})
+
+describe('host config validation', () => {
+  it('rejects an invalid search draft before creating a runtime', async () => {
+    let created = 0
+    let searched = 0
+    const adapter: SearchAdapter = {
+      manifest: {
+        kind: 'search',
+        id: 'invalid',
+        label: 'Invalid',
+        description: 'Test adapter',
+        fields: [],
+        defaults: {},
+      },
+      validate: () => ({ ok: false, issues: [{ path: 'pages', message: 'Pages cannot be larger than 3.' }] }),
+      create: () => {
+        created++
+        return {
+          available: () => true,
+          search: async () => {
+            searched++
+            return { sources: [], truncated: false }
+          },
+        }
+      },
+    }
+    const adapters = {
+      getSearchAdapter: (id: string) => id === 'invalid' ? adapter : undefined,
+      listAdapters: () => ({ search: [adapter.manifest], fetch: [] }),
+    } as unknown as SearchToolsService
+    const config = {
+      search: { get: () => ({ adapter: 'invalid', adapters: { invalid: { pages: 4 } } }) },
+      fetch: { get: () => ({ adapter: 'readable-http', adapters: {} }) },
+      research: { get: () => DEFAULT_RESEARCH_CONFIG },
+      activation: { get: () => DEFAULT_ACTIVATION_CONFIG },
+    } as unknown as Config
+    const ctx = { logger, get: () => undefined } as unknown as Context
+    const dispatcher = new SearchDispatcher(ctx, config, adapters, new Diagnostics())
+
+    expect(dispatcher.available()).toBe(false)
+    await expect(dispatcher.search({ query: 'q' })).rejects.toMatchObject({ code: 'SEARCH_CONFIG_INVALID' })
+    await expect(dispatcher.preview('invalid', { pages: 4 }, { query: 'q' }))
+      .rejects.toMatchObject({ code: 'SEARCH_CONFIG_INVALID' })
+    expect(created).toBe(0)
+    expect(searched).toBe(0)
+  })
+
+  it('rejects an invalid fetch draft before creating a runtime', async () => {
+    let created = 0
+    const adapter: FetchAdapter = {
+      manifest: {
+        kind: 'fetch',
+        id: 'invalid-fetch',
+        label: 'Invalid fetch',
+        description: 'Test adapter',
+        fields: [],
+        defaults: {},
+      },
+      validate: () => ({ ok: false, issues: [{ path: 'maxArticleChars', message: 'Article cap is too large.' }] }),
+      create: () => {
+        created++
+        return {
+          available: () => true,
+          fetch: async () => ({
+            url: 'https://example.com/',
+            statusCode: 200,
+            body: { kind: 'text', content: 'ok' },
+            truncated: false,
+          }),
+        }
+      },
+    }
+    const adapters = {
+      getFetchAdapter: (id: string) => id === 'invalid-fetch' ? adapter : undefined,
+      listAdapters: () => ({ search: [], fetch: [adapter.manifest] }),
+    } as unknown as SearchToolsService
+    const config = {
+      search: { get: () => ({ adapter: 'searxng', adapters: {} }) },
+      fetch: { get: () => ({ adapter: 'invalid-fetch', adapters: { 'invalid-fetch': { maxArticleChars: 2_000_000 } } }) },
+      research: { get: () => DEFAULT_RESEARCH_CONFIG },
+      activation: { get: () => DEFAULT_ACTIVATION_CONFIG },
+    } as unknown as Config
+    const ctx = { logger, get: () => undefined } as unknown as Context
+    const dispatcher = new FetchDispatcher(ctx, config, adapters, new Diagnostics())
+
+    expect(dispatcher.available()).toBe(false)
+    await expect(dispatcher.fetch({ url: 'https://example.com/' })).rejects.toMatchObject({ code: 'FETCH_CONFIG_INVALID' })
+    await expect(dispatcher.preview('invalid-fetch', { maxArticleChars: 2_000_000 }, { url: 'https://example.com/' }))
+      .rejects.toMatchObject({ code: 'FETCH_CONFIG_INVALID' })
+    expect(created).toBe(0)
   })
 })
 

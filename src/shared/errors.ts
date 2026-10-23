@@ -1,12 +1,14 @@
 /** Host-side error type carrying a machine-routable code through DSH's WebError. */
 
 import { WebError } from '@deepseek-ai/dsh-web'
-import { displayUrl } from './url.ts'
 
 export class SearchToolsError extends WebError {
-  constructor(message: string, code: string, options?: { cause?: unknown }) {
+  readonly retryAfterMs: number | undefined
+
+  constructor(message: string, code: string, options?: { cause?: unknown; retryAfterMs?: number }) {
     super(message, code, options)
     this.name = 'SearchToolsError'
+    this.retryAfterMs = options?.retryAfterMs
   }
 }
 
@@ -22,9 +24,4 @@ export function errorCode(error: unknown, fallback: string): string {
     return error.code
   }
   return fallback
-}
-
-/** Redact a URL before putting it in diagnostics. */
-export function diagnosticUrl(raw: string | undefined): string | undefined {
-  return raw === undefined ? undefined : displayUrl(raw)
 }

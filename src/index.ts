@@ -35,23 +35,46 @@ export function apply(ctx: Context, config: ConfigShape): void {
   ctx.effect(() => ctx.web.registerFetchProvider(fetch), 'dsh-search-tools: fetch provider')
 
   // The research tool follows the live config. Disabling it removes its schema
-  // from the model instead of leaving a tool that always throws.
+  // from the model instead of leaving a tool that always throws. The declared
+  // deadline is re-registered when the configured timeout changes.
   let toolFiber: Fiber | undefined
+  let toolTimeout = -1
+  let researchToolRegistered = false
   const syncTool = (): void => {
-    const enabled = snapshot(config).research.enabled
-    if (enabled && toolFiber === undefined) {
+    const state = snapshot(config)
+    const enabled = state.research.enabled
+    const timeout = state.research.timeoutMs
+    if (enabled && (toolFiber === undefined || toolTimeout !== timeout)) {
+      if (toolFiber !== undefined) void toolFiber.dispose()
+      toolTimeout = timeout
       toolFiber = ctx.inject(['tools'], (child) => {
-        child.effect(() => applyResearchTool(child, config), 'dsh-search-tools: web_research tool')
+        child.effect(() => {
+          const dispose = applyResearchTool(child, config, timeout)
+          researchToolRegistered = true
+          return () => {
+            researchToolRegistered = false
+            dispose()
+          }
+        }, 'dsh-search-tools: web_research tool')
       })
     } else if (!enabled && toolFiber !== undefined) {
       void toolFiber.dispose()
       toolFiber = undefined
+      toolTimeout = -1
+      researchToolRegistered = false
     }
   }
   ;(ctx.on as unknown as (event: string, listener: () => void) => void)('loader/volatile-update', syncTool)
   syncTool()
 
   ctx.inject(['webServer', 'connection'], (webCtx) => {
-    registerRoutes(webCtx, { config, search, fetch, adapters, diagnostics })
+    registerRoutes(webCtx, {
+      config,
+      search,
+      fetch,
+      adapters,
+      diagnostics,
+      researchRegistered: () => researchToolRegistered,
+    })
   })
 }

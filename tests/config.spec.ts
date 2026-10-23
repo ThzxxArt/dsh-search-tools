@@ -48,6 +48,67 @@ describe('adapter config defaults', () => {
     expect(issueText({ path: 'x', message: 'fallback text', code: 'missing.code' }, key => key)).toBe('fallback text')
   })
 
+  it('rejects every out-of-range SearXNG number instead of silently clamping', () => {
+    const cases: Array<[string, unknown, string]> = [
+      ['safesearch', 3, 'field.max'],
+      ['safesearch', -1, 'field.min'],
+      ['pages', 0, 'field.min'],
+      ['pages', 4, 'field.max'],
+      ['maxResults', 0, 'field.min'],
+      ['maxResults', 21, 'field.max'],
+      ['requestTimeoutMs', 999, 'field.min'],
+      ['requestTimeoutMs', 120_001, 'field.max'],
+      ['deadlineMs', 999, 'field.min'],
+      ['deadlineMs', 300_001, 'field.max'],
+      ['retries', -1, 'field.min'],
+      ['retries', 6, 'field.max'],
+      ['cacheTtlMs', 86_400_001, 'field.max'],
+      ['cacheMaxEntries', 10_001, 'field.max'],
+    ]
+    for (const [key, value, code] of cases) {
+      const result = validateSearxngConfig({ [key]: value })
+      expect(result.ok, `${key}=${String(value)}`).toBe(false)
+      expect(result.issues.some(issue => issue.path === key && issue.code === code), `${key}=${String(value)}`).toBe(true)
+    }
+  })
+
+  it('rejects non-numeric and non-integer built-in values', () => {
+    expect(validateSearxngConfig({ pages: '2' }).issues[0]?.code).toBe('field.number')
+    expect(validateSearxngConfig({ pages: 1.5 }).issues[0]?.code).toBe('field.number')
+    expect(validateSearxngConfig({ engines: ['google', 3] }).issues[0]?.code).toBe('field.stringArray')
+    expect(validateSearxngConfig({ method: 'PUT' }).issues[0]?.code).toBe('field.option')
+    expect(validateSearxngConfig({ format: 'xml' }).issues[0]?.code).toBe('field.option')
+    expect(validateSearxngConfig({ timeRange: 'hour' }).issues[0]?.code).toBe('field.option')
+    expect(validateSearxngConfig({ strategy: 'random' }).issues[0]?.code).toBe('field.option')
+  })
+
+  it('rejects every out-of-range Readability number', () => {
+    const cases: Array<[string, number, string]> = [
+      ['minArticleChars', -1, 'field.min'],
+      ['minArticleChars', 100_001, 'field.max'],
+      ['maxArticleChars', 999, 'field.min'],
+      ['maxArticleChars', 5_000_001, 'field.max'],
+      ['maxResponseBytes', 1_023, 'field.min'],
+      ['maxResponseBytes', 50_000_001, 'field.max'],
+      ['maxBodyChars', 1_023, 'field.min'],
+      ['maxBodyChars', 20_000_001, 'field.max'],
+      ['timeoutMs', 999, 'field.min'],
+      ['timeoutMs', 120_001, 'field.max'],
+      ['maxRedirects', -1, 'field.min'],
+      ['maxRedirects', 11, 'field.max'],
+    ]
+    for (const [key, value, code] of cases) {
+      const result = validateReadableHttpConfig({ [key]: value })
+      expect(result.ok, `${key}=${value}`).toBe(false)
+      expect(result.issues.some(issue => issue.path === key && issue.code === code), `${key}=${value}`).toBe(true)
+    }
+  })
+
+  it('rejects article caps larger than the decoded-body cap', () => {
+    const result = validateReadableHttpConfig({ maxArticleChars: 100_000, maxBodyChars: 10_000 })
+    expect(result.issues.some(issue => issue.code === 'readable.maxArticleAboveBody')).toBe(true)
+  })
+
   it('validates an external adapter from its manifest without importing adapter code', () => {
     const manifest: AdapterManifest = {
       kind: 'search',

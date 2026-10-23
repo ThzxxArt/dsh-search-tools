@@ -25,9 +25,23 @@ export const DEFAULT_READABLE_HTTP_CONFIG: ReadableHttpConfig = {
   maxBodyChars: 2_000_000,
   timeoutMs: 20_000,
   maxRedirects: 5,
-  userAgent: 'dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)',
+  userAgent: 'dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)',
   failOpen: true,
 }
+
+const NUMBER_FIELDS: readonly {
+  key: string
+  label: string
+  min: number
+  max: number
+}[] = [
+  { key: 'minArticleChars', label: 'Minimum article characters', min: 0, max: 100_000 },
+  { key: 'maxArticleChars', label: 'Maximum article characters', min: 1_000, max: 5_000_000 },
+  { key: 'maxResponseBytes', label: 'Maximum response bytes', min: 1_024, max: 50_000_000 },
+  { key: 'maxBodyChars', label: 'Maximum decoded characters', min: 1_024, max: 20_000_000 },
+  { key: 'timeoutMs', label: 'Timeout', min: 1_000, max: 120_000 },
+  { key: 'maxRedirects', label: 'Maximum redirects', min: 0, max: 10 },
+]
 
 export function normalizeReadableHttpConfig(raw: unknown): ReadableHttpConfig {
   const value = isRecord(raw) ? raw : {}
@@ -55,10 +69,29 @@ export function validateReadableHttpConfig(raw: unknown): AdapterValidation {
   const maxBodyChars = readNumber(value.maxBodyChars, 2_000_000)
   if (maxArticleChars < minArticleChars) issues.push(issue('maxArticleChars', '正文上限不能小于正文下限', 'readable.maxArticleBelowMin'))
   if (maxBodyChars < minArticleChars) issues.push(issue('maxBodyChars', '解码上限不能小于正文下限', 'readable.maxBodyBelowMin'))
-  if (readNumber(value.timeoutMs, 20_000) < 1_000) issues.push(issue('timeoutMs', '超时不能小于 1000ms', 'readable.timeoutTooSmall'))
-  if (readNumber(value.maxResponseBytes, 5_000_000) < 1_024) issues.push(issue('maxResponseBytes', '响应上限不能小于 1024 字节', 'readable.maxResponseTooSmall'))
+  if (maxArticleChars > maxBodyChars) issues.push(issue('maxArticleChars', '正文上限不能大于解码上限', 'readable.maxArticleAboveBody'))
+
+  for (const field of NUMBER_FIELDS) {
+    const rawValue = value[field.key]
+    if (rawValue === undefined) continue
+    if (typeof rawValue !== 'number' || !Number.isFinite(rawValue) || !Number.isInteger(rawValue)) {
+      issues.push(issue(field.key, `${field.label}必须是数字`, 'field.number', { label: field.label }))
+      continue
+    }
+    if (rawValue < field.min) issues.push(issue(field.key, `${field.label}不能小于 ${field.min}`, 'field.min', { label: field.label, min: field.min }))
+    if (rawValue > field.max) issues.push(issue(field.key, `${field.label}不能大于 ${field.max}`, 'field.max', { label: field.label, max: field.max }))
+  }
+  for (const key of ['enabled', 'readability', 'failOpen'] as const) {
+    if (value[key] !== undefined && typeof value[key] !== 'boolean') {
+      issues.push(issue(key, `${key} 必须是布尔值`, 'field.boolean', { label: key }))
+    }
+  }
   const userAgent = readString(value.userAgent, DEFAULT_READABLE_HTTP_CONFIG.userAgent).trim()
-  if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行', 'userAgent.invalid'))
+  if (value.userAgent !== undefined && typeof value.userAgent !== 'string') {
+    issues.push(issue('userAgent', 'User-Agent 必须是字符串', 'field.string', { label: 'User-Agent' }))
+  } else if (userAgent.length === 0 || /[\r\n]/u.test(userAgent)) {
+    issues.push(issue('userAgent', 'User-Agent 不能为空或包含换行', 'userAgent.invalid'))
+  }
   return result(issues)
 }
 

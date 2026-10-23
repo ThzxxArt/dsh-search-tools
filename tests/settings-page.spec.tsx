@@ -24,10 +24,10 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.3',
+  version: '0.1.4',
   configPath: '/tmp/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0 },
-  fetch: { enabled: true, registered: true, adapter: 'readable-http' },
+  fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
   research: { enabled: true, registered: true },
   credentials: {},
   cache: { size: 0, hits: 0, misses: 0 },
@@ -385,6 +385,23 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Save and apply' })).toBeDisabled()
   })
 
+  it('shows a numeric field error immediately and blocks saving', async () => {
+    renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search behavior' }))
+    const pages = await screen.findByRole('spinbutton', { name: 'Pages' })
+    fireEvent.change(pages, { target: { value: '4' } })
+
+    expect((await screen.findAllByText('Pages cannot be larger than 3.')).length).toBeGreaterThan(0)
+    expect(pages).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('button', { name: 'Save and apply' })).toBeDisabled()
+  })
+
+  it('uses the live fetch availability in the hero status', async () => {
+    renderPage()
+    expect(await screen.findByText('Fetch: available')).toBeInTheDocument()
+  })
+
   it('renders the agent-facing research settings and persists a changed budget', async () => {
     const { form } = renderPage()
     fireEvent.click(await screen.findByRole('tab', { name: 'Research' }))
@@ -487,8 +504,9 @@ describe('SettingsPage', () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.3')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.4')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
+    expect(screen.getByTestId('runtime-state')).toHaveTextContent('Fetch: available · Research: registered')
   })
 
   it('copies only the configuration path from the path action', async () => {

@@ -52,7 +52,7 @@ export class ReadableHttpRuntime implements FetchAdapterRuntime {
       return {
         ...result,
         body,
-        truncated: result.truncated || result.body.content.length > config.maxArticleChars,
+        truncated: result.truncated || extraction.truncated,
       }
     } catch (error) {
       if (config.failOpen) {
@@ -67,10 +67,14 @@ export class ReadableHttpRuntime implements FetchAdapterRuntime {
     const started = this.ctx.now()
     try {
       const result = await this.fetch({ url }, signal)
+      const ok = result.statusCode >= 200 && result.statusCode < 300
       return {
-        ok: result.statusCode >= 200 && result.statusCode < 300,
+        ok,
         latencyMs: this.ctx.now() - started,
-        ...(result.statusCode >= 200 && result.statusCode < 300 ? {} : { message: `HTTP ${result.statusCode}` }),
+        statusCode: result.statusCode,
+        contentType: result.body.kind,
+        readable: result.body.kind === 'text' || result.body.content.includes('data-dsh-readable="1"'),
+        ...(ok ? {} : { message: `HTTP ${result.statusCode}` }),
       }
     } catch (error) {
       return {

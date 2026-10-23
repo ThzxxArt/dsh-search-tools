@@ -2,7 +2,7 @@
 
 > 状态：**v3 方案已确认，工程骨架已开工（2026-10-22）**
 >
-> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。0.1.2 完成设置页 UI/UX 修订，0.1.3 补齐审计缺口（Search 子页、Fetch reader、字段级错误、五个 tab 组件、操作条留白），详见附录 E/F。架构速查见 [architecture.md](architecture.md)。
+> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。0.1.2 完成设置页 UI/UX 修订，0.1.3 补齐审计缺口（Search 子页、Fetch reader、字段级错误、五个 tab 组件、操作条留白），0.1.4 完成配置契约、搜索 deadline/回退、抓取截断/probe 和研究超时/预算修复；详见附录 E/F/G。架构速查见 [architecture.md](architecture.md)。
 >
 > 目标仓库：`https://github.com/ThzxxArt/dsh-search-tools`
 >
@@ -334,6 +334,13 @@ GET /api/dsh-search-tools/adapters
 - 页面不加载外部 adapter 的客户端代码；所有字段由 manifest 描述，渲染逻辑在核心页。
 
 ### 2.6 配置模型
+
+> **历史方案说明（0.1.4）：** 本节及 3.5 节出现的 `search.runtime` / `fetch.runtime`、
+> `secretDrafts`、`contractVersion` 是 v0.1.0 早期设计，不是当前实现契约。0.1.x 实际
+> 使用 `search.adapters.<id>` / `fetch.adapters.<id>` 的开放字典，密钥只写 DSH
+> credentials，探测/预览也不接受草稿 secret。新增 adapter 时请以
+> `src/core/types.ts` 的 `AdapterManifest` / `SearchAdapter` / `FetchAdapter` 和
+> `src/search/adapters/searxng/*` 为准；本节的 runtime 分层不再作为实现依据。
 
 ```ts
 import type { Volatile } from '@deepseek-ai/cordis'
@@ -1707,3 +1714,55 @@ Fetch 结果使用 DSH `CodeBlock`，支持 Copy content、Hide content / Show c
 ### F.4 证据
 
 560px 使用受控容器宽度；失败/只读/冲突/凭据错误由组件测试覆盖，真实 GUI 覆盖成功态、reader、焦点和 564/416 布局。未把受控 560px 当作物理设备验证。
+
+---
+
+## 附录 G：0.1.4 配置契约与搜索/抓取正确性
+
+0.1.4 不新增 adapter，只修正已有链路与配置契约；稳定 provider id、SSRF 边界和
+manifest 驱动的设置页结构保持不变。
+
+### G.1 配置契约
+
+- 搜索：`userAgent` 进入真实请求与 probe；`language` 派生 `accept-language`，
+  `all` 不发送；`deadlineMs` 用共享 signal 覆盖实例、重试、分页与退避；
+  `cacheTtlMs=0` 和 `cacheMaxEntries=0` 都关闭缓存；缓存键加入 `auth.type`、
+  `proxy`、`userAgent`；`proxy` 同时用于 probe。
+- 抓取：所有数值/布尔/UA 字段在宿主 `validate()` 中校验；`maxArticleChars`
+  是正文文本上限，并限制 `maxArticleChars <= maxBodyChars`；`readable-http`
+  导出真实 probe。
+- 研究：`timeoutMs` 同时进入工具声明超时和内部 signal；抓取预算在请求/提取前
+  预留；当前 fetch adapter 的 `maxBodyChars`/`minArticleChars` 被读取；Markdown
+  标题/摘要/链接做转义。
+- 状态：`/status` 的 `fetch.available` 和 `research.registered` 来自真实 runtime；
+  Fetch chip 和 Diagnostics 使用这两个字段。
+
+### G.2 搜索韧性
+
+- 分页 `Promise.allSettled`：成功页合并，失败页进 `notes`，全失败才抛错。
+- `format=auto`：JSON 403/415/406 或解析失败时同实例回退 HTML；401 保持认证错误。
+- probe：`/config` 404 或非 JSON 时用一次 `/search` JSON 探测；HTML-only 200
+  报告 `json=false, html=true`。
+- 结果：单条标题/摘要和整段答案有安全上限；重复 URL 保留更长的标题/摘要。
+
+### G.3 抓取正文
+
+`ReadableExtraction` 返回 `truncated`、`textChars`、`htmlChars`；`truncated` 由
+提取器按文本语义决定。HTML 截断优先按块级节点，无法安全截断时返回纯文本，
+保证不产生半截标签。`maxArticleChars` 与 `maxBodyChars` 的跨字段关系由
+`validateReadableHttpConfig` 拒绝保存。
+
+### G.4 研究预算与超时
+
+`runResearch` 在并发 worker 启动时先预留每页最坏预算，预算为 0 的页面不再
+发起抓取；`timeoutMs` 到点会 abort 搜索/抓取并返回 `WEB_RESEARCH_TIMEOUT`。
+`research.timeoutMs` 变化时，`index.ts` 会重新注册 `web_research`，使声明超时
+与配置一致。
+
+### G.5 测试边界
+
+新增宿主契约测试覆盖 UA/参数、部分分页、格式/probe 回退、deadline/abort、
+缓存 TTL/键、fetch transport limits/probe、fail-open/closed、研究超时/预算/
+并发、Markdown 转义和状态真相。真实 DSH GUI 复验了 0.1.4 版本、五 tab、
+fetch 可用性、research 注册、fetch probe、数字校验失败态、prompt 复制、
+搜索请求头和 700/560 布局；物理设备、屏幕阅读器与非 Chromium 引擎仍未覆盖。

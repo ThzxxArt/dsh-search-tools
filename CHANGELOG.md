@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.1.4 — 2026-10-23
+
+### Added
+
+- `search.userAgent` now reaches both search requests and probes; `language`
+  also emits an `accept-language` header (omitted for `all`).
+- `research.timeoutMs` now drives the registered tool's declared timeout and a
+  real `AbortSignal` around search/fetch; timeout returns
+  `WEB_RESEARCH_TIMEOUT`.
+- `readable-http` now exports a real `/probe` implementation, so
+  `FetchDispatcher.probe` no longer returns `FETCH_PROBE_UNSUPPORTED`.
+- Page-level search degradation: a failed page no longer discards successful
+  pages; failed pages become notes and an all-pages failure still raises.
+- `format=auto` now retries the same instance with `format=html` on 403/415/406
+  or a JSON parse failure; 401 remains an authentication error.
+- Probe fallback from `/config` 404/non-JSON to one `/search` JSON probe.
+- Search retries honor `Retry-After` (delta-seconds or HTTP date) within the
+  shared deadline instead of always using exponential backoff.
+- The host calls each adapter's `validate()` before available/search/fetch/
+  probe/preview. Invalid live or draft config returns
+  `SEARCH_CONFIG_INVALID` / `FETCH_CONFIG_INVALID` instead of being silently
+  clamped by normalization.
+- Search preview uses the draft `maxResults` instead of a hard-coded 10.
+- Search probe uses the configured GET/POST method and combines the configured
+  request timeout with the caller signal.
+- `/status` reports real `search.enabled` and `fetch.enabled` values.
+- `web_research` rejects `defaultFetchTop > maxFetch` and
+  `maxCharsPerPage > maxTotalChars` with `RESEARCH_CONFIG_INVALID`.
+- Cache keys include auth type, proxy, and user agent; credential rotation
+  still requires a manual clear.
+- Result snippets/titles/answers are bounded; duplicate URLs keep the longer
+  snippet and title.
+- Fetch `truncated` now comes from the extractor, not a raw-HTML-length
+  comparison. HTML truncation is block-safe and falls back to text rather than
+  emitting broken markup.
+- `maxArticleChars` is explicitly an extracted-text cap and must not exceed
+  `maxBodyChars`.
+- Research budgets are reserved before fetching/extraction; pages with no
+  remaining budget are skipped.
+- Research fetch limits read the active fetch adapter instead of hard-coding
+  `readable-http`.
+- Research Markdown escapes titles, snippets, headings, and link destinations.
+- Numeric/boolean/string-array/enum validation for both built-in adapters, plus
+  cross-field checks; the settings page surfaces numeric errors before save.
+- `/status` reports `fetch.available` and live `research.registered`; the Fetch
+  chip and Diagnostics use those values.
+- New tests for status truth, request headers/params, partial pages, format and
+  probe fallback, strict deadline/abort, cache keys/TTL zero, fetch probe,
+  transport limits, fail-open/closed, research timeout/budget/concurrency, and
+  Markdown escaping.
+
+### Changed
+
+- Version metadata and default User-Agents report `0.1.4`.
+- README/README.en remove the stale “Advanced tab”, “prompt read-only”, and
+  “research timeout not wired” claims; cache TTL 0, probe, UA, and truncation
+  semantics are documented.
+- Diagnostics now shows live fetch availability and research registration.
+
+### Verified
+
+- `pnpm typecheck`: pass.
+- `pnpm test`: 119 tests / 19 files.
+- `pnpm build`: host, client, and types pass.
+- No new adapter, no stable provider-id change, and no SSRF/permission changes.
+
 ## 0.1.3 — 2026-10-23
 
 ### Added

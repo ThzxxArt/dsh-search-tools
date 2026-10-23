@@ -10,7 +10,7 @@ export function formatDiagnostics(status: StatusResponse): string {
     `dsh-search-tools ${status.version}`,
     `config: ${status.configPath ?? 'unknown'}`,
     `search: adapter=${status.search.adapter} available=${String(status.search.available)} registered=${String(status.search.registered)} instances=${status.search.instances}`,
-    `fetch: adapter=${status.fetch.adapter} registered=${String(status.fetch.registered)}`,
+    `fetch: adapter=${status.fetch.adapter} available=${String(status.fetch.available)} registered=${String(status.fetch.registered)}`,
     `research: enabled=${String(status.research.enabled)} registered=${String(status.research.registered)}`,
     `credentials: ${credentials.length > 0 ? credentials : 'none'}`,
     `cache: size=${status.cache.size} hits=${status.cache.hits} misses=${status.cache.misses}`,
