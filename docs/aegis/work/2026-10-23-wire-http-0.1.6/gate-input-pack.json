@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "baselineRefs": [
+    "src/core/types.ts",
+    "src/core/host-types.ts",
+    "src/core/dispatchers.ts",
+    "src/fetch/adapters/jina-reader/provider.ts",
+    "src/shared/defaults.ts",
+    "src/client/settings-utils.ts"
+  ],
+  "impactStatement": "docs/aegis/work/2026-10-23-wire-http-0.1.6/impact-statement-draft.json",
+  "compatPlan": "Stable provider id dsh-search-tools-fetch, FetchResult html|text union, existing readable-http and jina-reader behavior.",
+  "retirementPlan": "not-yet-verified",
+  "evidenceBundle": [
+    "docs/aegis/work/2026-10-23-wire-http-0.1.6/evidence-bundle-draft-gui.json",
+    "docs/aegis/work/2026-10-23-wire-http-0.1.6/evidence-bundle-draft-live.json",
+    "docs/aegis/work/2026-10-23-wire-http-0.1.6/evidence-bundle-draft-pdf.json",
+    "docs/aegis/work/2026-10-23-wire-http-0.1.6/evidence-bundle-draft-release.json"
+  ]
+}

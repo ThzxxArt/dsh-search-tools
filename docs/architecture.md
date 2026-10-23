@@ -18,6 +18,7 @@ DSH ctx.web
   ctx.searchTools (adapter registry)
     ├── searxng        built-in search adapter
     ├── readable-http  built-in fetch adapter (default, DSH safe HTTP)
+    ├── wire-http      built-in fetch adapter (optional, local browser-grade HTTP + PDF)
     ├── jina-reader    built-in fetch adapter (optional, Reader rendering)
     └── future packages
 ```
@@ -42,6 +43,9 @@ switching back does not lose it.
       adapters:
         readable-http:
           readability: true
+        wire-http:
+          profile: chrome
+          pdf: true
         jina-reader:
           endpoint: https://r.jina.ai/
           engine: auto
@@ -124,6 +128,25 @@ navigations, so the target guard is best-effort, not a connection-level pin.
 Hosted Jina sends the target URL off-machine and may cache it; only a
 self-hosted Reader keeps the page local, and its egress still needs restricting.
 This is documented in the manifest `notice` and README/SECURITY.
+
+`wire-http` is a local adapter and a connection-level pin:
+
+1. it parses the initial target with the shared `shared/public-target.ts` owner;
+2. it starts a loopback HTTP proxy on `127.0.0.1:0`; every CONNECT/HTTP hop
+   resolves DNS, requires every answer to be public, and connects to one
+   validated IP without re-resolving the hostname;
+3. it runs `impit` inside a one-request worker; the worker is terminated on
+   success, failure, abort, and timeout;
+4. it reads HTML through the shared Readability path and PDF through a lazy
+   `pdfjs-dist` text extractor, with page/byte/character caps;
+5. it does not execute page JavaScript, send cookies/Authorization, or fall
+   back to another adapter. SPA content remains the job of `jina-reader` or a
+   future opt-in browser backend.
+
+The worker boundary exists because Impit's native client has no close/dispose
+API. A worker per request makes cleanup deterministic; no persistent native
+client or socket can survive into the next fetch. HTTP/3 is deliberately out of
+scope because the TCP guard cannot pin it.
 
 ## Extension path
 

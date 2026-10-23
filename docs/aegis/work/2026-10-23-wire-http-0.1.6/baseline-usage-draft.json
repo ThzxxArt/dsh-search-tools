@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-10-23-wire-http-0.1.6",
+  "requiredBaselineRefs": [
+    "src/core/types.ts",
+    "src/core/host-types.ts",
+    "src/core/dispatchers.ts",
+    "src/fetch/adapters/jina-reader/provider.ts",
+    "src/shared/defaults.ts",
+    "src/client/settings-utils.ts"
+  ],
+  "deliveredContextRefs": [],
+  "acknowledgedBeforePlanRefs": [],
+  "citedInPlanRefs": [],
+  "missingRefs": [
+    "src/core/types.ts",
+    "src/core/host-types.ts",
+    "src/core/dispatchers.ts",
+    "src/fetch/adapters/jina-reader/provider.ts",
+    "src/shared/defaults.ts",
+    "src/client/settings-utils.ts"
+  ],
+  "decision": "needs-baseline-readback"
+}

@@ -6,11 +6,13 @@ import { isRecord, validateManifestConfig } from '../shared/validation.ts'
 import { validateSearxngConfig } from '../search/adapters/searxng/schema.ts'
 import { validateJinaReaderConfig } from '../fetch/adapters/jina-reader/schema.ts'
 import { validateReadableHttpConfig } from '../fetch/adapters/readable-http/schema.ts'
+import { validateWireHttpConfig } from '../fetch/adapters/wire-http/schema.ts'
 
 const BUILTIN_VALIDATORS: Readonly<Record<string, (config: unknown) => { issues: readonly AdapterIssue[] }>> = {
   'search:searxng': validateSearxngConfig,
   'fetch:readable-http': validateReadableHttpConfig,
   'fetch:jina-reader': validateJinaReaderConfig,
+  'fetch:wire-http': validateWireHttpConfig,
 }
 
 export function adapterState(manifest: AdapterManifest, config: JsonObject | undefined): 'ready' | 'attention' | 'setup' {

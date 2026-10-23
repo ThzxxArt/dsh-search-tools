@@ -1,7 +1,10 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: {
+    index: 'src/index.ts',
+    'wire-worker': 'src/fetch/adapters/wire-http/worker.ts',
+  },
   format: ['esm'],
   platform: 'node',
   target: 'node22',

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "live-wire",
+  "type": "integration-test",
+  "source": "WIRE_LIVE=1 pnpm exec vitest run tests/wire-live.spec.ts",
+  "summary": "Real Impit worker, plain HTTP absolute-form, HTTP→HTTPS redirect, and full runtime fetched example.com through the egress guard; all pass",
+  "verifier": "vitest",
+  "sliceId": "live",
+  "evidenceStatus": "evidence-finalized",
+  "updatedAt": "2026-10-23"
+}

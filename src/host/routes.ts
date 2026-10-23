@@ -17,7 +17,7 @@ import { isRecord, readBoolean } from '../shared/validation.ts'
 
 const BASE = '/api/dsh-search-tools'
 const MAX_BODY_BYTES = 64 * 1024
-const VERSION = '0.1.5'
+const VERSION = '0.1.6'
 const FETCH_PREVIEW_BASE_TIMEOUT_MS = 30_000
 const FETCH_PROBE_BASE_TIMEOUT_MS = 30_000
 const FETCH_ROUTE_MAX_TIMEOUT_MS = 190_000

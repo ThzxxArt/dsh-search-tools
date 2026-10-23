@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "pdf-real",
+  "type": "test-report",
+  "source": "tests/pdf.spec.ts and tests/wire-provider.spec.ts",
+  "summary": "Real PDF fixture extracts Hello PDF; empty/invalid PDF paths fail explicitly",
+  "verifier": "vitest",
+  "sliceId": "pdf",
+  "evidenceStatus": "evidence-finalized",
+  "updatedAt": "2026-10-23"
+}

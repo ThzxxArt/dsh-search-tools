@@ -10,6 +10,7 @@ import { SettingsPage, type WebSelection } from '../src/client/SettingsPage.tsx'
 import { searxngManifest } from '../src/search/adapters/searxng/manifest.ts'
 import { jinaReaderManifest } from '../src/fetch/adapters/jina-reader/manifest.ts'
 import { readableHttpManifest } from '../src/fetch/adapters/readable-http/manifest.ts'
+import { wireHttpManifest } from '../src/fetch/adapters/wire-http/manifest.ts'
 import { fetchAdapters, fetchStatus, previewFetch, previewSearch, probeSearch } from '../src/client/api.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => import('./helpers/primitives.tsx'))
@@ -25,7 +26,7 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.5',
+  version: '0.1.6',
   configPath: '/tmp/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0 },
   fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
@@ -37,7 +38,7 @@ const STATUS: StatusResponse = {
 
 const ADAPTERS: AdapterListResponse = {
   search: [searxngManifest],
-  fetch: [readableHttpManifest, jinaReaderManifest],
+  fetch: [readableHttpManifest, jinaReaderManifest, wireHttpManifest],
 }
 
 function translate(key: string, params?: Record<string, unknown>): string {
@@ -505,7 +506,7 @@ describe('SettingsPage', () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.5')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.6')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
     expect(screen.getByTestId('runtime-state')).toHaveTextContent('Fetch: available · Research: registered')
   })
@@ -583,6 +584,33 @@ describe('SettingsPage', () => {
   })
 })
 
+describe('Wire HTTP settings integration', () => {
+  async function openWire(): Promise<void> {
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: /^Fetch$/ }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Wire HTTP/ }))
+    await screen.findByText(/Requests run locally/)
+  }
+
+  it('renders local-only notice, capabilities, and no secret field', async () => {
+    await openWire()
+    expect(screen.getByText('html')).toBeInTheDocument()
+    expect(screen.getAllByText('pdf').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('readability').length).toBeGreaterThan(0)
+    expect(screen.getByLabelText('Browser profile')).toHaveValue('chrome')
+    expect(screen.getByLabelText('Local timeout (ms)')).toHaveValue(25000)
+    expect(screen.getByLabelText('Extract PDF text')).toBeChecked()
+    expect(screen.queryByLabelText('Jina API key')).not.toBeInTheDocument()
+  })
+
+  it('blocks save on an invalid article/body cap relationship', async () => {
+    await openWire()
+    fireEvent.change(screen.getByLabelText('Maximum article text characters'), { target: { value: '10000000' } })
+    expect(await screen.findByLabelText('Maximum article text characters')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('button', { name: 'Save and apply' })).toBeDisabled()
+  })
+})
+
 describe('Jina Reader settings integration', () => {
   async function openJina(): Promise<void> {
     renderPage()
@@ -594,7 +622,7 @@ describe('Jina Reader settings integration', () => {
   it('renders the manifest notice, browser/pdf capabilities, and Jina fields', async () => {
     await openJina()
     expect(screen.getByText('browser')).toBeInTheDocument()
-    expect(screen.getByText('pdf')).toBeInTheDocument()
+    expect(screen.getAllByText('pdf').length).toBeGreaterThan(0)
     expect(screen.getByLabelText('Reader endpoint')).toHaveValue('https://r.jina.ai/')
     expect(screen.getByLabelText('Fetch engine')).toBeInTheDocument()
     expect(screen.getByLabelText('Response format')).toBeInTheDocument()

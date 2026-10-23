@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "搜索工具",
-    "description": "为 DeepSeek Harness 提供 adapter-first 的网页搜索与正文抓取，支持 SearXNG 与 Jina Reader，在设置页完成全部配置。"
+    "description": "为 DeepSeek Harness 提供 adapter-first 的网页搜索与正文抓取，支持 SearXNG、Readability HTTP、本地 Wire HTTP（含 PDF）与 Jina Reader，在设置页完成全部配置。"
   }
 }

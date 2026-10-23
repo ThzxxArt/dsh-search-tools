@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "gui-wire",
+  "type": "manual-ui",
+  "source": "/tmp/wiretest-wire-fetch.png and /tmp/wiretest-saved.png",
+  "summary": "DSH test profile 0.2.1-rc.2 shows Wire HTTP fields/notice/no secret, example.com preview HTTP 200, private target rejected, save and reload persist wire-http",
+  "verifier": "Playwright",
+  "sliceId": "gui",
+  "evidenceStatus": "evidence-finalized",
+  "updatedAt": "2026-10-23"
+}

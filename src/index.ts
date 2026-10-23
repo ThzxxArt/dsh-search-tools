@@ -8,6 +8,7 @@ import { FetchDispatcher, SearchDispatcher } from './core/dispatchers.ts'
 import { SearchToolsService } from './core/service.ts'
 import { jinaReaderAdapter } from './fetch/adapters/jina-reader/adapter.ts'
 import { readableHttpAdapter } from './fetch/adapters/readable-http/adapter.ts'
+import { wireHttpAdapter } from './fetch/adapters/wire-http/adapter.ts'
 import { registerRoutes } from './host/routes.ts'
 import { applyResearchTool } from './research/tool.ts'
 import { searxngAdapter } from './search/adapters/searxng/adapter.ts'
@@ -29,6 +30,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
   ctx.effect(() => adapters.registerSearchAdapter(searxngAdapter), 'dsh-search-tools: searxng adapter')
   ctx.effect(() => adapters.registerFetchAdapter(readableHttpAdapter), 'dsh-search-tools: readable-http adapter')
   ctx.effect(() => adapters.registerFetchAdapter(jinaReaderAdapter), 'dsh-search-tools: jina-reader adapter')
+  ctx.effect(() => adapters.registerFetchAdapter(wireHttpAdapter), 'dsh-search-tools: wire-http adapter')
 
   const search = new SearchDispatcher(ctx, config, adapters, diagnostics)
   const fetch = new FetchDispatcher(ctx, config, adapters, diagnostics)

@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.1.6 — 2026-10-24
+
+### Added
+
+- New opt-in `wire-http` fetch adapter: local browser-grade TLS/HTTP2
+  fingerprinting through `impit` (Chrome/Firefox profiles), no Reader, API key,
+  browser, Docker, or system library required.
+- A loopback egress guard (`127.0.0.1:0`) validates every CONNECT/HTTP hop,
+  rejects private/reserved/link-local/ULA/CGNAT/IPv4-mapped/6to4/Teredo/NAT64
+  answers, and pins the connection to a validated IP. The initial target and
+  each redirect hop use the same guard.
+- One-request worker isolation around the native `impit` client. The worker is
+  terminated on success, error, abort, and timeout, so native clients and
+  sockets cannot survive into the next fetch.
+- Local PDF text extraction with lazy `pdfjs-dist` loading, page/byte/character
+  caps, `isEvalSupported: false`, and explicit `WIRE_PDF_UNREADABLE` /
+  `WIRE_PDF_INVALID` failures.
+- Shared public-target parsing/address policy extracted from the Jina guard;
+  both Jina and wire-http now use the same `shared/public-target.ts` owner.
+- Manifest groups/fields/notice for the settings page, `fetch:wire-http`
+  validator registration, built-in defaults, and `html`/`pdf`/`probe`/
+  `readability` capabilities. No custom React component was added.
+- Contract and integration tests for schema/manifest, public/private/mixed
+  targets, IPv4-mapped/NAT64/6to4/Teredo, egress CONNECT/HTTP rejection, worker
+  lifecycle/abort/timeout, HTML/Readability, real PDF text, duplicate/missing
+  response handling, and the settings UI.
+
+### Changed
+
+- Version metadata and default User-Agents report `0.1.6`.
+- `fetch.adapter` remains `readable-http`; `wire-http` is explicit and is kept
+  in the built-in defaults so it is visible in the settings page without a
+  migration.
+- `jina-reader`'s public-target classifier now calls the shared owner; its
+  public configuration and error codes are unchanged.
+- `tsdown` emits `lib/wire-worker.js` as a separate worker entry.
+
+### Security
+
+- `wire-http` is local-only and does not send target URLs to a third-party
+  Reader. It does not execute page JavaScript; SPA pages still require
+  `jina-reader` or a future opt-in browser.
+- The guard rejects a redirect to a private address at the next CONNECT rather
+  than relying on the initial pre-flight check. It also refuses non-80/443
+  ports, credentials, non-http(s) schemes, and a missing/oversized CONNECT
+  authority.
+- The worker sends no cookies, Authorization, or login state. No automatic
+  fallback to `jina-reader` or `readable-http` exists, so a blocked private
+  target cannot silently leave the machine.
+- `impit` is an Apache-2.0 native dependency with platform binaries; `pdfjs-dist`
+  is Apache-2.0. The plugin does not bundle Jina, a browser, or a rendering
+  engine.
+- No change to stable provider ids, `readable-http`'s DSH SSRF path, or DSH's
+  permission/approval model.
+
+### Verified
+
+- `pnpm typecheck`, `pnpm test`, `pnpm build`, and the package checks pass.
+- Default suite: 199 passed / 4 live tests skipped (28 files); the live suite
+  with `WIRE_LIVE=1` passes the real-`impit` worker, plain HTTP absolute-form,
+  HTTP→HTTPS redirect, and full-runtime readable tests.
+- Real PDF fixture extraction returns `Hello PDF`; invalid PDF bytes fail
+  explicitly.
+- The full suite covers private/mixed target rejection, redirect-blocked error
+  mapping, egress CONNECT/HTTP guard, worker timeout/abort cleanup, and the
+  wire-http settings fields/validator.
+- The default remains `readable-http`; `wire-http` is opt-in.
+
 ## 0.1.5 — 2026-10-23
 
 ### Added

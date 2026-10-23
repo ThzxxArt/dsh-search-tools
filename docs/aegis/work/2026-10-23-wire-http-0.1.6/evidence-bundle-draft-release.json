@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "release-final",
+  "type": "test-report",
+  "source": "/tmp/wire-release-final2.log",
+  "summary": "pnpm release exit 0; 199 passed, 4 live skipped, build includes lib/wire-worker.js, pack/publint pass",
+  "verifier": "pnpm release",
+  "sliceId": "release",
+  "evidenceStatus": "evidence-finalized",
+  "updatedAt": "2026-10-23"
+}

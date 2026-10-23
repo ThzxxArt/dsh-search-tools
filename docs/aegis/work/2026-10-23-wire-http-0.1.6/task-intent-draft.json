@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "requestedOutcome": "Implement and verify the complete 0.1.6 wire-http fetch adapter with PDF extraction, public-target pinning, worker isolation, settings UI integration, tests, and docs; no partial features or dangling links.",
+  "goal": "Implement and verify the complete 0.1.6 wire-http fetch adapter with PDF extraction, public-target pinning, worker isolation, settings UI integration, tests, and docs; no partial features or dangling links.",
+  "successEvidence": [],
+  "stopCondition": "Stop when success evidence is satisfied or a blocker/risk requires pause.",
+  "nonGoals": [
+    "Browser JavaScript rendering; login/paywall/CAPTCHA bypass; search adapter; HTTP/3."
+  ],
+  "scope": "0.1.6 wire-http adapter end to end: shared public-target guard, loopback egress proxy, worker transport, schema/manifest/provider, PDF text, settings validator, docs/notices, tests and release gate. Default adapter and stable provider ids remain unchanged.",
+  "changeKinds": [
+    "feature"
+  ],
+  "riskHints": [
+    "high"
+  ]
+}

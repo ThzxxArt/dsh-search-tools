@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-10-23-wire-http-0.1.6",
+  "currentTodo": "Commit and report",
+  "completedTodos": [
+    "Final release checks 199 passed / 4 live skipped",
+    "Live tests 4/4 including HTTP absolute-form and redirect",
+    "DSH GUI preview/save/persist and private rejection"
+  ],
+  "activeSlice": "delivery",
+  "evidenceRefs": [
+    "/tmp/wire-release-final2.log",
+    "WIRE_LIVE=1 tests/wire-live.spec.ts 4/4",
+    "/tmp/wiretest-wire-fetch.png"
+  ],
+  "blockedOn": null,
+  "nextStep": "Stage, commit, and report; do not push unless requested",
+  "updatedAt": "2026-10-24"
+}

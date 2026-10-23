@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "candidateDocs": [
+    "src/core/types.ts",
+    "src/core/host-types.ts",
+    "src/core/dispatchers.ts",
+    "src/fetch/adapters/jina-reader/provider.ts",
+    "src/shared/defaults.ts",
+    "src/client/settings-utils.ts"
+  ],
+  "whyRelevant": "Baseline read-set requires agent review.",
+  "missingAuthority": []
+}

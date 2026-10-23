@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [
+    "fetch adapter, security boundary, worker runtime, settings UI, package/build"
+  ],
+  "owners": [
+    "FetchDispatcher + new wire-http adapter"
+  ],
+  "invariants": [
+    "No silent fallback; default readable-http unchanged; no Page JS execution claim; public-target pinning at every hop."
+  ],
+  "compatBoundary": "Stable provider id dsh-search-tools-fetch, FetchResult html|text union, existing readable-http and jina-reader behavior.",
+  "nonGoals": [
+    "Browser JavaScript rendering; login/paywall/CAPTCHA bypass; search adapter; HTTP/3."
+  ]
+}

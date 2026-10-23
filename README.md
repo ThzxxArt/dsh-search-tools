@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **仓库版本：0.1.5（2026-10-23，npm 与 GitHub Release 均已发布）。** 新增可选的 **Jina Reader** 抓取 adapter：浏览器渲染、PDF/Office、选择器、iframe/Shadow DOM、`no-cache` 和自托管端点；默认仍是 `readable-http`，稳定 provider id 不变。Jina 目标 URL 会发给配置的 Reader 端点（只有本地自托管 Reader 才留在本机；远程自托管仍会出网），设置页和 README 都会明确提示；`readable-http` 的 DSH 安全 HTTP/SSRF 边界不变。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
+> **仓库版本：0.1.6（2026-10-24）。** 新增可选的 **本地 Wire HTTP** 抓取 adapter：本地浏览器级 TLS/HTTP2 指纹、逐跳公网出口 pinning、PDF 文本提取，不需要 Reader、API key、浏览器或容器，也不执行页面 JavaScript。默认仍是 `readable-http`，稳定 provider id 不变；`jina-reader` 继续作为需要浏览器渲染/PDF 转换时的可选后端。详细实现边界见 [Wire HTTP 抓取配置](#wire-http-抓取配置) 与 [v0.1.6 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.6.md)。
 
 ---
 
@@ -25,6 +25,7 @@
   - [配置存放位置](#配置存放位置)
   - [SearXNG 搜索配置](#searxng-搜索配置)
   - [Readability HTTP 抓取配置](#readability-http-抓取配置)
+  - [Wire HTTP 抓取配置](#wire-http-抓取配置)
   - [Jina Reader 抓取配置](#jina-reader-抓取配置)
   - [web_research 配置](#web_research-配置)
   - [接管配置](#接管配置)
@@ -50,7 +51,7 @@ DSH 自带 `web_search` 和 `web_fetch`，但默认后端不一定适合每个�
 - 新增后端只需要注册 adapter，设置页按 manifest 自动渲染，不需要改页面代码；
 - 额外提供 `web_research`：一次调用完成“搜索 + 抓取前 N 条正文”，适合需要页面内容而非只拿链接的模型回合。
 
-它**不**做这些事：不提供公共搜索 API，不绕过目标站点的登录/付费墙，也不替代 DSH 的权限与沙箱模型。渲染能力取决于抓取 adapter：`readable-http` 不执行页面 JavaScript；可选的 `jina-reader` 会把公网 URL 交给 Reader 服务做浏览器渲染（自托管时留在本机），并且同样不登录、不绕过付费墙、不破解验证码。
+它**不**做这些事：不提供公共搜索 API，不绕过目标站点的登录/付费墙，也不替代 DSH 的权限与沙箱模型。渲染能力取决于抓取 adapter：`readable-http` 不执行页面 JavaScript；可选的 `wire-http` 在本地做浏览器级 HTTP/TLS 指纹和 PDF 文本提取，但同样不执行页面 JavaScript；可选的 `jina-reader` 会把公网 URL 交给 Reader 服务做浏览器渲染（自托管时留在本机），三者都不登录、不绕过付费墙、不破解验证码。
 
 ## 界面预览
 
@@ -71,7 +72,8 @@ DSH 自带 `web_search` 和 `web_fetch`，但默认后端不一定适合每个�
 | 稳定的搜索/抓取 provider | `dsh-search-tools`、`dsh-search-tools-fetch` 永不随后端变化 |
 | 内置搜索 adapter | SearXNG：多实例、顺序/轮询、故障转移、JSON/HTML、GET/POST、Bearer/Basic、代理、缓存、分页、域名过滤 |
 | 内置抓取 adapter | Readability HTTP：复用 DSH 安全 HTTP，Readability 提取正文，失败可回退原文 |
-| 可选激进抓取 adapter | Jina Reader：浏览器渲染、PDF/Office、CSS 选择器、iframe/Shadow DOM、代理选项；目标必须是公网地址，Reader 可托管或自托管 |
+| 本地强抓取 adapter（可选） | Wire HTTP：`impit` 本地浏览器级 TLS/HTTP2 指纹、逐跳公网出口 pinning、Readability、PDF 文本；不需要 Reader/Key/浏览器/容器，不执行 JS |
+| 可选渲染抓取 adapter | Jina Reader：浏览器渲染、PDF/Office、CSS 选择器、iframe/Shadow DOM、代理选项；目标必须是公网地址，Reader 可托管或自托管 |
 | 研究工具 | `web_research`：搜索、按并发抓取前 N 页、按页/总预算截断、返回来源与正文 |
 | Web 设置页 | 概览、搜索、抓取、研究、诊断五个页签；Connection / Search behavior 子页、实例卡、内联测试、正文 reader、预算条、字段级错误、诊断、缓存清理、键盘保存 |
 | 凭据隔离 | 搜索 token 写入 DSH credentials，不落 YAML、不进日志、不出现在诊断文本 |
@@ -92,6 +94,7 @@ DSH ctx.web
   ctx.searchTools（adapter 注册表）
     ├── searxng         内置搜索 adapter
     ├── readable-http   内置抓取 adapter（默认，DSH 安全 HTTP）
+    ├── wire-http       内置抓取 adapter（可选，本地浏览器级 HTTP + PDF）
     ├── jina-reader     内置抓取 adapter（可选，Reader 渲染）
     └── 未来由独立包注册的 adapter
 ```
@@ -112,8 +115,8 @@ DSH ctx.web
 | DSH | `>=0.2.1-rc.2 <0.3.0`（当前按 `0.2.1-rc.2` 验证） |
 | Node.js | `^22.19.0 || >=24.0.0` |
 | 搜索后端 | 一个可访问的 SearXNG 实例；也可暂时保持 DSH 默认搜索 |
-| 抓取后端 | 公网 `http(s)` 页面；`readable-http` 由 DSH SSRF 防护拦截内网，`jina-reader` 在发出前做公网目标守卫 |
-| Reader（可选） | `r.jina.ai` 的 API key，或一个可访问的自托管 Jina Reader 端点；不配置时继续用 `readable-http` |
+| 抓取后端 | 公网 `http(s)` 页面；`readable-http` 由 DSH SSRF 防护拦截内网，`wire-http` 在本地逐跳 pin 公网地址，`jina-reader` 在发出前做公网目标守卫 |
+| Reader（可选） | `r.jina.ai` 的 API key，或一个可访问的自托管 Jina Reader 端点；不配置时继续用 `readable-http` 或 `wire-http` |
 | 浏览器 | DSH Web GUI（设置页只在 Web 端注册） |
 
 DSH 本身仍是 preview 软件，接口可能变化。插件把 peer 范围锁在已验证的 `0.2.1-rc.2` 线，升级 DSH 前请先看 [CHANGELOG](https://github.com/ThzxxArt/dsh-search-tools/blob/main/CHANGELOG.md)。
@@ -273,6 +276,7 @@ dsh plugin --profile <profile> add dsh-search-tools
 
 - 抓取 adapter 选择与字段；
 - 输入公网 URL 做一次抓取预览；
+- 选择 `wire-http` 时显示本地边界 notice、浏览器指纹/超时/PDF 字段；它不需要 Key，也不执行页面 JavaScript；
 - 选择 `jina-reader` 时显示数据边界 warning、API key 和浏览器/Reader 选项；`readable-http` 仍保留原有字段；
 - 显示状态码、内容类型、字符数、截断标记和正文预览；
 - 内网地址会被 `readable-http` 的 SSRF 防护或 `jina-reader` 的公网目标守卫拒绝，这是预期行为。
@@ -342,7 +346,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.5 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.6 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -358,8 +362,22 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.5 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.6 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
+        wire-http:
+          enabled: true
+          profile: chrome
+          timeoutMs: 25000
+          maxRedirects: 5
+          locale: ""
+          maxResponseBytes: 5000000
+          readability: true
+          minArticleChars: 200
+          maxArticleChars: 200000
+          failOpen: true
+          pdf: true
+          maxPdfPages: 10
+          maxBodyChars: 2000000
         jina-reader:
           enabled: true
           endpoint: https://r.jina.ai/
@@ -470,6 +488,36 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 - 需要截断 HTML 时按块级节点处理；无法安全截断时退回纯文本，保证不会返回半截标签；
 - Readability 失败且 `failOpen=true` 时返回原始文本/HTML，而不是让整个抓取失败；
 - `readable-http` 的 `/probe` 会真实发起一次抓取并返回 HTTP 状态/内容类型。
+
+### Wire HTTP 抓取配置
+
+> **本地边界：** `wire-http` 在本地通过 loopback 出口守卫抓取，不把目标 URL 发给第三方 Reader，也不需要 API key、浏览器、Docker 或系统库。它使用 `impit` 的 Chrome/Firefox TLS/HTTP2 指纹；**不执行页面 JavaScript**，所以 SPA 仍应使用 `jina-reader`。它不会登录、绕过付费墙或破解验证码。
+
+| 字段 | 默认 | 范围/取值 | 说明 |
+|---|---:|---|---|
+| `enabled` | `true` | boolean | 关闭后该 adapter 不可用 |
+| `profile` | `chrome` | `chrome` / `firefox` | 浏览器 TLS/HTTP2 指纹；不是浏览器引擎 |
+| `timeoutMs` | `25000` | 1000–180000 | worker 与出口守卫的硬超时；默认低于 DSH `web_fetch` 的 30 秒工具超时 |
+| `maxRedirects` | `5` | 0–10 | 每一跳重定向都重新经过公网出口守卫 |
+| `locale` | 空 | BCP 47 | 可选 `Accept-Language`，例如 `zh-CN` |
+| `maxResponseBytes` | `5000000` | 1024–50000000 | 原始响应字节上限；超限显式失败 |
+| `readability` | `true` | boolean | 用 Readability 提取 HTML 正文；关闭时返回原始 HTML |
+| `minArticleChars` | `200` | 0–100000 | 正文最小字符数 |
+| `maxArticleChars` | `200000` | 1000–5000000 | 提取后正文文本上限；不能小于下限，也不能大于 `maxBodyChars` |
+| `failOpen` | `true` | boolean | 提取失败时回退原始 HTML；关闭时返回 `WIRE_UNREADABLE` |
+| `pdf` | `true` | boolean | 本地 PDF 文本提取 |
+| `maxPdfPages` | `10` | 1–20 | 只读前 N 页；超过上限标记 `truncated` |
+| `maxBodyChars` | `2000000` | 1024–20000000 | 解码后字符上限，HTML/文本/PDF 共用 |
+
+行为与失败语义：
+
+- 初始目标先解析并校验，随后每一跳由本地出口代理重新解析；任何 DNS 答案包含私网/loopback/link-local/CGNAT/ULA/IPv4-mapped/6to4/Teredo/NAT64 都会被拒绝；
+- 只允许 `http(s)`、80/443，不允许 URL 凭据；代理连接到已验证的 IP，不会再次解析主机名；
+- `impit` 运行在单次请求 worker 中，成功、失败、取消或超时都会终止 worker；原生 client 不会跨请求残留；
+- 响应按 `Content-Type`/magic 分流：PDF → 本地 PDF.js 文本；HTML → Readability；文本/JSON → 直接文本；二进制 → `WIRE_UNSUPPORTED_CONTENT`；
+- 2xx 空 body 返回 `WIRE_EMPTY_BODY`；4xx/5xx 的空 body 保留状态码；PDF 无文本层返回 `WIRE_PDF_UNREADABLE`，损坏 PDF 返回 `WIRE_PDF_INVALID`；
+- 不自动 fallback 到 Jina 或 readable-http，避免把被本地守卫拒绝的 URL 静默发给第三方；
+- 不需要 `JINA_API_KEY`；设置页不显示 secret 字段。
 
 ### Jina Reader 抓取配置
 
@@ -601,7 +649,9 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 
 - **设置路由有认证栅栏。** 所有 `/api/dsh-search-tools/*` 路由都经过 DSH 的 `connection.requestRejection`，未认证请求返回 401/403。
 - **请求体有上限。** JSON body 限制 64 KiB，非 JSON 返回 415。
-- **SSRF 边界按 adapter 区分。** `readable-http` 复用 DSH 的 `HttpFetchProvider`，内网/保留地址会被拒绝；`jina-reader` 在发出前做公网目标守卫，但 Reader 服务端会重新解析 DNS，并且可能跟随目标页重定向/浏览器跳转，因此不能提供与 DSH 相同的连接级 pinning。托管 Jina 时目标 URL 会离开本机；自托管时页面留在 Reader 服务内，但仍应限制 Reader 容器的网络出口。
+- **SSRF 边界按 adapter 区分。** `readable-http` 复用 DSH 的 `HttpFetchProvider`，内网/保留地址会被拒绝；`wire-http` 在本地 loopback 出口代理中对每个 CONNECT/HTTP 目标和每一跳重定向重新解析 DNS，要求所有答案都是公网，并连接到已验证的 IP（连接级 pinning）；`jina-reader` 在发出前做公网目标守卫，但 Reader 服务端会重新解析 DNS，并且可能跟随目标页重定向/浏览器跳转，因此不能提供与 DSH 相同的连接级 pinning。托管 Jina 时目标 URL 会离开本机；自托管时页面留在 Reader 服务内，但仍应限制 Reader 容器的网络出口。
+- **Wire HTTP 不执行页面 JavaScript。** 它模仿浏览器 TLS/HTTP2 协议指纹，不是浏览器；SPA 请用 `jina-reader`。PDF 只在本地用 PDF.js 提取文本，`isEvalSupported: false`，不执行 PDF 内嵌脚本。
+- **Wire HTTP worker 没有持久凭据。** 不发送 Cookie、Authorization 或登录态；不登录、不绕过付费墙、不破解验证码。
 - **Reader 不是匿名代理。** 托管 Reader 可能缓存页面，`noCache` 只要求实时抓取；自托管也不能绕过登录、付费墙或验证码。
 - **搜索重定向不跟随。** SearXNG 请求使用 `redirect: 'error'`，认证头不会跟随跨源重定向。
 - **凭据不落 YAML。** Bearer/Basic/Jina API key 写入 DSH credentials；YAML 只保存非敏感配置。诊断文本会脱敏，不包含 token。
@@ -695,6 +745,7 @@ pnpm release
 
 ```text
 lib/index.js        Host 半侧
+lib/wire-worker.js  wire-http 单次请求 worker
 lib/client.js       浏览器 lazy-CJS factory
 lib/types/**        TypeScript 声明
 ```
@@ -716,11 +767,11 @@ CI 在 Ubuntu/Windows × Node 22/24 上跑 typecheck、test、build、pack dry-r
 ```text
 src/core/                 adapter 类型、注册表、稳定 dispatcher、诊断
 src/search/adapters/      SearXNG adapter（manifest/schema/client/parser）
-src/fetch/adapters/       Readability HTTP / Jina Reader adapters
+src/fetch/adapters/       Readability HTTP / Wire HTTP / Jina Reader adapters
 src/research/             web_research pipeline、prompt、render、tool
 src/host/                 认证的设置路由
 src/client/               设置 → 搜索工具 + 研究卡片
-src/shared/               config、校验、diff、URL、限制
+src/shared/               config、校验、diff、URL、公网目标守卫、限制
 tests/                    Host 单测 + 设置页/研究卡片组件测试
 docs/                     架构、设计、M0 验收、发布清单
 ```
@@ -733,7 +784,7 @@ Readability 运行在 Host 内。`jsdom` 的 `tr46` 依赖会调用 `createRequi
 
 发布前确认：
 
-- `package.json` 版本是 `0.1.5`；
+- `package.json` 版本是 `0.1.6`；
 - `CHANGELOG.md` 有对应条目；
 - `pnpm release` 全绿；
 - 工作区干净；
@@ -750,7 +801,7 @@ pnpm pack --pack-destination dist
 打 tag 并推送：
 
 ```sh
-git tag -a v0.1.5 -m "dsh-search-tools v0.1.5"
+git tag -a v0.1.6 -m "dsh-search-tools v0.1.6"
 git push origin main --follow-tags
 ```
 
@@ -767,7 +818,7 @@ git push origin main --follow-tags
 npm publish --access public
 ```
 
-发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、分别用 `readable-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.5 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.5.md)。
+发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、分别用 `readable-http`、`wire-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.6 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.6.md)。
 
 ## 故障排查
 
@@ -803,11 +854,11 @@ npm publish --access public
 
 ## 已知限制
 
-- **内置一个搜索 adapter 和两个抓取 adapter。** `readable-http` 是默认；`jina-reader` 是可选 Reader 后端。0.1.x 不附带 Google/Bing/Exa 等商业搜索后端。
+- **内置一个搜索 adapter 和三个抓取 adapter。** `readable-http` 是默认；`wire-http` 是本地浏览器级 HTTP + PDF 后端；`jina-reader` 是可选 Reader 后端。0.1.x 不附带 Google/Bing/Exa 等商业搜索后端。
 - **没有自动更新。** 升级需要卸载再安装。
 - **外部 adapter contract 是实验性的。** 0.1.x 可能调整；生产集成请锁版本。
-- **浏览器渲染只属于 `jina-reader`。** `readable-http` 不执行 JS；Jina 需要公网 Reader（托管或自托管），且不处理登录态、付费墙或验证码。SPA 能渲染不等于能登录。
-- **`readable-http` 只处理文本/HTML。** PDF、图片、音视频不会转成正文；需要 PDF/Office 时用 `jina-reader`。Jina 的 PDF/Office 转换取决于 Reader 服务能力。
+- **浏览器渲染只属于 `jina-reader`。** `readable-http` 和 `wire-http` 都不执行 JS；`wire-http` 强化的是 TLS/HTTP2 指纹、出口 pinning 和 PDF，不是浏览器引擎。Jina 需要公网 Reader（托管或自托管），且不处理登录态、付费墙或验证码。SPA 能渲染不等于能登录。
+- **`readable-http` 只处理文本/HTML。** PDF、图片、音视频不会转成正文；`wire-http` 可本地提取 PDF 文本；需要 Office/浏览器渲染时用 `jina-reader`。Jina 的 PDF/Office 转换取决于 Reader 服务能力。
 - **`web_research` 不是爬虫。** 只抓前 N 条结果，不做站点遍历、去重图谱或深度抓取。
 - **研究提示词预览可复制。** 工具描述保持英文，与模型实际看到的内容一致；预览数值跟随当前草稿。
 - **接管是全局 provider 切换。** 它会影响该 DSH profile 中所有使用 `ctx.web` 的调用，不只本插件。
@@ -818,7 +869,7 @@ npm publish --access public
 
 本项目使用 MIT 许可证，见 [LICENSE](https://github.com/ThzxxArt/dsh-search-tools/blob/main/LICENSE)。
 
-第三方组件与许可证说明见 [THIRD_PARTY_NOTICES.md](https://github.com/ThzxxArt/dsh-search-tools/blob/main/THIRD_PARTY_NOTICES.md)。主要运行时依赖包括 `@mozilla/readability`、`linkedom`、`cheerio`、`turndown`、`@joplin/turndown-plugin-gfm`、`undici`、`lru-cache`、`normalize-url`、`ipaddr.js`。`jina-reader` 只调用用户配置的 Reader 服务，不打包 Jina 的代码；自托管 Reader 的许可证与运行要求由 Reader 项目提供。
+第三方组件与许可证说明见 [THIRD_PARTY_NOTICES.md](https://github.com/ThzxxArt/dsh-search-tools/blob/main/THIRD_PARTY_NOTICES.md)。主要运行时依赖包括 `@mozilla/readability`、`linkedom`、`cheerio`、`turndown`、`@joplin/turndown-plugin-gfm`、`undici`、`lru-cache`、`normalize-url`、`ipaddr.js`、`impit`（Apache-2.0，平台原生二进制）和 `pdfjs-dist`（Apache-2.0）。`jina-reader` 只调用用户配置的 Reader 服务，不打包 Jina 的代码；自托管 Reader 的许可证与运行要求由 Reader 项目提供。`wire-http` 不打包浏览器、Reader 或 Jina 代码。
 
 ---
 
