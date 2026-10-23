@@ -142,7 +142,7 @@ export const jinaReaderManifest: AdapterManifest = {
       kind: 'number',
       key: 'maxBodyChars',
       label: lt('Maximum content characters', '正文最大字符数'),
-      description: lt('Clips data.content locally and reports truncated=true.', '在本地截断 data.content，并置 truncated=true。'),
+      description: lt('Clips the selected mode\'s content locally and reports truncated=true.', '在本地截断当前模式的响应内容，并置 truncated=true。'),
       min: 1_024,
       max: 20_000_000,
       step: 1_024,

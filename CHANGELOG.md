@@ -12,7 +12,8 @@
   YAML, logs, or diagnostics.
 - Public-target guard rejects credentials, non-HTTP(S) URLs, loopback/private/
   link-local literals, and hostnames with any non-public DNS answer before the
-  URL leaves the plugin. Common NAT64 and IPv4-mapped addresses are handled.
+  URL leaves the plugin. Common NAT64, IPv4-mapped, and IPv4-compatible
+  addresses are handled.
 - Generic `manifest.notice` support and `browser`/`pdf` adapter capabilities;
   the Jina manifest renders a data-boundary notice in the existing form.
 - Fetch preview/probe route signals now follow the draft `timeoutMs` (base
@@ -20,6 +21,8 @@
 - `X-Timeout` is sent one second below the local `timeoutMs` (Reader wait budget,
   not a hard deadline); HTML/text modes read `data.html`/`data.text` and Markdown
   reads `data.content`.
+- IPv4-compatible IPv6 transition addresses are rejected by the public-target
+  guard, and `JINA_RATE_LIMIT` retry hints are bounded to one hour.
 - Contract tests for request headers/body, key isolation, target 404 mapping,
   401/403/429/5xx, timeout/abort, clipping, response caps, bad JSON, probe, UI
   notice/validation/credential write, defaults, and host timeout wiring.
@@ -50,7 +53,7 @@
 
 ### Verified
 
-- `pnpm release`: 154 tests / 22 files, typecheck, build, pack, and publint pass.
+- `pnpm release`: 155 tests / 22 files, typecheck, build, pack, and publint pass.
 - Real DSH GUI with a local fake Jina Reader: adapter cards/notice, request
   shape including `x-timeout=59` for a 60s local deadline, Markdown/HTML/text
   response modes, key write/read/clear, config save/reload (timeout 61000),

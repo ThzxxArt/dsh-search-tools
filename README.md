@@ -71,7 +71,7 @@ DSH 自带 `web_search` 和 `web_fetch`，但默认后端不一定适合每个�
 | 稳定的搜索/抓取 provider | `dsh-search-tools`、`dsh-search-tools-fetch` 永不随后端变化 |
 | 内置搜索 adapter | SearXNG：多实例、顺序/轮询、故障转移、JSON/HTML、GET/POST、Bearer/Basic、代理、缓存、分页、域名过滤 |
 | 内置抓取 adapter | Readability HTTP：复用 DSH 安全 HTTP，Readability 提取正文，失败可回退原文 |
-| 可选激进抓取 adapter | Jina Reader：浏览器渲染、PDF/Office、CSS 选择器、iframe/Shadow DOM、代理选项、自托管；需要公网目标或自托管 Reader |
+| 可选激进抓取 adapter | Jina Reader：浏览器渲染、PDF/Office、CSS 选择器、iframe/Shadow DOM、代理选项；目标必须是公网地址，Reader 可托管或自托管 |
 | 研究工具 | `web_research`：搜索、按并发抓取前 N 页、按页/总预算截断、返回来源与正文 |
 | Web 设置页 | 概览、搜索、抓取、研究、诊断五个页签；Connection / Search behavior 子页、实例卡、内联测试、正文 reader、预算条、字段级错误、诊断、缓存清理、键盘保存 |
 | 凭据隔离 | 搜索 token 写入 DSH credentials，不落 YAML、不进日志、不出现在诊断文本 |
@@ -500,8 +500,8 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 行为与错误：
 
 - 请求固定为 `POST <endpoint>/`，`Content-Type: application/x-www-form-urlencoded`，body 为 `url=<目标>`；`Accept: application/json`，并带 `X-Respond-With`、`X-Timeout` 等头。
-- 目标 URL 在发出前经过公网目标守卫：只允许 `http(s)`、禁止 URL 内凭据、拒绝 loopback/私有/链路本地地址，并要求 DNS 解析结果全部为公网地址。错误码为 `JINA_INVALID_TARGET` / `JINA_TARGET_BLOCKED` / `JINA_TARGET_UNRESOLVED`。
-- 401/403 → `JINA_AUTH`；429 → `JINA_RATE_LIMIT`（有 `Retry-After` 时带 `retryAfterMs`）；5xx/其他 → `JINA_HTTP`；网络失败 → `JINA_NETWORK`；超时 → `JINA_TIMEOUT`；非法 JSON/缺少当前模式的字段（`data.content`、`data.html` 或 `data.text`）→ `JINA_BAD_RESPONSE`；超限 → `JINA_RESPONSE_TOO_LARGE`。
+- 目标 URL 在发出前经过公网目标守卫：只允许 `http(s)`、禁止 URL 内凭据、拒绝 loopback/私有/链路本地地址及 IPv4-compatible 等过渡地址，并要求 DNS 解析结果全部为公网地址。错误码为 `JINA_INVALID_TARGET` / `JINA_TARGET_BLOCKED` / `JINA_TARGET_UNRESOLVED`。
+- 401/403 → `JINA_AUTH`；429 → `JINA_RATE_LIMIT`（有 `Retry-After` 时带 `retryAfterMs`，最多 1 小时）；5xx/其他 → `JINA_HTTP`；网络失败 → `JINA_NETWORK`；超时 → `JINA_TIMEOUT`；非法 JSON/缺少当前模式的字段（`data.content`、`data.html` 或 `data.text`）→ `JINA_BAD_RESPONSE`；超限 → `JINA_RESPONSE_TOO_LARGE`。
 - Reader 返回的目标页 404 只在它提供 `data.warning` 时保留为 `statusCode=404`；该字段通常由 Markdown 模式返回，HTML/text 模式可能没有。可选的 `data.statusCode` 仅作为自托管兼容字段读取。
 - **残余风险：** Reader 服务端会重新解析目标 DNS，并可能跟随目标页重定向/浏览器跳转；本插件无法像 `HttpFetchProvider` 那样 pin 住连接，所以这是 best-effort 守卫，不是 DSH 级别的 SSRF 保证。自托管时请限制 Reader 容器的网络出口。
 - HTML 模式的 `maxBodyChars` 截断优先落在完整标签边界，但仍可能留下不完整文档；需要 token 预算时优先用 Markdown/text。

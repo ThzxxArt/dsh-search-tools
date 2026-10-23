@@ -82,7 +82,7 @@ export async function resolveJinaTarget(
   return url
 }
 
-/** Public unicast check with IPv4-mapped and common NAT64/transition handling. */
+/** Public unicast check with IPv4-mapped, IPv4-compatible, and NAT64/transition handling. */
 export function isPublicIpAddress(input: string): boolean {
   let parsed: ipaddr.IPv4 | ipaddr.IPv6
   try {
@@ -93,6 +93,10 @@ export function isPublicIpAddress(input: string): boolean {
   if (parsed instanceof ipaddr.IPv4) return parsed.range() === 'unicast'
   if (parsed.isIPv4MappedAddress()) return parsed.toIPv4Address().range() === 'unicast'
   const bytes = parsed.toByteArray()
+  // Deprecated IPv4-compatible ::/96 is still treated as unicast by some
+  // resolvers/runtimes. Reject it together with unspecified/loopback so a
+  // private IPv4 destination cannot hide behind an IPv6-compatible literal.
+  if (bytes.slice(0, 12).every(byte => byte === 0)) return false
   if (isPrefix(bytes, [0x20, 0x02])) return false // 6to4 can embed an arbitrary IPv4 destination.
   if (isPrefix(bytes, [0x20, 0x01, 0x00, 0x00])) return false // Teredo.
   if (isPrefix(bytes, [0x00, 0x64, 0xff, 0x9b])) {

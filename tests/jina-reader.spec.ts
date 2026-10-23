@@ -67,6 +67,10 @@ describe('Jina Reader config', () => {
       .toEqual(expect.arrayContaining([expect.objectContaining({ path: 'endpoint' })]))
     expect(validateJinaReaderConfig({ endpoint: 'https://user:pass@reader.example.com' }).issues)
       .toEqual(expect.arrayContaining([expect.objectContaining({ path: 'endpoint' })]))
+    expect(validateJinaReaderConfig({ endpoint: 'https://reader.example.com/?token=1' }).issues)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ path: 'endpoint' })]))
+    expect(validateJinaReaderConfig({ endpoint: 'https://reader.example.com/#fragment' }).issues)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ path: 'endpoint' })]))
     expect(validateJinaReaderConfig({ targetSelector: 'article\nbody' }).issues)
       .toEqual(expect.arrayContaining([expect.objectContaining({ path: 'targetSelector' })]))
     expect(validateJinaReaderConfig({ locale: 'not a locale!' }).issues)
@@ -112,6 +116,8 @@ describe('Jina public-target guard', () => {
     expect(isPublicIpAddress('10.0.0.1')).toBe(false)
     expect(isPublicIpAddress('127.0.0.1')).toBe(false)
     expect(isPublicIpAddress('::1')).toBe(false)
+    expect(isPublicIpAddress('::7f00:1')).toBe(false)
+    expect(isPublicIpAddress('::a00:1')).toBe(false)
     expect(isPublicIpAddress('::ffff:10.0.0.1')).toBe(false)
     expect(isPublicIpAddress('64:ff9b::a00:1')).toBe(false)
     expect(isPublicIpAddress('2002:0a00:0001::')).toBe(false)
@@ -119,6 +125,8 @@ describe('Jina public-target guard', () => {
 
   it('rejects private literal targets and credentials before any request', async () => {
     await expect(resolveJinaTarget('http://127.0.0.1/admin', signal))
+      .rejects.toMatchObject({ code: 'JINA_TARGET_BLOCKED' })
+    await expect(resolveJinaTarget('http://[::7f00:1]/admin', signal))
       .rejects.toMatchObject({ code: 'JINA_TARGET_BLOCKED' })
     await expect(resolveJinaTarget('https://user:pass@public.example/', signal, publicResolver))
       .rejects.toMatchObject({ code: 'JINA_INVALID_TARGET' })

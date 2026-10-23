@@ -347,7 +347,7 @@ synthetic `data.content`; it is not a hosted Jina success claim.
 | Host timeout wiring | Slow fake path (31s) with draft `timeoutMs=60000`: GUI returns `Test passed` after 31,200ms; a 30s fixed route would have failed. |
 | Live Jina reachability | Switching the draft endpoint to `https://r.jina.ai/` and testing anonymous yields `Jina Reader rejected the credentials (HTTP 401)` in 588ms; this validates error mapping, not success. |
 | Responsive | 700px and 560px: `scrollWidth === clientWidth` (700/700, 560/560); no horizontal overflow. |
-| Tests | `pnpm test`: 154 tests / 22 files, pass. Coverage includes Markdown/HTML/text mode fields, missing-mode errors, blocked-target/no-fetch, content-length oversize, Retry-After dates, mid-resolution timeout, Jina → `web_research` clipping, `JINA_API_KEY` status, and the documented `curl` engine. |
+| Tests | `pnpm test`: 155 tests / 22 files, pass. Coverage includes Markdown/HTML/text mode fields, missing-mode errors, blocked-target/no-fetch, content-length oversize, Retry-After dates, mid-resolution timeout, Jina → `web_research` clipping, `JINA_API_KEY` status, and the documented `curl` engine. |
 | Typecheck / build / pack | `pnpm typecheck`, `pnpm build`, `pnpm pack:check`, and `pnpm release` pass. |
 
 `X-Timeout` is a Reader wait budget, not a hard deadline; the adapter sends it

@@ -11,6 +11,8 @@ import { resolveJinaTarget } from './target.ts'
 const API_KEY_REF = 'JINA_API_KEY'
 const CLIENT_USER_AGENT = 'dsh-search-tools/0.1.5 (+https://github.com/ThzxxArt/dsh-search-tools)'
 const MAX_URL_LENGTH = 2_048
+/** Bound a hostile/accidental Retry-After value before exposing it as a hint. */
+const MAX_RETRY_AFTER_MS = 3_600_000
 
 export class JinaReaderRuntime implements FetchAdapterRuntime {
   constructor(
@@ -266,9 +268,11 @@ function retryAfterMs(response: Response): number | undefined {
   const raw = response.headers.get('retry-after')
   if (raw === null) return undefined
   const seconds = Number(raw)
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1_000)
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(MAX_RETRY_AFTER_MS, Math.round(seconds * 1_000))
+  }
   const date = Date.parse(raw)
-  if (Number.isFinite(date)) return Math.max(0, date - Date.now())
+  if (Number.isFinite(date)) return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, date - Date.now()))
   return undefined
 }
 

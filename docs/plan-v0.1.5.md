@@ -104,7 +104,7 @@ Files:
 
 Steps:
 1. Add failing tests with an injected resolver: public target passes; private/loopback/link-local literal and resolved address fail; empty resolution fails; credentials in URL fail; `ftp:` fails; abort fails.
-2. Implement `resolveJinaTarget(raw, signal, resolver)` using `node:dns/promises` + `ipaddr.js`, IPv4-mapped and common NAT64 checks.
+2. Implement `resolveJinaTarget(raw, signal, resolver)` using `node:dns/promises` + `ipaddr.js`, IPv4-mapped/IPv4-compatible and common NAT64 checks.
 3. Keep DNS rebinding residual explicit in comments and docs: Jina resolves independently; this is best-effort, not a pin.
 4. Verify focused tests.
 
@@ -235,7 +235,7 @@ Acceptance: fake Jina succeeds end-to-end through real DSH; code gate green; no 
 - Hosted Jina sends target URL off-machine; accepted by user's A choice. Self-hosted endpoint keeps local.
 - Jina-side DNS rebinding and redirect/browser navigation cannot be pinned; local DNS guard is best-effort and documented. Self-hosted Reader egress must be restricted.
 - `X-Timeout` is a Reader wait budget, not a hard deadline; the local AbortController is the hard deadline and `X-Timeout` is sent one second shorter.
-- `web_fetch` tool timeout is 30s by default; Jina 25s default fits, 60s/180s requires raising DSH `fetchTool.timeoutMs`.
+- `web_fetch` tool timeout is 30s by default; Jina 25s default fits, 60s/180s requires raising DSH `tool-web.fetchTimeoutMs`.
 - Jina API semantics can drift; contract tests pin our mapping, live 401 proves reachability only.
 - No real Jina key in this environment; hosted success path remains unverified unless a key/self-host is supplied. Self-hosted/fake Reader covers protocol and GUI.
 

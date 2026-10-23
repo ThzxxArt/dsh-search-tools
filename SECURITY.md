@@ -21,7 +21,8 @@ Please open a private security advisory on GitHub rather than a public issue.
 - `readable-http` reuses `@deepseek-ai/dsh-web-fetch-http`, including its
   address-pinned SSRF policy.
 - `jina-reader` is **not** the same boundary. It validates the target URL and
-  every resolved address before sending, but the Reader service resolves the
+  every resolved address before sending (including IPv4-mapped,
+  IPv4-compatible, and common NAT64 forms), but the Reader service resolves the
   target again and may follow redirects or browser navigations; this is
   best-effort, not connection-level pinning. A hosted Reader sends the target
   URL off-machine and may cache it. Use a self-hosted Reader and restrict its

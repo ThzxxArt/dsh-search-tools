@@ -71,7 +71,7 @@ These screenshots use demo data (`https://searxng.example.com`, no real credenti
 | Stable search/fetch providers | `dsh-search-tools` and `dsh-search-tools-fetch` never change with the backend |
 | Built-in search adapter | SearXNG: multiple instances, ordered/round-robin, failover, JSON/HTML, GET/POST, Bearer/Basic auth, proxy, cache, pagination, domain filters |
 | Built-in fetch adapter | Readability HTTP: reuses DSH safe HTTP, extracts article text with Readability, can fall back to raw content |
-| Optional aggressive fetch adapter | Jina Reader: browser rendering, PDF/Office, CSS selectors, iframe/Shadow DOM, proxy option, self-hosting; public targets or a self-hosted Reader |
+| Optional aggressive fetch adapter | Jina Reader: browser rendering, PDF/Office, CSS selectors, iframe/Shadow DOM, proxy option; targets must be public, and the Reader itself can be hosted or self-hosted |
 | Research tool | `web_research`: search, fetch top N concurrently, per-page/total clipping, sources + readable content |
 | Web settings page | Overview, Search, Fetch, Research, Diagnostics; Connection / Search behavior sub-tabs, instance cards, inline tests, content reader, budget meters, field-level errors, diagnostics, cache clear, keyboard save |
 | Credential isolation | Search tokens go to DSH credentials, never YAML, logs, or diagnostic text |
@@ -500,8 +500,8 @@ Behavior:
 Behavior and errors:
 
 - The request is `POST <endpoint>/` with `Content-Type: application/x-www-form-urlencoded`, body `url=<target>`, `Accept: application/json`, and `X-Respond-With` / `X-Timeout` / selector headers.
-- Before sending, a target guard allows only `http(s)`, rejects embedded credentials, loopback/private/link-local addresses, and requires every DNS answer to be public. Errors are `JINA_INVALID_TARGET` / `JINA_TARGET_BLOCKED` / `JINA_TARGET_UNRESOLVED`.
-- 401/403 → `JINA_AUTH`; 429 → `JINA_RATE_LIMIT` (with `retryAfterMs` when available); 5xx/other → `JINA_HTTP`; network → `JINA_NETWORK`; timeout → `JINA_TIMEOUT`; malformed JSON or the missing mode field (`data.content`, `data.html`, or `data.text`) → `JINA_BAD_RESPONSE`; oversize → `JINA_RESPONSE_TOO_LARGE`.
+- Before sending, a target guard allows only `http(s)`, rejects embedded credentials, loopback/private/link-local and transition addresses such as IPv4-compatible IPv6, and requires every DNS answer to be public. Errors are `JINA_INVALID_TARGET` / `JINA_TARGET_BLOCKED` / `JINA_TARGET_UNRESOLVED`.
+- 401/403 → `JINA_AUTH`; 429 → `JINA_RATE_LIMIT` (with `retryAfterMs` when available, capped at 1 hour); 5xx/other → `JINA_HTTP`; network → `JINA_NETWORK`; timeout → `JINA_TIMEOUT`; malformed JSON or the missing mode field (`data.content`, `data.html`, or `data.text`) → `JINA_BAD_RESPONSE`; oversize → `JINA_RESPONSE_TOO_LARGE`.
 - A target 404 stays `statusCode=404` only when the Reader supplies `data.warning`; that field is typically present in Markdown mode and may be absent in HTML/text mode. The optional `data.statusCode` is read only as a self-hosted compatibility field.
 - **Residual risk:** the Reader resolves the target again and may follow redirects or browser navigations, so this adapter cannot pin the connection like `HttpFetchProvider`; the guard is best-effort, not a DSH-level SSRF guarantee. Restrict a self-hosted Reader container's egress.
 - In HTML mode, `maxBodyChars` prefers a complete tag boundary but can still leave a partial document; use Markdown/text when a token budget matters.

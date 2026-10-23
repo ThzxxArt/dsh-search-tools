@@ -17,11 +17,12 @@ requires registry credentials and was not performed in this workspace.**
     robots.txt, image/link retention, locale, target User-Agent, Reader proxy,
     and hosted or self-hosted endpoints;
   - stores `JINA_API_KEY` in DSH credentials only;
-  - rejects non-HTTP(S), credential-bearing, private/loopback/link-local, and
-    non-public-DNS targets before sending;
+  - rejects non-HTTP(S), credential-bearing, private/loopback/link-local,
+    IPv4-compatible transition, and non-public-DNS targets before sending;
   - maps 401/403 → `JINA_AUTH`, 429 → `JINA_RATE_LIMIT`, 5xx → `JINA_HTTP`,
     timeout → `JINA_TIMEOUT`, bad JSON → `JINA_BAD_RESPONSE`, and envelope
-    overflow → `JINA_RESPONSE_TOO_LARGE`.
+    overflow → `JINA_RESPONSE_TOO_LARGE`; Retry-After hints are capped at one
+    hour.
 - Generic `manifest.notice` and `browser`/`pdf` capabilities; the notice is
   rendered by the existing `AdapterForm`.
 - Fetch preview/probe route signals now follow the draft `timeoutMs`
@@ -47,7 +48,7 @@ pnpm release
 | Check | Result |
 |---|---|
 | `pnpm typecheck` | pass |
-| `pnpm test` | 154 tests / 22 files, pass |
+| `pnpm test` | 155 tests / 22 files, pass |
 | `pnpm build` | host, client, declarations pass |
 | `pnpm pack --dry-run` | package includes Jina adapter declarations and READMEs |
 | `pnpm check:publint` | no issues |

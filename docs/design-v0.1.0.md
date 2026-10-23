@@ -50,7 +50,7 @@ DSH ctx.web
    ▼
 fetch adapter registry
    ├── readable-http     ← v0.1.0 内置
-   ├── jina-reader       ← 未来
+   ├── jina-reader       ← 0.1.5 内置
    └── browser           ← 未来（仍不拥有浏览器，调用 browser-use）
 ```
 
@@ -115,7 +115,8 @@ ctx.web.registerSearchProvider(new ExaProvider())
 │ 适配器层                                                          │
 │  searxng adapter（v0.1.0）                                        │
 │  readable-http adapter（v0.1.0）                                  │
-│  未来：exa / tavily / brave / jina / browser / …                  │
+│  jina-reader adapter（v0.1.5）                                    │
+│  未来：exa / tavily / brave / browser / …                         │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -978,11 +979,11 @@ inner.fetch(url)
 - `linkedom` 懒加载；失败则原样透传并 warn 一次。**不要用 jsdom**：它的 `tr46` 依赖会调用 `createRequire(...).resolve.paths`，被 DSH 的 profile resolution hook 打断；linkedom 足够 Readability 使用，且安装体积小得多。
 - 内网地址由 `HttpFetchProvider` 的 SSRF 防护拒绝。
 
-### 5.3 未来 fetch adapter
+### 5.3 未来 fetch adapter（0.1.5 已实现 jina-reader）
 
 同一个 contract：
 
-- `jina-reader`：API key + endpoint，返回 Markdown。
+- `jina-reader`：API key + endpoint，返回 Markdown；0.1.5 已实现，详见附录 H。
 - `browser`：调用 DSH `browser-use`，不拥有浏览器；只作为可选 adapter。
 - `direct-http`：不做 Readability，只透传。
 - `pdf`：单独包，不混进核心。
@@ -1793,13 +1794,13 @@ Shadow DOM、`X-No-Cache`、`X-Proxy` 和自托管。它不登录、不绕过付
 - `JINA_API_KEY` 只走 DSH credentials/env，不进入 YAML；`endpoint`、`engine`、
   `responseMode`、超时、大小上限、选择器、隐私开关全部进入真实请求。
 - 公共目标守卫：拒绝 URL 内凭据、非 http(s)、loopback/private/link-local 字面量，
-  以及 DNS 答案含非公网地址的主机；常见 IPv4-mapped/NAT64 也处理。
+  以及 DNS 答案含非公网地址的主机；常见 IPv4-mapped/IPv4-compatible/NAT64 也处理。
 - 错误码：`JINA_INVALID_TARGET`、`JINA_TARGET_BLOCKED`、
   `JINA_TARGET_UNRESOLVED`、`JINA_AUTH`、`JINA_RATE_LIMIT`、`JINA_HTTP`、
   `JINA_NETWORK`、`JINA_TIMEOUT`、`JINA_BAD_RESPONSE`、
   `JINA_RESPONSE_TOO_LARGE`。
 - host `fetch-preview`/fetch `probe` 的 signal 按草稿 `timeoutMs` 放大：基线
-  30s/20s，加 5s，封顶 190s；`web_fetch` 的 30s 工具超时仍是 DSH 侧限制。
+  30s/30s，加 5s，封顶 190s；`web_fetch` 的 30s 工具超时仍是 DSH 侧限制。
 
 ### H.3 安全边界
 

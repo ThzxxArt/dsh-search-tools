@@ -171,13 +171,22 @@ describe('Jina Reader response and failure mapping', () => {
   it('maps authentication, rate limit, and server failures to stable codes', async () => {
     await expect(runtime({}, async () => response({ code: 401, message: 'bad key' }, 401)).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_AUTH' })
+    await expect(runtime({}, async () => response({ code: 403, message: 'forbidden' }, 403)).fetch({ url: 'https://target.example/' }))
+      .rejects.toMatchObject({ code: 'JINA_AUTH' })
     await expect(runtime({}, async () => response({ code: 429, message: 'slow down' }, 429, { 'retry-after': '2' })).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_RATE_LIMIT', retryAfterMs: 2_000 })
     const retryDate = new Date(Date.now() + 5_000).toUTCString()
     await expect(runtime({}, async () => response({ code: 429 }, 429, { 'retry-after': retryDate })).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_RATE_LIMIT', retryAfterMs: expect.any(Number) })
+    await expect(runtime({}, async () => response({ code: 429 }, 429, { 'retry-after': '999999999' })).fetch({ url: 'https://target.example/' }))
+      .rejects.toMatchObject({ code: 'JINA_RATE_LIMIT', retryAfterMs: 3_600_000 })
     await expect(runtime({}, async () => response({ message: 'boom' }, 503)).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_HTTP' })
+  })
+
+  it('maps transport failures to JINA_NETWORK', async () => {
+    await expect(runtime({}, async () => { throw new Error('socket closed') }).fetch({ url: 'https://target.example/' }))
+      .rejects.toMatchObject({ code: 'JINA_NETWORK' })
   })
 
   it('clips content and reports truncation', async () => {

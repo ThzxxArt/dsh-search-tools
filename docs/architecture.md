@@ -111,8 +111,8 @@ SSRF boundary is DSH's, not this plugin's.
 
 `jina-reader` is an external-Reader adapter. It:
 
-1. rejects non-HTTP(S), credential-bearing, loopback/private/link-local, and
-   non-public-DNS targets before sending;
+1. rejects non-HTTP(S), credential-bearing, loopback/private/link-local,
+   IPv4-compatible transition addresses, and non-public-DNS targets before sending;
 2. sends `POST <endpoint>/` with the target in the form body, never as an
    authorization-bearing redirect;
 3. requires HTTPS for remote endpoints; plain HTTP is loopback-only;
