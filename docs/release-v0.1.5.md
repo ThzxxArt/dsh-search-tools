@@ -128,8 +128,11 @@ Screenshot: [settings-fetch-jina.png](assets/settings-fetch-jina.png).
 
 1. Confirm `package.json` is `0.1.5` and the worktree is clean.
 2. Run `pnpm release`.
-3. `npm publish --provenance --access public`.
-4. `git tag -a v0.1.5 -m "dsh-search-tools v0.1.5" && git push origin main --follow-tags`.
+3. Preferred: `git tag -a v0.1.5 -m "dsh-search-tools v0.1.5" && git push origin main --follow-tags`;
+   the tag workflow publishes to npm with provenance and attaches the registry
+   tarball to the GitHub Release.
+4. If publishing manually, run `npm publish --access public`; a local publish
+   does not attach provenance.
 5. Verify npm `0.1.5` is `latest` and the GitHub Release tarball hash matches npm.
 6. In a fresh DSH profile, select `readable-http` and `jina-reader` separately and
    run a fetch test and one `web_research` call.

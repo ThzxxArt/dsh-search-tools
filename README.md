@@ -761,10 +761,10 @@ git push origin main --follow-tags
 3. 用 `NPM_TOKEN` 发布到 npm（provenance）；
 4. 把 tarball 附加到 GitHub Release。
 
-手动发布：
+手动发布（不产生 provenance；正式发布走 tag workflow）：
 
 ```sh
-npm publish --provenance --access public
+npm publish --access public
 ```
 
 发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、分别用 `readable-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.5 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.5.md)。

@@ -757,10 +757,10 @@ Pushing a `v*` tag triggers `.github/workflows/release.yml`:
 3. publishes to npm with provenance using `NPM_TOKEN`;
 4. attaches the tarball to the GitHub Release.
 
-Manual publish:
+Manual publish (does not attach provenance; prefer the tag workflow):
 
 ```sh
-npm publish --provenance --access public
+npm publish --access public
 ```
 
 After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run fetch tests through both `readable-http` and `jina-reader`, and make one `web_research` call. See the [v0.1.5 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.5.md).
