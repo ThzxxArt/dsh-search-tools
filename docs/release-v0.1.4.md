@@ -152,6 +152,8 @@ tarball, and attaches that exact file to the GitHub release.
   completed successfully.
 - The published tarball contains the gap-closure symbols
   (`SEARCH_CONFIG_INVALID`, `retryAfterMs`, and `RESEARCH_CONFIG_INVALID`).
+- The published tarball installs into a clean temporary npm prefix:
+  `dsh-search-tools@0.1.4`, 73 packages, no install-time error.
 
 ## Post-publish smoke test
 
