@@ -6,8 +6,25 @@ npm: https://www.npmjs.com/package/dsh-search-tools<br>
 DSH target: `0.2.1-rc.2` (`>=0.2.1-rc.2 <0.3.0`)<br>
 Node target: `^22.19.0 || >=24.0.0`
 
-Status: **gap-closing release.** Search, fetch, research, takeover, and
+Status: **published 2026-10-23.** Search, fetch, research, takeover, and
 credential semantics are unchanged.
+
+## Publication evidence
+
+| Check | Result |
+|---|---|
+| Tag | `v0.1.3` → `0e241d6` |
+| Release workflow | [run 39896837283](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39896837283) — success |
+| GitHub Release | [v0.1.3](https://github.com/ThzxxArt/dsh-search-tools/releases/tag/v0.1.3) — published, not draft/prerelease |
+| npm | `dsh-search-tools@0.1.3`, `latest` |
+| npm publish time | `2026-10-23T03:40:49.353Z` |
+| Tarball | 219,425 bytes |
+| SHA-256 | `d779fb0eb01fd56175c9c503086fb86ab960ca35d636fd9257cb6eee71f04890` |
+| npm vs GitHub asset | identical SHA-256 |
+
+The first release run (`39896151527`) published npm successfully but failed
+while the registry read model was still catching up; the workflow now retries the
+`npm view` lookup and the tarball download together, and the rerun completed.
 
 ## What changed
 

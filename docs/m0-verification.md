@@ -241,6 +241,21 @@ profile; those two states are covered by component tests. The 560px case uses a
 controlled content width, not a physical device. No screen-reader or non-Chromium
 run in this round.
 
+## 0.1.3 publication (2026-10-23)
+
+- Tag `v0.1.3` points at `0e241d6`; Release workflow
+  [39896837283](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39896837283)
+  completed successfully.
+- npm `dsh-search-tools@0.1.3` is published and is the `latest` dist-tag;
+  publish time is `2026-10-23T03:40:49.353Z`.
+- GitHub Release [v0.1.3](https://github.com/ThzxxArt/dsh-search-tools/releases/tag/v0.1.3)
+  is published (not draft/prerelease) with `dsh-search-tools-0.1.3.tgz`.
+- The npm and GitHub tarballs are both 219,425 bytes and hash to
+  `d779fb0eb01fd56175c9c503086fb86ab960ca35d636fd9257cb6eee71f04890`.
+- The first release run failed at the registry-download step while npm was still
+  catching up. The workflow now retries the `npm view` and download together;
+  the rerun succeeded.
+
 ## Remaining
 
 - Additional adapter packages beyond SearXNG / Readability HTTP.
