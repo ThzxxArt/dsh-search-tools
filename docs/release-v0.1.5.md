@@ -7,8 +7,8 @@ GitHub Release: https://github.com/ThzxxArt/dsh-search-tools/releases/tag/v0.1.5
 DSH target: `0.2.1-rc.2` (`>=0.2.1-rc.2 <0.3.0`)<br>
 Node target: `^22.19.0 || >=24.0.0`<br>
 Status: **published 2026-10-23.** npm `0.1.5` is the `latest` dist-tag; the
-GitHub Release is generated from the `v0.1.5` tag. The npm publish used the
-operator token and has no provenance; the tag workflow skips npm because the
+GitHub Release is published from the `v0.1.5` tag. The npm publish used the
+operator token and has no provenance; the tag workflow skipped npm because the
 version already exists.
 
 ## What changed
@@ -107,8 +107,22 @@ Screenshot: [settings-fetch-jina.png](assets/settings-fetch-jina.png).
 - `npm publish --access public` published `dsh-search-tools@0.1.5`; the registry
   read model reports it as the `latest` dist-tag.
 - The publish used the operator npm token and has no provenance.
-- `v0.1.5` is the tag target; the tag workflow skips the already-published npm
-  version and creates the GitHub Release with the registry tarball.
+- GitHub Release
+  [v0.1.5](https://github.com/ThzxxArt/dsh-search-tools/releases/tag/v0.1.5)
+  is published (not draft/prerelease) with
+  `dsh-search-tools-0.1.5.tgz`.
+- Release workflow
+  [39959869420](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39959869420)
+  completed successfully; its `publish` job succeeded. The npm guard skipped
+  the already-published version, then downloaded the registry tarball and
+  attached it to the release.
+- The registry and GitHub tarballs are both 279,183 bytes and hash to
+  `aeef97f15448a17dab76c623fb2dea9aa897858ba6ac448b7d4541b9f8f0deed`.
+- The published tarball installs into a clean temporary npm prefix:
+  `dsh-search-tools@0.1.5`, 73 packages, no install-time error.
+- `main` CI run
+  [39959868916](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39959868916)
+  completed successfully.
 
 ## Publish steps (when credentials are available)
 

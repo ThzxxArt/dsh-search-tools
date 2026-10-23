@@ -367,6 +367,29 @@ handling, response modes, and timeout chain. **Not covered:** hosted Jina HTTP
 physical 560px device, screen reader, non-Chromium browsers, or a real-model
 `web_research` selection run. Those remain evidence gaps, not passes.
 
+## 0.1.5 publication (2026-10-23)
+
+- Release workflow
+  [39959869420](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39959869420)
+  completed successfully; its `publish` job succeeded.
+- npm `dsh-search-tools@0.1.5` is the `latest` dist-tag on
+  `https://registry.npmjs.org`.
+- GitHub Release
+  [v0.1.5](https://github.com/ThzxxArt/dsh-search-tools/releases/tag/v0.1.5)
+  is published with `dsh-search-tools-0.1.5.tgz`.
+- The registry and GitHub tarballs are both 279,183 bytes and hash to
+  `aeef97f15448a17dab76c623fb2dea9aa897858ba6ac448b7d4541b9f8f0deed`.
+- npm integrity:
+  `sha512-Vm1jNrV5YTfrLdPrC598JddoXSqJ0m7GZzgQmK6t2L0StCN00uePpxKJTV5KMgD6HHwFUEl9EuqouwRLgm2abw==`.
+- The published tarball installs into a clean temporary npm prefix:
+  `dsh-search-tools@0.1.5`, 73 packages, no install-time error.
+- `main` CI run
+  [39959868916](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39959868916)
+  completed successfully.
+- The npm publish used the operator token and has no provenance; the tag
+  workflow skipped npm because the version already existed, then attached the
+  registry tarball to the GitHub Release.
+
 ## Remaining
 
 - Hosted Jina (real API key) and self-hosted Jina Reader success-path verification.
