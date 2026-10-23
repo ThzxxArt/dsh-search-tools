@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **仓库版本：0.1.5（2026-10-23，尚未发布到 npm/GitHub Release）。** 新增可选的 **Jina Reader** 抓取 adapter：浏览器渲染、PDF/Office、选择器、iframe/Shadow DOM、`no-cache` 和自托管端点；默认仍是 `readable-http`，稳定 provider id 不变。Jina 目标 URL 会发给配置的 Reader 端点（只有本地自托管 Reader 才留在本机；远程自托管仍会出网），设置页和 README 都会明确提示；`readable-http` 的 DSH 安全 HTTP/SSRF 边界不变。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
+> **仓库版本：0.1.5（2026-10-23，npm 已发布；GitHub Release 由 `v0.1.5` tag 生成）。** 新增可选的 **Jina Reader** 抓取 adapter：浏览器渲染、PDF/Office、选择器、iframe/Shadow DOM、`no-cache` 和自托管端点；默认仍是 `readable-http`，稳定 provider id 不变。Jina 目标 URL 会发给配置的 Reader 端点（只有本地自托管 Reader 才留在本机；远程自托管仍会出网），设置页和 README 都会明确提示；`readable-http` 的 DSH 安全 HTTP/SSRF 边界不变。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
 
 ---
 

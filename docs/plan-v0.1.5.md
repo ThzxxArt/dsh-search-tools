@@ -1,6 +1,6 @@
 # dsh-search-tools v0.1.5 实施计划：Jina Reader 激进抓取后端
 
-> 状态：实施完成（2026-10-23；仓库门禁 + 真实 DSH GUI fake Reader 通过；npm/GitHub 发布未执行）
+> 状态：实施完成（2026-10-23；仓库门禁 + 真实 DSH GUI fake Reader 通过；npm 0.1.5 已发布，GitHub Release 由 `v0.1.5` tag 生成）
 >
 > 基线：`8d37066`（0.1.4 发布后 main，2026-10-23）
 >

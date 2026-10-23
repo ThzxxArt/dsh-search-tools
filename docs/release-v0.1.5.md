@@ -2,10 +2,14 @@
 
 Date: 2026-10-23<br>
 Package: `dsh-search-tools@0.1.5`<br>
+npm: https://www.npmjs.com/package/dsh-search-tools/v/0.1.5<br>
+GitHub Release: https://github.com/ThzxxArt/dsh-search-tools/releases/tag/v0.1.5<br>
 DSH target: `0.2.1-rc.2` (`>=0.2.1-rc.2 <0.3.0`)<br>
 Node target: `^22.19.0 || >=24.0.0`<br>
-Status: **implementation and repository gate complete; npm/GitHub publication
-requires registry credentials and was not performed in this workspace.**
+Status: **published 2026-10-23.** npm `0.1.5` is the `latest` dist-tag; the
+GitHub Release is generated from the `v0.1.5` tag. The npm publish used the
+operator token and has no provenance; the tag workflow skips npm because the
+version already exists.
 
 ## What changed
 
@@ -93,7 +97,18 @@ Screenshot: [settings-fetch-jina.png](assets/settings-fetch-jina.png).
   restricted.
 - Real SearXNG engine quality, physical 560px device, screen reader, and
   non-Chromium browsers.
-- npm/GitHub publication in this workspace (no registry credentials were used).
+- npm provenance: this manual token publish has no provenance; the tag workflow
+  skips npm because `0.1.5` already exists.
+
+## Actual publication (2026-10-23)
+
+- `pnpm release` passed before publication: 163 tests / 22 files, typecheck,
+  build, pack, and publint.
+- `npm publish --access public` published `dsh-search-tools@0.1.5`; the registry
+  read model reports it as the `latest` dist-tag.
+- The publish used the operator npm token and has no provenance.
+- `v0.1.5` is the tag target; the tag workflow skips the already-published npm
+  version and creates the GitHub Release with the registry tarball.
 
 ## Publish steps (when credentials are available)
 

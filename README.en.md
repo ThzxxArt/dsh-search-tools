@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Repository version: 0.1.5 (2026-10-23; not yet published to npm/GitHub Releases).** Adds an optional **Jina Reader** fetch adapter: browser rendering, PDF/Office, selectors, iframe/Shadow DOM, `no-cache`, and self-hosted endpoints. The default remains `readable-http` and the stable provider ids are unchanged. Jina sends the target URL to the configured Reader endpoint (only a local self-hosted Reader keeps it on-machine; a remote self-hosted Reader still leaves the machine); the settings page and README state this boundary explicitly. `readable-http` keeps the DSH safe-HTTP/SSRF boundary. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
+> **Repository version: 0.1.5 (2026-10-23; published on npm; GitHub Release is generated from the `v0.1.5` tag).** Adds an optional **Jina Reader** fetch adapter: browser rendering, PDF/Office, selectors, iframe/Shadow DOM, `no-cache`, and self-hosted endpoints. The default remains `readable-http` and the stable provider ids are unchanged. Jina sends the target URL to the configured Reader endpoint (only a local self-hosted Reader keeps it on-machine; a remote self-hosted Reader still leaves the machine); the settings page and README state this boundary explicitly. `readable-http` keeps the DSH safe-HTTP/SSRF boundary. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
 
 ---
 
