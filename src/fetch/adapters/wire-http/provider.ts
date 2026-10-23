@@ -7,6 +7,7 @@ import type {
 import { SearchToolsError, errorCode, errorMessage } from '../../../shared/errors.ts'
 import { displayUrl } from '../../../shared/url.ts'
 import {
+  parseHttpTarget,
   resolvePublicTarget,
   type PublicAddressResolver,
   type PublicTargetCodes,
@@ -68,6 +69,12 @@ export class WireHttpRuntime implements FetchAdapterRuntime {
 
     const guard = new EgressGuard(this.options.resolver === undefined ? {} : { resolver: this.options.resolver })
     try {
+      // Fragments never belong on the wire and an HTTPS fragment would not
+      // reach the CONNECT guard, so reject it before native code starts.
+      const parsed = parseHttpTarget(request.url, WIRE_CODES)
+      if (parsed.hash.length > 0) {
+        throw new SearchToolsError('wire-http does not accept URL fragments', 'WIRE_INVALID_TARGET')
+      }
       // Resolve the initial URL before launching native code. The guard repeats
       // the check for every redirect hop, including the first one.
       const target = await resolvePublicTarget(request.url, controller.signal, this.options.resolver, WIRE_CODES)

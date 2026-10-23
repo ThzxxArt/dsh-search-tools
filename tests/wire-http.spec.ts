@@ -127,9 +127,10 @@ describe('shared public-target guard', () => {
     await expect(resolvePublicTarget('http://127.0.0.1/', signal)).rejects.toMatchObject({ code: 'TARGET_BLOCKED' })
   })
 
-  it('rejects IPv4-mapped, NAT64, 6to4, Teredo, CGNAT, and link-local addresses', () => {
+  it('rejects IPv4-mapped private, every known NAT64 form, 6to4, Teredo, CGNAT, and link-local addresses', () => {
     for (const address of [
-      '::ffff:10.0.0.1', '64:ff9b::a00:1', '2002:0a00:0001::', '2001:0000::1',
+      '::ffff:10.0.0.1', '64:ff9b::a00:1', '64:ff9b::5db8:d822',
+      '64:ff9b:1::1', '2002:0a00:0001::', '2001:0000::1',
       '100.64.0.1', '169.254.1.1', 'fe80::1', 'fc00::1', '::7f00:1', '::a00:1',
     ]) {
       expect(isPublicIpAddress(address), address).toBe(false)

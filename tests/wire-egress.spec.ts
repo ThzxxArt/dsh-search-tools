@@ -62,6 +62,18 @@ function readUntil(socket: Duplex, needle: string): Promise<string> {
   })
 }
 
+function rawRequest(port: number, payload: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = netConnect(port, '127.0.0.1')
+    let data = ''
+    socket.setEncoding('utf8')
+    socket.on('data', (chunk) => { data += chunk })
+    socket.once('error', reject)
+    socket.once('close', () => { resolve(data) })
+    socket.once('connect', () => { socket.write(payload) })
+  })
+}
+
 function publicResolver(): PublicAddressResolver {
   return async () => [{ address: '93.184.216.34', family: 4 }]
 }
@@ -159,6 +171,26 @@ describe('wire-http loopback egress guard', () => {
     })
     expect(response).toContain('403')
     expect(response).toContain('WIRE_TARGET_BLOCKED')
+    expect(upstreamConnections).toBe(0)
+  })
+
+  it('rejects absolute-form fragments before resolving or connecting', async () => {
+    let upstreamConnections = 0
+    const upstream = createNetServer(() => { upstreamConnections++ })
+    servers.push(upstream)
+    const upstreamPort = await listen(upstream)
+    const guard = new EgressGuard({
+      resolver: publicResolver(),
+      connector: () => netConnect({ host: '127.0.0.1', port: upstreamPort }),
+    })
+    guards.push(guard)
+    const proxy = await guard.start()
+    const response = await rawRequest(
+      proxyPort(proxy),
+      'GET http://public.example/#fragment HTTP/1.1\r\nHost: public.example\r\nConnection: close\r\n\r\n',
+    )
+    expect(response).toContain('400 Bad Request')
+    expect(response).toContain('fragment')
     expect(upstreamConnections).toBe(0)
   })
 

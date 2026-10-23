@@ -511,7 +511,7 @@ Behavior:
 
 Behavior and failure semantics:
 
-- The initial target is parsed and resolved; every subsequent hop is resolved again by the local guard. Any private/loopback/link-local/CGNAT/ULA/IPv4-mapped/6to4/Teredo/NAT64 answer is rejected.
+- The initial target is parsed and resolved; every subsequent hop is resolved again by the local guard. Any private/loopback/link-local/CGNAT/ULA/IPv4-mapped/6to4/Teredo/known-NAT64 (`64:ff9b::/96`, `64:ff9b:1::/48`) answer is rejected. Network-specific NAT64 prefixes cannot be enumerated in a general runtime; they remain an explicitly documented residual boundary.
 - Only `http(s)` and ports 80/443 are allowed; URL credentials are rejected. The guard connects to a validated IP and does not re-resolve the hostname.
 - `impit` runs in a one-request worker and is terminated on success, error, abort, and timeout; no native client survives a request.
 - PDF responses go to local PDF.js text extraction; HTML goes through Readability; text/JSON is decoded directly; unsupported binary content returns `WIRE_UNSUPPORTED_CONTENT`.

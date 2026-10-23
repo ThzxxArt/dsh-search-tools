@@ -134,21 +134,21 @@ export function isPublicIpAddress(input: string): boolean {
   if (parsed instanceof ipaddr.IPv4) return parsed.range() === 'unicast'
   if (parsed.isIPv4MappedAddress()) return parsed.toIPv4Address().range() === 'unicast'
   const bytes = parsed.toByteArray()
+  const range = parsed.range()
+  // Reject every known NAT64 form, including 64:ff9b::/96 addresses that
+  // embed a public IPv4. The mapping is only meaningful on an IPv6-only
+  // network, and treating it as ordinary unicast would let a NAT64 prefix
+  // reach a destination the IPv4 guard never saw. Network-specific NAT64
+  // prefixes cannot be enumerated here; they are documented as a residual
+  // boundary rather than silently assumed safe.
+  if (range === 'rfc6052' || range === 'rfc6145') return false
   // Deprecated IPv4-compatible ::/96 is still treated as unicast by some
   // resolvers/runtimes. Reject it together with unspecified/loopback so a
   // private IPv4 destination cannot hide behind an IPv6-compatible literal.
   if (bytes.slice(0, 12).every(byte => byte === 0)) return false
   if (isPrefix(bytes, [0x20, 0x02])) return false // 6to4 can embed an arbitrary IPv4 destination.
   if (isPrefix(bytes, [0x20, 0x01, 0x00, 0x00])) return false // Teredo.
-  if (isPrefix(bytes, [0x00, 0x64, 0xff, 0x9b])) {
-    if (isPrefix(bytes, [0x00, 0x64, 0xff, 0x9b, 0x00, 0x01])) return false // local-use NAT64.
-    // 64:ff9b::/96 embeds the destination in the last four bytes.
-    if (bytes.slice(4, 12).every(byte => byte === 0)) {
-      return ipaddr.fromByteArray(bytes.slice(12)).range() === 'unicast'
-    }
-    return false
-  }
-  return parsed.range() === 'unicast'
+  return range === 'unicast'
 }
 
 export function stripIpv6Brackets(hostname: string): string {

@@ -231,6 +231,7 @@ function parseAbsoluteHttpTarget(raw: string | undefined): URL {
   }
   if (url.protocol !== 'http:') throw new Error('absolute-form proxy requests must use http')
   if (url.username.length > 0 || url.password.length > 0) throw new Error('proxy target must not contain credentials')
+  if (url.hash.length > 0) throw new Error('proxy target must not contain a fragment')
   if (url.port.length > 0 && !ALLOWED_PORTS.has(Number(url.port))) throw new Error('proxy target port is not allowed')
   return url
 }

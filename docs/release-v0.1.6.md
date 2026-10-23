@@ -30,10 +30,10 @@ pnpm release
 Required results:
 
 - typecheck clean;
-- default tests: 199 passed, 4 `WIRE_LIVE` tests skipped;
+- default tests: 203 passed, 5 `WIRE_LIVE` tests skipped;
 - `WIRE_LIVE=1 pnpm exec vitest run tests/wire-live.spec.ts` passes against
-  `https://example.com/` and `httpbin.org` (real Impit worker, plain HTTP
-  absolute-form, HTTP→HTTPS redirect, and full runtime);
+  `https://example.com/` (real Impit worker, plain HTTP absolute-form,
+  HTTP→HTTPS redirect, full runtime, and a three-page `web_research`);
 - `lib/index.js` and `lib/wire-worker.js` exist;
 - package tarball contains both files and `impit`/`pdfjs-dist` are declared
   runtime dependencies;
@@ -54,12 +54,23 @@ Required results:
    the default remains `readable-http`.
 7. Check diagnostics for no `Authorization`, Cookie, API key, or query leakage.
 
+## Real model validation
+
+On 2026-10-24 the supplied Agnes endpoint was exercised with
+`agnes-3.0-flash` over its Anthropic Messages protocol. The model emitted a
+`web_fetch` tool call for `https://example.com/`; `wire-http` returned HTTP 200
+and readable text; the tool result was returned to the model, which answered
+with the page title, **Example Domain**. `agnes-2.5-flash` also returned the
+expected direct reply. The API key was supplied at runtime and is not stored in
+the repository, package, test fixtures, or release artifacts.
+
 ## Known environment boundary
 
-The real Impit path and real PDF extraction are covered by local tests against
-`example.com` and a checked-in PDF fixture. A CI runner without outbound access
-will skip the four `WIRE_LIVE` tests; this is an environment gap, not a product
-fallback. No hosted Reader or external API is used by `wire-http`.
+The real Impit path, real PDF extraction, and three-page research path are
+covered by local tests against `example.com` and generated/checked-in PDF
+fixtures. A CI runner without outbound access will skip the five `WIRE_LIVE`
+tests; this is an environment gap, not a product fallback. No hosted Reader or
+external API is used by `wire-http`.
 
 ## Post-release
 

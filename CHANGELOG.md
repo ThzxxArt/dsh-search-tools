@@ -8,9 +8,11 @@
   fingerprinting through `impit` (Chrome/Firefox profiles), no Reader, API key,
   browser, Docker, or system library required.
 - A loopback egress guard (`127.0.0.1:0`) validates every CONNECT/HTTP hop,
-  rejects private/reserved/link-local/ULA/CGNAT/IPv4-mapped/6to4/Teredo/NAT64
-  answers, and pins the connection to a validated IP. The initial target and
-  each redirect hop use the same guard.
+  rejects private/reserved/link-local/ULA/CGNAT/IPv4-mapped/6to4/Teredo and
+  known NAT64 (`64:ff9b::/96`, `64:ff9b:1::/48`) answers, and pins the
+  connection to a validated IP. The initial target and each redirect hop use
+  the same guard; network-specific NAT64 prefixes remain a documented residual
+  boundary.
 - One-request worker isolation around the native `impit` client. The worker is
   terminated on success, error, abort, and timeout, so native clients and
   sockets cannot survive into the next fetch.
@@ -58,15 +60,30 @@
 ### Verified
 
 - `pnpm typecheck`, `pnpm test`, `pnpm build`, and the package checks pass.
-- Default suite: 199 passed / 4 live tests skipped (28 files); the live suite
+- Default suite: 203 passed / 5 live tests skipped (28 files); the live suite
   with `WIRE_LIVE=1` passes the real-`impit` worker, plain HTTP absolute-form,
-  HTTP→HTTPS redirect, and full-runtime readable tests.
+  HTTP→HTTPS redirect, full-runtime readable tests, and `web_research` over
+  three wire-http pages.
+- Added regression coverage for URL-fragment rejection in the runtime and
+  absolute-form guard, all known NAT64 forms (including public-embedded
+  `64:ff9b::/96`), native Impit loading on the current platform, and a real
+  three-page PDF page-cap fixture.
 - Real PDF fixture extraction returns `Hello PDF`; invalid PDF bytes fail
   explicitly.
 - The full suite covers private/mixed target rejection, redirect-blocked error
   mapping, egress CONNECT/HTTP guard, worker timeout/abort cleanup, and the
   wire-http settings fields/validator.
 - The default remains `readable-http`; `wire-http` is opt-in.
+
+### Real model validation
+
+- 2026-10-24: the supplied Agnes endpoint was exercised with
+  `agnes-3.0-flash` through its Anthropic Messages API. The model emitted a
+  `web_fetch` tool call for `https://example.com/`; the local `wire-http`
+  worker returned HTTP 200 and readable text; the tool result was sent back and
+  the model answered **“Page title: Example Domain”**. `agnes-2.5-flash`
+  returned the expected direct reply. The credential was supplied at runtime
+  and is not stored in the repository or package.
 
 ## 0.1.5 — 2026-10-23
 

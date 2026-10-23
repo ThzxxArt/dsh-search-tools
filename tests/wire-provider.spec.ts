@@ -157,6 +157,14 @@ describe('wire-http runtime', () => {
     expect(fetched.body.content).toBe('hello')
   })
 
+  it('rejects URL fragments before starting the worker', async () => {
+    const runWorker = vi.fn(async () => result('never'))
+    const wire = runtime({}, runWorker)
+    await expect(wire.fetch({ url: 'https://public.example/article#section' }))
+      .rejects.toMatchObject({ code: 'WIRE_INVALID_TARGET' })
+    expect(runWorker).not.toHaveBeenCalled()
+  })
+
   it('rejects private targets before starting the worker and maps probe failures', async () => {
     const runWorker = vi.fn(async () => result('never'))
     const privateRuntime = new WireHttpRuntime(context(), () => normalizeWireHttpConfig({}), {

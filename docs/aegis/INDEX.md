@@ -9,6 +9,7 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-10-23 | work | docs/aegis/work/2026-10-23-wire-http-0.1.6/20-checkpoint.md | 0.1.6 wire-http local browser-grade fetch adapter checkpoint |
 | 2026-10-23 | work | docs/aegis/work/2026-10-23-wire-http-0.1.6/90-evidence.md | 0.1.6 wire-http local browser-grade fetch adapter evidence |
 | 2026-10-23 | work | docs/aegis/work/2026-10-23-wire-http-0.1.6/99-reflection.md | 0.1.6 wire-http local browser-grade fetch adapter reflection |
+| 2026-10-24 | work | docs/aegis/work/2026-10-23-wire-http-0.1.6/95-post-audit.md | 0.1.6 wire-http post-audit closure |
 | 2026-10-23 | artifact | docs/aegis/work/2026-10-23-wire-http-0.1.6/task-intent-draft.json | 0.1.6 wire-http local browser-grade fetch adapter task intent draft |
 | 2026-10-23 | artifact | docs/aegis/work/2026-10-23-wire-http-0.1.6/baseline-read-set-hint.json | 0.1.6 wire-http local browser-grade fetch adapter baseline read-set hint |
 | 2026-10-23 | artifact | docs/aegis/work/2026-10-23-wire-http-0.1.6/baseline-usage-draft.json | 0.1.6 wire-http local browser-grade fetch adapter baseline usage draft |

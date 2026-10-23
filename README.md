@@ -511,7 +511,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 
 行为与失败语义：
 
-- 初始目标先解析并校验，随后每一跳由本地出口代理重新解析；任何 DNS 答案包含私网/loopback/link-local/CGNAT/ULA/IPv4-mapped/6to4/Teredo/NAT64 都会被拒绝；
+- 初始目标先解析并校验，随后每一跳由本地出口代理重新解析；任何 DNS 答案包含私网/loopback/link-local/CGNAT/ULA/IPv4-mapped/6to4/Teredo/已知 NAT64 前缀（`64:ff9b::/96`、`64:ff9b:1::/48`）都会被拒绝；网络专用 NAT64 前缀无法在通用运行时中穷举，仍被文档标为残余边界；
 - 只允许 `http(s)`、80/443，不允许 URL 凭据；代理连接到已验证的 IP，不会再次解析主机名；
 - `impit` 运行在单次请求 worker 中，成功、失败、取消或超时都会终止 worker；原生 client 不会跨请求残留；
 - 响应按 `Content-Type`/magic 分流：PDF → 本地 PDF.js 文本；HTML → Readability；文本/JSON → 直接文本；二进制 → `WIRE_UNSUPPORTED_CONTENT`；
