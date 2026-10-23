@@ -144,13 +144,13 @@ dsh --profile <profile>
 
 ### 方式三：离线 tarball
 
-从 [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases) 下载 `dsh-search-tools-0.1.3.tgz`，然后：
+从 [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases) 下载最新可用的 `dsh-search-tools-<version>.tgz`，然后：
 
 ```sh
-dsh plugin --profile <profile> add ./dsh-search-tools-0.1.3.tgz
+dsh plugin --profile <profile> add ./dsh-search-tools-<version>.tgz
 ```
 
-tarball 与 npm 产物字节一致，适合内网或无法访问 npm 的环境。
+发布资产与 npm 产物字节一致，适合内网或无法访问 npm 的环境。
 
 ### 升级
 

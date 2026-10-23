@@ -61,9 +61,3 @@ export function isHttpUrl(value: string): boolean {
     return false
   }
 }
-
-export function adapterGroupsFor(
-  manifest: AdapterManifest | undefined,
-): readonly NonNullable<AdapterManifest['groups']>[number][] {
-  return manifest?.groups ?? []
-}

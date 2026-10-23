@@ -144,13 +144,13 @@ dsh --profile <profile>
 
 ### Option 3: Offline tarball
 
-Download `dsh-search-tools-0.1.3.tgz` from [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases), then:
+Download the latest available `dsh-search-tools-<version>.tgz` from [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases), then:
 
 ```sh
-dsh plugin --profile <profile> add ./dsh-search-tools-0.1.3.tgz
+dsh plugin --profile <profile> add ./dsh-search-tools-<version>.tgz
 ```
 
-The tarball is byte-identical to the npm artifact and works on isolated networks.
+Release assets are byte-identical to the npm artifact and work on isolated networks.
 
 ### Upgrade
 

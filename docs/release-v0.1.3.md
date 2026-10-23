@@ -1,9 +1,9 @@
 # v0.1.3 release checklist
 
-Date: 2026-10-23  
-Package: `dsh-search-tools@0.1.3`  
-npm: https://www.npmjs.com/package/dsh-search-tools  
-DSH target: `0.2.1-rc.2` (`>=0.2.1-rc.2 <0.3.0`)  
+Date: 2026-10-23<br>
+Package: `dsh-search-tools@0.1.3`<br>
+npm: https://www.npmjs.com/package/dsh-search-tools<br>
+DSH target: `0.2.1-rc.2` (`>=0.2.1-rc.2 <0.3.0`)<br>
 Node target: `^22.19.0 || >=24.0.0`
 
 Status: **gap-closing release.** Search, fetch, research, takeover, and
