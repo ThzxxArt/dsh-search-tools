@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Current version: 0.1.4 (2026-10-23).** This is the configuration-contract and search/fetch correctness release: `search.userAgent`, `research.timeoutMs`, and fetch `/probe` are wired; `cacheTtlMs=0` really disables the cache; the search deadline covers retries, pagination, backoff, and `Retry-After`; the host validates live config, drafts, probes, and previews before use; partial pagination, `auto` JSON→HTML fallback, and probe fallback are tested; fetch `truncated` follows extracted-text semantics and HTML truncation stays structurally valid; research timeout, front-loaded budgets, and Markdown escaping are complete. No second adapter was added and the stable provider ids and SSRF boundary are unchanged. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
+> **Repository version: 0.1.5 (2026-10-23; not yet published to npm/GitHub Releases).** Adds an optional **Jina Reader** fetch adapter: browser rendering, PDF/Office, selectors, iframe/Shadow DOM, `no-cache`, and self-hosted endpoints. The default remains `readable-http` and the stable provider ids are unchanged. Jina sends the target URL to the configured Reader endpoint (self-hosting keeps it local); the settings page and README state this boundary explicitly. `readable-http` keeps the DSH safe-HTTP/SSRF boundary. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
 
 ---
 
@@ -25,6 +25,7 @@ Adapter-first web search and readable page fetching for [DeepSeek Harness](https
   - [Where configuration lives](#where-configuration-lives)
   - [SearXNG search settings](#searxng-search-settings)
   - [Readability HTTP fetch settings](#readability-http-fetch-settings)
+  - [Jina Reader fetch settings](#jina-reader-fetch-settings)
   - [web_research settings](#web_research-settings)
   - [Takeover settings](#takeover-settings)
 - [Model tools](#model-tools)
@@ -49,7 +50,7 @@ DSH ships built-in `web_search` and `web_fetch`, but the default backends do not
 - Adding a backend means registering an adapter; the settings page renders its manifest without page-code changes.
 - An extra `web_research` tool performs search + top-N page fetch in one call for turns that need page content, not just links.
 
-It does **not** provide a public search API, bypass logins or paywalls, execute page JavaScript, render a browser, or replace DSH's permission and sandbox model.
+It does **not** provide a public search API, bypass logins or paywalls, or replace DSH's permission and sandbox model. Rendering depends on the fetch adapter: `readable-http` does not execute page JavaScript; the optional `jina-reader` delegates public URLs to a Reader service for browser rendering (self-hosting keeps the content local), and still does not sign in, bypass paywalls, or solve CAPTCHAs.
 
 ## Screenshots
 
@@ -61,6 +62,8 @@ These screenshots use demo data (`https://searxng.example.com`, no real credenti
 
 ![Fetch content reader](https://raw.githubusercontent.com/ThzxxArt/dsh-search-tools/main/docs/assets/settings-fetch-reader.png)
 
+![Jina Reader fetch settings](https://raw.githubusercontent.com/ThzxxArt/dsh-search-tools/main/docs/assets/settings-fetch-jina.png)
+
 ## Features
 
 | Capability | Description |
@@ -68,6 +71,7 @@ These screenshots use demo data (`https://searxng.example.com`, no real credenti
 | Stable search/fetch providers | `dsh-search-tools` and `dsh-search-tools-fetch` never change with the backend |
 | Built-in search adapter | SearXNG: multiple instances, ordered/round-robin, failover, JSON/HTML, GET/POST, Bearer/Basic auth, proxy, cache, pagination, domain filters |
 | Built-in fetch adapter | Readability HTTP: reuses DSH safe HTTP, extracts article text with Readability, can fall back to raw content |
+| Optional aggressive fetch adapter | Jina Reader: browser rendering, PDF/Office, CSS selectors, iframe/Shadow DOM, proxy option, self-hosting; public targets or a self-hosted Reader |
 | Research tool | `web_research`: search, fetch top N concurrently, per-page/total clipping, sources + readable content |
 | Web settings page | Overview, Search, Fetch, Research, Diagnostics; Connection / Search behavior sub-tabs, instance cards, inline tests, content reader, budget meters, field-level errors, diagnostics, cache clear, keyboard save |
 | Credential isolation | Search tokens go to DSH credentials, never YAML, logs, or diagnostic text |
@@ -87,7 +91,8 @@ DSH ctx.web
         ▼
   ctx.searchTools (adapter registry)
     ├── searxng         built-in search adapter
-    ├── readable-http   built-in fetch adapter
+    ├── readable-http   built-in fetch adapter (default, DSH safe HTTP)
+    ├── jina-reader     built-in fetch adapter (optional, Reader rendering)
     └── future adapters from independent packages
 ```
 
@@ -107,7 +112,8 @@ See [docs/architecture.md](https://github.com/ThzxxArt/dsh-search-tools/blob/mai
 | DSH | `>=0.2.1-rc.2 <0.3.0` (verified against `0.2.1-rc.2`) |
 | Node.js | `^22.19.0 || >=24.0.0` |
 | Search backend | A reachable SearXNG instance; or keep DSH's default search |
-| Fetch backend | Public `http(s)` pages; private addresses are blocked by DSH's SSRF protection |
+| Fetch backend | Public `http(s)` pages; `readable-http` uses DSH SSRF protection, `jina-reader` performs a pre-flight public-target guard |
+| Reader (optional) | A `r.jina.ai` API key or a reachable self-hosted Jina Reader endpoint; without it, keep `readable-http` |
 | Browser | DSH Web GUI (the settings section is Web-only) |
 
 DSH itself is preview software and its interfaces can change. The plugin pins its peer range to the verified `0.2.1-rc.2` line; read the [CHANGELOG](https://github.com/ThzxxArt/dsh-search-tools/blob/main/CHANGELOG.md) before upgrading DSH.
@@ -205,10 +211,13 @@ The plugin trims a trailing `/search`, query, and hash from the instance URL. Em
 ### 3. Configure fetch (optional)
 
 1. Open the **Fetch** tab.
-2. Keep **Readability HTTP**.
-3. Test a public page with the defaults, for example `https://example.com`.
-4. If extraction is poor, adjust article bounds, response limits, or timeout; or disable Readability to use raw content.
-5. Save after **Test** passes.
+2. Start with **Readability HTTP** and test a public page such as `https://example.com`.
+3. If the target is a SPA, PDF/Office, or static HTTP misses the content, choose **Jina Reader**:
+   - Hosted: `https://r.jina.ai/` and save a **Jina API key**;
+   - Self-hosted: `http://127.0.0.1:3000/` (HTTP is loopback-only) or an HTTPS reverse proxy;
+   - Set **Fetch engine** to `browser` for dynamic pages and **Bypass Reader cache** when freshness matters.
+4. Read the data-boundary warning above the form; save only after **Test** passes.
+5. `web_fetch` has a 30s tool timeout by default. Raising the Reader timeout above 30s also requires raising DSH `tool-web.fetchTimeoutMs`, otherwise `TOOL_TIMEOUT` wins.
 
 ### 4. Enable takeover (optional)
 
@@ -265,7 +274,8 @@ The result contains `sources`, `fetched`, and `truncated`; the conversation card
 - Fetch adapter picker and fields.
 - Public URL preview.
 - Status code, body kind, character count, truncation flag, and content preview.
-- Private addresses are rejected by SSRF protection; this is expected.
+- Selecting `jina-reader` shows a data-boundary warning, API key, and browser/Reader options; `readable-http` keeps its existing fields.
+- Private addresses are rejected by `readable-http` SSRF protection or the `jina-reader` public-target guard; this is expected.
 
 ### Research
 
@@ -332,7 +342,7 @@ The shape is roughly:
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.5 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -348,8 +358,28 @@ The shape is roughly:
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.5 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
+        jina-reader:
+          enabled: true
+          endpoint: https://r.jina.ai/
+          engine: auto
+          responseMode: markdown
+          timeoutMs: 25000
+          maxResponseBytes: 5000000
+          maxBodyChars: 200000
+          waitForSelector: ""
+          targetSelector: ""
+          removeSelector: ""
+          includeIframes: false
+          includeShadowDom: false
+          noCache: false
+          respectRobots: true
+          retainImages: none
+          retainLinks: all
+          upstreamProxy: none
+          locale: ""
+          userAgent: ""
     research:
       enabled: true
       maxResults: 8
@@ -372,6 +402,7 @@ Secrets do not enter YAML. The plugin resolves them through DSH credentials:
 |---|---|---|
 | `SEARXNG_TOKEN` | Bearer auth | raw token |
 | `SEARXNG_BASIC_AUTH` | Basic auth | `username:password` |
+| `JINA_API_KEY` | Jina Reader Bearer auth (optional) | Token value; leave empty for an unauthenticated self-hosted Reader |
 
 Secret fields are write-only: the page shows only configured/unconfigured state and source, never the value. Tests use saved credentials; unsaved input is not sent.
 
@@ -429,7 +460,7 @@ Behavior:
 | `userAgent` | versioned default | non-empty, no newlines | Request UA |
 | `failOpen` | `true` | boolean | Fall back to raw content when extraction fails |
 
-Fetch behavior:
+`readable-http` behavior:
 
 - Reuses DSH's safe HTTP provider, intended to block SSRF and private addresses.
 - Handles `http(s)` URLs only.
@@ -438,7 +469,43 @@ Fetch behavior:
 - `maxArticleChars` caps extracted article text, not raw HTML. `truncated` now comes from the extractor, so short text with long HTML is not misreported.
 - When HTML must be cut, it is truncated by block nodes; if that is unsafe, the extractor returns text instead of a half-open tag.
 - With `failOpen=true`, a Readability failure returns raw text/HTML instead of failing the whole fetch.
-- The `readable-http` `/probe` performs a real fetch and reports HTTP status/content kind; the manifest's `probe` capability is no longer declaration-only.
+- The `readable-http` `/probe` performs a real fetch and reports HTTP status/content kind.
+
+### Jina Reader fetch settings
+
+> **Data boundary:** `jina-reader` is not a replacement default. With hosted `https://r.jina.ai/`, the target URL is sent to Jina; only a self-hosted Reader keeps the page local. The Reader may cache pages; enable `noCache` for fresh content. It does not sign in, bypass paywalls, or solve CAPTCHAs.
+
+| Field | Default | Range/values | Notes |
+|---|---:|---|---|
+| `enabled` | `true` | boolean | Disables the adapter |
+| `endpoint` | `https://r.jina.ai/` | http(s) URL | Hosted or self-hosted; remote must be HTTPS, HTTP is loopback-only |
+| `engine` | `auto` | `auto` / `browser` / `curl` | `browser` forces a headless browser; `curl` is the lightweight HTTP engine for static pages |
+| `responseMode` | `markdown` | `markdown` / `html` / `text` | `html` maps to `body.kind=html` for local Readability |
+| `timeoutMs` | `25000` | 1000–180000 | Local hard deadline; the Reader `X-Timeout` is one second shorter as a wait budget. Above 30000 also raise DSH `tool-web.fetchTimeoutMs` |
+| `maxResponseBytes` | `5000000` | 1024–50000000 | Reader JSON envelope cap; overflow returns `JINA_RESPONSE_TOO_LARGE` |
+| `maxBodyChars` | `200000` | 1024–20000000 | Clip the mode field (`data.content`, `data.html`, or `data.text`) and set `truncated=true` |
+| `waitForSelector` | empty | CSS selector | Wait before extraction |
+| `targetSelector` | empty | CSS selector | Extract only matching content |
+| `removeSelector` | empty | CSS selector | Remove navigation/ads before extraction |
+| `includeIframes` | `false` | boolean | `X-With-Iframe: true` |
+| `includeShadowDom` | `false` | boolean | `X-With-Shadow-Dom: true` |
+| `noCache` | `false` | boolean | `X-No-Cache: true` |
+| `respectRobots` | `true` | boolean | `X-Robots-Txt: dsh-search-tools` |
+| `retainImages` | `none` | `none` / `all` | Default removes images to save tokens |
+| `retainLinks` | `all` | `none` / `all` | Retain links or not |
+| `upstreamProxy` | `none` | `none` / `auto` | `auto` needs Reader support and usually an API key |
+| `locale` | empty | BCP 47 | For example `zh-CN` |
+| `userAgent` | empty | string | Sent as `X-User-Agent` to the target; empty means Reader default |
+
+Behavior and errors:
+
+- The request is `POST <endpoint>/` with `Content-Type: application/x-www-form-urlencoded`, body `url=<target>`, `Accept: application/json`, and `X-Respond-With` / `X-Timeout` / selector headers.
+- Before sending, a target guard allows only `http(s)`, rejects embedded credentials, loopback/private/link-local addresses, and requires every DNS answer to be public. Errors are `JINA_INVALID_TARGET` / `JINA_TARGET_BLOCKED` / `JINA_TARGET_UNRESOLVED`.
+- 401/403 → `JINA_AUTH`; 429 → `JINA_RATE_LIMIT` (with `retryAfterMs` when available); 5xx/other → `JINA_HTTP`; network → `JINA_NETWORK`; timeout → `JINA_TIMEOUT`; malformed JSON or the missing mode field (`data.content`, `data.html`, or `data.text`) → `JINA_BAD_RESPONSE`; oversize → `JINA_RESPONSE_TOO_LARGE`.
+- A target 404 stays `statusCode=404` only when the Reader supplies `data.warning`; that field is typically present in Markdown mode and may be absent in HTML/text mode. The optional `data.statusCode` is read only as a self-hosted compatibility field.
+- **Residual risk:** the Reader resolves the target again and may follow redirects or browser navigations, so this adapter cannot pin the connection like `HttpFetchProvider`; the guard is best-effort, not a DSH-level SSRF guarantee. Restrict a self-hosted Reader container's egress.
+- In HTML mode, `maxBodyChars` prefers a complete tag boundary but can still leave a partial document; use Markdown/text when a token budget matters.
+- **Self-hosting:** run the open-source Jina Reader locally or behind HTTPS; set `endpoint` to `http://127.0.0.1:3000/` (loopback HTTP) or the HTTPS URL. The hosted API key is only sent to the configured endpoint and stored in DSH credentials.
 
 ### web_research settings
 
@@ -530,12 +597,13 @@ Behavior:
 
 - **Authenticated settings routes.** Every `/api/dsh-search-tools/*` route passes DSH's `connection.requestRejection` fence; unauthenticated requests get 401/403.
 - **Bounded request bodies.** JSON bodies are capped at 64 KiB; non-JSON requests get 415.
-- **SSRF protection.** Fetching reuses DSH's `HttpFetchProvider`; private/reserved addresses are rejected. This is not a custom network stack.
+- **SSRF is adapter-scoped.** `readable-http` reuses DSH's `HttpFetchProvider`, which rejects private/reserved addresses. `jina-reader` performs a pre-flight public-target guard, but the Reader resolves the target again and may follow redirects or browser navigations, so it cannot provide connection-level pinning. Hosted Jina sends the target URL off-machine; a self-hosted Reader keeps it inside that service but still needs egress restrictions.
+- **The Reader is not an anonymous proxy.** A hosted Reader may cache pages; `noCache` only asks for a live fetch. Neither mode bypasses logins, paywalls, or CAPTCHAs.
 - **No redirects for searches.** SearXNG requests use `redirect: 'error'`, so auth headers cannot follow a cross-origin redirect.
-- **Credentials stay out of YAML.** Bearer/Basic secrets go to DSH credentials; YAML stores only `auth.type`. Diagnostics are redacted.
+- **Credentials stay out of YAML.** Bearer/Basic/Jina API keys go to DSH credentials; YAML stores only non-secret settings. Diagnostics are redacted.
 - **Proxies carry no credentials.** `proxy` must be an `http(s)` URL without username/password.
-- **Limited error text.** Instance hostnames may appear in diagnostics, but query strings and credentials are stripped.
-- **No telemetry.** The plugin sends no usage data to the author or a third party; search requests go only to the instances you configure.
+- **Limited error text.** Instance/target hostnames may appear in diagnostics, but query strings and credentials are stripped.
+- **No telemetry.** The plugin sends no usage data to the author; search requests go only to your instances, and `jina-reader` requests go only to your configured Reader endpoint (hosted Jina is third-party).
 
 Security still depends on DSH and your deployment. Do not expose the settings page to an untrusted network, and do not treat secrets in a shared profile as public configuration.
 
@@ -644,7 +712,7 @@ CI runs typecheck, test, build, pack dry-run, and publint on Ubuntu/Windows × N
 ```text
 src/core/                 adapter types, registry, stable dispatchers, diagnostics
 src/search/adapters/      SearXNG adapter (manifest/schema/client/parser)
-src/fetch/adapters/       Readability HTTP adapter
+src/fetch/adapters/       Readability HTTP / Jina Reader adapters
 src/research/             web_research pipeline, prompt, render, tool
 src/host/                 authenticated settings routes
 src/client/               Settings → Search Tools + research card
@@ -661,7 +729,7 @@ Readability runs inside the Host. `jsdom`'s `tr46` dependency calls `createRequi
 
 Before releasing:
 
-- `package.json` version is `0.1.4`;
+- `package.json` version is `0.1.5`;
 - `CHANGELOG.md` has the matching entry;
 - `pnpm release` passes;
 - the worktree is clean;
@@ -678,7 +746,7 @@ pnpm pack --pack-destination dist
 Tag and push:
 
 ```sh
-git tag -a v0.1.4 -m "dsh-search-tools v0.1.4"
+git tag -a v0.1.5 -m "dsh-search-tools v0.1.5"
 git push origin main --follow-tags
 ```
 
@@ -695,7 +763,7 @@ Manual publish:
 npm publish --provenance --access public
 ```
 
-After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run search and fetch tests, and make one `web_research` call. See the [v0.1.4 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.4.md).
+After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run fetch tests through both `readable-http` and `jina-reader`, and make one `web_research` call. See the [v0.1.5 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.5.md).
 
 ## Troubleshooting
 
@@ -708,7 +776,10 @@ After publishing, smoke-test a fresh profile: install, enable, configure SearXNG
 | JSON parse failure | Instance does not serve JSON | Add `json` to SearXNG `search.formats`, or set format to `html` |
 | `web_research is disabled` | Research tool off | Settings → Research → enable `web_research`, save |
 | Research returns sources without content | `fetch_top=0`; fetch failed; page not readable | Raise `fetch_top`; inspect fetch `error`; test the URL on the Fetch tab |
-| Private URL fetch fails | SSRF protection | Expected; do not try to bypass |
+| Private URL fetch fails | `readable-http` DSH SSRF protection; `jina-reader` public-target guard | Expected; do not try to bypass |
+| Jina fetch returns 401/403 | Missing/invalid API key; anonymous IP blocked | Save `JINA_API_KEY` in Settings, or use a self-hosted Reader |
+| Jina fetch returns 429 | Reader rate limit | Retry later, reduce rate, configure a key/quota, or switch back to `readable-http` |
+| Jina timeout | Reader browser render is slow; DSH `web_fetch` 30s tool limit wins | Keep `timeoutMs` under 25s, or raise DSH `tool-web.fetchTimeoutMs` |
 | Built-in search breaks after takeover | Bundle disabled/removed while takeover still points at it | Re-enable the plugin or disable takeover; the settings/plugin detail page has recovery actions |
 | Save conflict | Config changed elsewhere or overridden by a higher layer | Click **Reload**; inspect the profile's `cordis.patch.yml` and overlays |
 | Config is read-only | Higher layer overrides it | The page explains; edit the overriding layer or remove it |
@@ -728,11 +799,11 @@ Suggested diagnosis order:
 
 ## Known limitations
 
-- **One search adapter and one fetch adapter are built in.** The architecture supports more; 0.1.x does not ship Google/Bing/Exa or other commercial backends.
+- **One search adapter and two fetch adapters are built in.** `readable-http` is the default; `jina-reader` is optional. 0.1.x does not ship Google/Bing/Exa or other commercial search backends.
 - **No auto-update.** Upgrade by removing and reinstalling.
 - **The external adapter contract is experimental.** It may change in 0.1.x; pin versions for production integrations.
-- **No browser rendering.** No JavaScript execution, login state, SPA, paywall, or CAPTCHA handling.
-- **Text/HTML only.** PDFs, images, audio, and video are not converted to article text.
+- **Browser rendering belongs to `jina-reader`.** `readable-http` does not execute JS; Jina needs a public Reader (hosted or self-hosted) and still does not handle login state, paywalls, or CAPTCHAs. Rendering a SPA is not the same as authenticating to it.
+- **`readable-http` handles text/HTML only.** PDFs, images, audio, and video are not converted to article text; use `jina-reader` for PDF/Office, subject to Reader capability.
 - **`web_research` is not a crawler.** It fetches the top N results only; no site traversal, graph deduplication, or deep crawling.
 - **The research prompt preview is copyable.** The tool description stays English to match what the model sees; preview values follow the current draft.
 - **Takeover is a global provider switch.** It affects every `ctx.web` consumer in the DSH profile, not only this plugin.
@@ -743,7 +814,7 @@ Suggested diagnosis order:
 
 MIT. See [LICENSE](https://github.com/ThzxxArt/dsh-search-tools/blob/main/LICENSE).
 
-Third-party components and licenses are listed in [THIRD_PARTY_NOTICES.md](https://github.com/ThzxxArt/dsh-search-tools/blob/main/THIRD_PARTY_NOTICES.md). Main runtime dependencies include `@mozilla/readability`, `linkedom`, `cheerio`, `turndown`, `@joplin/turndown-plugin-gfm`, `undici`, `lru-cache`, and `normalize-url`.
+Third-party components and licenses are listed in [THIRD_PARTY_NOTICES.md](https://github.com/ThzxxArt/dsh-search-tools/blob/main/THIRD_PARTY_NOTICES.md). Main runtime dependencies include `@mozilla/readability`, `linkedom`, `cheerio`, `turndown`, `@joplin/turndown-plugin-gfm`, `undici`, `lru-cache`, `normalize-url`, and `ipaddr.js`. `jina-reader` calls only the Reader service configured by the user; Jina's code is not bundled, and a self-hosted Reader's license/runtime requirements come from that project.
 
 ---
 

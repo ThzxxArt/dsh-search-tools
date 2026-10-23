@@ -2,7 +2,7 @@
 
 import { useId } from 'react'
 import {
-  Button, IconChevronDownOutlineRegular, Input, Tag,
+  Button, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular, Input, Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   AdapterField, AdapterIssue, AdapterManifest, JsonObject, JsonValue, LocalizedText,
@@ -10,6 +10,7 @@ import type {
 import { getPath, setPath } from '../../shared/path.ts'
 import type { CredentialInfo } from '../credential-types.ts'
 import { issueText } from '../issue-text.ts'
+import { Notice } from './Feedback.tsx'
 import { Field, type Translate } from './Field.tsx'
 import { InstanceEditor, type InstanceTestResult, type InstanceValue } from './InstanceCard.tsx'
 
@@ -113,6 +114,11 @@ export function AdapterForm({
     .filter(group => groupIds === undefined || groupIds.includes(group.id))
   return (
     <div className="dshst-group-list">
+      {manifest.notice === undefined ? null : (
+        <Notice tone="warning" icon={<IconWarningTriangleOutlineRegular size={14} />}>
+          <p>{text(manifest.notice)}</p>
+        </Notice>
+      )}
       {groups.map(group => (
         <GroupBlock
           key={group.id}

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Search Tools",
-    "description": "Adapter-first web search and readable page fetching for DeepSeek Harness, configured in Settings."
+    "description": "Adapter-first web search and page fetching for DeepSeek Harness, with SearXNG and Jina Reader, configured in Settings."
   }
 }

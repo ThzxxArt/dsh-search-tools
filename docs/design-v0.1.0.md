@@ -2,7 +2,7 @@
 
 > 状态：**v3 方案已确认，工程骨架已开工（2026-10-22）**
 >
-> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。0.1.2 完成设置页 UI/UX 修订，0.1.3 补齐审计缺口（Search 子页、Fetch reader、字段级错误、五个 tab 组件、操作条留白），0.1.4 完成配置契约、搜索 deadline/回退、抓取截断/probe 和研究超时/预算修复；详见附录 E/F/G。架构速查见 [architecture.md](architecture.md)。
+> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。0.1.2 完成设置页 UI/UX 修订，0.1.3 补齐审计缺口（Search 子页、Fetch reader、字段级错误、五个 tab 组件、操作条留白），0.1.4 完成配置契约、搜索 deadline/回退、抓取截断/probe 和研究超时/预算修复；0.1.5 新增可选的 Jina Reader 抓取 adapter、通用 manifest notice、browser/pdf capability 和 host 动态超时；详见附录 E/F/G/H。架构速查见 [architecture.md](architecture.md)。
 >
 > 目标仓库：`https://github.com/ThzxxArt/dsh-search-tools`
 >
@@ -1766,3 +1766,53 @@ manifest 驱动的设置页结构保持不变。
 并发、Markdown 转义和状态真相。真实 DSH GUI 复验了 0.1.4 版本、五 tab、
 fetch 可用性、research 注册、fetch probe、数字校验失败态、prompt 复制、
 搜索请求头和 700/560 布局；物理设备、屏幕阅读器与非 Chromium 引擎仍未覆盖。
+
+---
+
+## 附录 H：0.1.5 Jina Reader 激进抓取后端
+
+0.1.5 新增第二个 fetch adapter，但**不改变**默认 `readable-http`、稳定 provider
+id `dsh-search-tools-fetch`、`web_fetch` 参数 schema 或 DSH 权限模型。Jina 是
+显式 opt-in：用户在抓取页选择后才生效。
+
+### H.1 为什么是 Jina
+
+`readable-http` 不执行 JS，不能读 PDF/Office，没有选择器/iframe/Shadow DOM。
+Jina Reader 用 `X-Engine: browser` 在服务端渲染，返回 Markdown/HTML，并支持
+`X-Target-Selector`、`X-Wait-For-Selector`、`X-Remove-Selector`、iframe、
+Shadow DOM、`X-No-Cache`、`X-Proxy` 和自托管。它不登录、不绕过付费墙、不破解
+验证码；这些仍是明确非目标。
+
+### H.2 契约
+
+- 新 adapter：`src/fetch/adapters/jina-reader/`（adapter、manifest、provider、
+  schema、target）。
+- `AdapterManifest.notice?` 是通用数据边界提示；`browser`/`pdf` 是新 capability。
+- `FetchResult` 形状不变：Markdown/text → `body.kind='text'`；HTML 模式 →
+  `body.kind='html'`。`web_research` 无需改 pipeline。
+- `JINA_API_KEY` 只走 DSH credentials/env，不进入 YAML；`endpoint`、`engine`、
+  `responseMode`、超时、大小上限、选择器、隐私开关全部进入真实请求。
+- 公共目标守卫：拒绝 URL 内凭据、非 http(s)、loopback/private/link-local 字面量，
+  以及 DNS 答案含非公网地址的主机；常见 IPv4-mapped/NAT64 也处理。
+- 错误码：`JINA_INVALID_TARGET`、`JINA_TARGET_BLOCKED`、
+  `JINA_TARGET_UNRESOLVED`、`JINA_AUTH`、`JINA_RATE_LIMIT`、`JINA_HTTP`、
+  `JINA_NETWORK`、`JINA_TIMEOUT`、`JINA_BAD_RESPONSE`、
+  `JINA_RESPONSE_TOO_LARGE`。
+- host `fetch-preview`/fetch `probe` 的 signal 按草稿 `timeoutMs` 放大：基线
+  30s/20s，加 5s，封顶 190s；`web_fetch` 的 30s 工具超时仍是 DSH 侧限制。
+
+### H.3 安全边界
+
+托管 Jina 会把目标 URL 发给 Reader 服务并可能缓存；只有自托管 Reader 能把
+页面留在本地。目标守卫是 best-effort：Reader 会重新解析 DNS，并可能跟随目标
+页重定向/浏览器导航，本插件无法像 `HttpFetchProvider` 一样 pin 连接；自托管
+Reader 的出口必须单独限制。Jina 的 manifest `notice`、README、SECURITY 和
+设置页 warning 都明确这一点；默认仍是 `readable-http`。
+
+### H.4 测试边界
+
+Jina 合同测试使用 fake Reader 验证：请求方法/body/全部头、API key 读取与
+隔离、目标 404、401/429/5xx、超时/abort、正文截断、响应字节上限、坏 JSON、
+probe、公网目标守卫、设置页 notice/校验/密钥写入、默认值、host 超时。
+真实 DSH GUI 使用本地 fake Reader 验证端到端；托管 `r.jina.ai` 的匿名 401
+只证明可达性与错误映射，真实 key/自托管成功路径需在具备条件的 profile 复验。

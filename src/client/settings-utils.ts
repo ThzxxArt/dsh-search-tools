@@ -4,7 +4,14 @@ import type { AdapterIssue, AdapterManifest, JsonObject } from '../core/types.ts
 import { getPath } from '../shared/path.ts'
 import { isRecord, validateManifestConfig } from '../shared/validation.ts'
 import { validateSearxngConfig } from '../search/adapters/searxng/schema.ts'
+import { validateJinaReaderConfig } from '../fetch/adapters/jina-reader/schema.ts'
 import { validateReadableHttpConfig } from '../fetch/adapters/readable-http/schema.ts'
+
+const BUILTIN_VALIDATORS: Readonly<Record<string, (config: unknown) => { issues: readonly AdapterIssue[] }>> = {
+  'search:searxng': validateSearxngConfig,
+  'fetch:readable-http': validateReadableHttpConfig,
+  'fetch:jina-reader': validateJinaReaderConfig,
+}
 
 export function adapterState(manifest: AdapterManifest, config: JsonObject | undefined): 'ready' | 'attention' | 'setup' {
   if (config === undefined) return 'setup'
@@ -29,9 +36,8 @@ export function hasMeaningfulConfig(manifest: AdapterManifest, config: JsonObjec
 }
 
 export function validateAdapterConfig(manifest: AdapterManifest, config: JsonObject): readonly AdapterIssue[] {
-  if (manifest.kind === 'search' && manifest.id === 'searxng') return validateSearxngConfig(config).issues
-  if (manifest.kind === 'fetch' && manifest.id === 'readable-http') return validateReadableHttpConfig(config).issues
-  return validateManifestConfig(manifest, config).issues
+  const validator = BUILTIN_VALIDATORS[`${manifest.kind}:${manifest.id}`]
+  return validator === undefined ? validateManifestConfig(manifest, config).issues : validator(config).issues
 }
 
 export function findManifest(list: readonly AdapterManifest[], id: string): AdapterManifest | undefined {

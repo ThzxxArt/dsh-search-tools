@@ -5,6 +5,7 @@ import type { FetchDispatcher, SearchDispatcher } from '../src/core/dispatchers.
 import type { SearchToolsService } from '../src/core/service.ts'
 import { Diagnostics } from '../src/core/diagnostics.ts'
 import { buildStatus, type RouteDeps } from '../src/host/routes.ts'
+import { jinaReaderManifest } from '../src/fetch/adapters/jina-reader/manifest.ts'
 import { DEFAULT_READABLE_HTTP_CONFIG } from '../src/fetch/adapters/readable-http/schema.ts'
 import { DEFAULT_SEARXNG_CONFIG } from '../src/search/adapters/searxng/schema.ts'
 
@@ -84,7 +85,7 @@ describe('status truth', () => {
       fetchAvailable: true,
       researchRegistered: true,
     }))
-    expect(status.version).toBe('0.1.4')
+    expect(status.version).toBe('0.1.5')
     expect(status.search.available).toBe(true)
     expect(status.search.registered).toBe(true)
     expect(status.fetch.available).toBe(true)
@@ -113,5 +114,21 @@ describe('status truth', () => {
     }))
     expect(status.search.enabled).toBe(false)
     expect(status.fetch.enabled).toBe(false)
+  })
+
+  it('reports the Jina API key credential declared by its manifest', async () => {
+    const deps = depsOf()
+    deps.adapters = {
+      getSearchAdapter: () => undefined,
+      getFetchAdapter: (id: string) => id === 'readable-http' ? {} : undefined,
+      listAdapters: () => ({ search: [], fetch: [jinaReaderManifest] }),
+    } as unknown as SearchToolsService
+    const credentialsCtx = {
+      get: (name: string) => name === 'credentials'
+        ? { describe: async (ref: string) => ({ configured: ref === 'JINA_API_KEY', writable: true }) }
+        : undefined,
+    } as unknown as Context
+    const status = await buildStatus(credentialsCtx, deps)
+    expect(status.credentials.JINA_API_KEY).toMatchObject({ configured: true, writable: true })
   })
 })

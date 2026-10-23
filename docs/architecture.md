@@ -16,8 +16,9 @@ DSH ctx.web
         │ reads search.adapter / fetch.adapter from Config
         ▼
   ctx.searchTools (adapter registry)
-    ├── searxng        first search adapter
-    ├── readable-http  first fetch adapter
+    ├── searxng        built-in search adapter
+    ├── readable-http  built-in fetch adapter (default, DSH safe HTTP)
+    ├── jina-reader    built-in fetch adapter (optional, Reader rendering)
     └── future packages
 ```
 
@@ -41,6 +42,9 @@ switching back does not lose it.
       adapters:
         readable-http:
           readability: true
+        jina-reader:
+          endpoint: https://r.jina.ai/
+          engine: auto
     research:
       enabled: true
 ```
@@ -59,8 +63,10 @@ Each adapter declares `AdapterManifest`:
 - `fields` (`text`, `url`, `password`, `number`, `boolean`, `select`, `tags`,
   `instances`) with optional `group`, `advanced`, and `unit`
 - `defaults`
+- `notice` (optional localized data-boundary/service warning, rendered above the form)
 - `secretRefs` with optional `group` / `advanced`
-- `capabilities`
+- `capabilities` (`json`, `html`, `probe`, `cache`, `pagination`, `readability`,
+  `browser`, `pdf`)
 
 The Settings page fetches `/api/dsh-search-tools/adapters`, renders the selected
 adapter's fields, and stores values in `adapters.<id>`. No page code changes when
@@ -86,13 +92,38 @@ the selected manifest's `instances` field, not a hard-coded SearXNG check.
 | `POST /api/dsh-search-tools/diagnostics/clear` | clear the in-memory error ring |
 
 Every route uses `connection.requestRejection`; bodies are JSON, bounded to
-64 KiB, and secrets are never logged or returned.
+64 KiB, and secrets are never logged or returned. `fetch-preview` and the fetch
+branch of `probe` derive their signals from the draft `timeoutMs`
+(30s/30s base, +5s, 190s cap); DSH's own `web_fetch` 30s tool timeout remains an
+outer bound outside this plugin.
 
 ## Settings entry
 
 The browser half registers `settings.section` with id `search-tools`, so the
 page appears as **Settings → Search Tools** next to General, Models, Plugins.
 It registers only while DSH serves the `dsh-search-tools` settings namespace.
+
+## Fetch security boundaries
+
+`readable-http` delegates to `@deepseek-ai/dsh-web-fetch-http`, which resolves
+public addresses and pins the connection through a per-request Undici agent. Its
+SSRF boundary is DSH's, not this plugin's.
+
+`jina-reader` is an external-Reader adapter. It:
+
+1. rejects non-HTTP(S), credential-bearing, loopback/private/link-local, and
+   non-public-DNS targets before sending;
+2. sends `POST <endpoint>/` with the target in the form body, never as an
+   authorization-bearing redirect;
+3. requires HTTPS for remote endpoints; plain HTTP is loopback-only;
+4. resolves `JINA_API_KEY` per request from DSH credentials/environment and never
+   returns it in errors or diagnostics.
+
+The Reader resolves the target again and may follow redirects or browser
+navigations, so the target guard is best-effort, not a connection-level pin.
+Hosted Jina sends the target URL off-machine and may cache it; only a
+self-hosted Reader keeps the page local, and its egress still needs restricting.
+This is documented in the manifest `notice` and README/SECURITY.
 
 ## Extension path
 

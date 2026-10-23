@@ -325,8 +325,47 @@ injection, physical 560px device, screen reader, and non-Chromium engines.
   [39914616653](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39914616653)
   completed successfully.
 
+## 0.1.5 Jina Reader implementation and GUI verification (2026-10-23)
+
+Environment: real DSH `0.2.1-rc.2`, profile `m0web`, local
+`dsh-search-tools@0.1.5` tarball, Chromium 140 via Playwright, and a local fake
+Jina Reader at `127.0.0.1:8898`. The fake validated the request and returned
+synthetic `data.content`; it is not a hosted Jina success claim.
+
+| Check | Evidence |
+|---|---|
+| Version / tabs | Diagnostics reports `v0.1.5`; Overview/Search/Fetch/Research/Diagnostics render. |
+| Adapter discovery | Fetch tab shows `Readability HTTP` and `Jina Reader`; Jina cards show `browser`, `pdf`, `probe`; the manifest notice is visible. |
+| Jina request | Fake Reader saw `POST /`, `accept: application/json`, `content-type: application/x-www-form-urlencoded`, `user-agent: dsh-search-tools/0.1.5…`, `x-engine: browser`, `x-respond-with: markdown`, `x-timeout: 59` (local timeout 60000 minus one second), `x-no-cache: true`, `x-robots-txt: dsh-search-tools`, and body `url=https%3A%2F%2Fexample.com%2F`. |
+| Response modes | Real GUI switched Response format through HTML, text, and Markdown; all three returned `Test passed` with the corresponding `data.html` / `data.text` / `data.content` payload. Contract tests also cover missing mode fields → `JINA_BAD_RESPONSE`. |
+| Jina result | Real GUI shows `Test passed`, HTTP 200, text, 113 chars, and the rendered `# Fake Jina Reader` reader card; no console/page errors. |
+| API key chain | Saved `test-jina-key` in the UI; fake Reader saw `authorization: Bearer test-jina-key`; the value did not enter the config form; clearing the secret returned the field to `Not configured`. |
+| Config persistence | Changed Reader timeout to 61000, saved, reloaded; the field read back 61000. |
+| Adapter switch | Switched to `Readability HTTP`, saved, reloaded (selected); switched back to `Jina Reader`, saved, reloaded (selected + notice). |
+| Public-target guard | GUI fetch of `http://127.0.0.1/admin` fails with `target "http://127.0.0.1/admin" resolves to a non-public address`; no Reader request is made. |
+| Endpoint validation | Draft `http://reader.example.com` sets `aria-invalid=true` and disables Save and apply. |
+| Host timeout wiring | Slow fake path (31s) with draft `timeoutMs=60000`: GUI returns `Test passed` after 31,200ms; a 30s fixed route would have failed. |
+| Live Jina reachability | Switching the draft endpoint to `https://r.jina.ai/` and testing anonymous yields `Jina Reader rejected the credentials (HTTP 401)` in 588ms; this validates error mapping, not success. |
+| Responsive | 700px and 560px: `scrollWidth === clientWidth` (700/700, 560/560); no horizontal overflow. |
+| Tests | `pnpm test`: 154 tests / 22 files, pass. Coverage includes Markdown/HTML/text mode fields, missing-mode errors, blocked-target/no-fetch, content-length oversize, Retry-After dates, mid-resolution timeout, Jina → `web_research` clipping, `JINA_API_KEY` status, and the documented `curl` engine. |
+| Typecheck / build / pack | `pnpm typecheck`, `pnpm build`, `pnpm pack:check`, and `pnpm release` pass. |
+
+`X-Timeout` is a Reader wait budget, not a hard deadline; the adapter sends it
+one second below `timeoutMs`, while the local `AbortController` enforces the
+actual deadline. Target 404 preservation depends on a Reader-supplied
+`data.warning` (primarily Markdown mode). Redirect/browser-navigation hops after
+the pre-flight guard are Reader-side residual risk; self-hosted Reader egress
+must be restricted.
+
+The local fake and unit tests cover the protocol, UI, security guard, key
+handling, response modes, and timeout chain. **Not covered:** hosted Jina HTTP
+200 with a real key, a real self-hosted Jina Reader, real SearXNG quality,
+physical 560px device, screen reader, non-Chromium browsers, or a real-model
+`web_research` selection run. Those remain evidence gaps, not passes.
+
 ## Remaining
 
-- Additional adapter packages beyond SearXNG / Readability HTTP.
+- Hosted Jina (real API key) and self-hosted Jina Reader success-path verification.
+- Additional adapter packages beyond SearXNG / Readability HTTP / Jina Reader.
 - Autonomous tool-selection evaluation; the real-model run named the tool under
   test.

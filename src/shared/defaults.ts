@@ -1,6 +1,7 @@
 /** Plain stored configuration shared by host, tests, and the settings page. */
 
 import type { JsonObject } from '../core/types.ts'
+import { DEFAULT_JINA_READER_CONFIG, type JinaReaderConfig } from '../fetch/adapters/jina-reader/schema.ts'
 import { DEFAULT_READABLE_HTTP_CONFIG, type ReadableHttpConfig } from '../fetch/adapters/readable-http/schema.ts'
 import { DEFAULT_SEARXNG_CONFIG, type SearxngConfig } from '../search/adapters/searxng/schema.ts'
 
@@ -64,6 +65,7 @@ export const DEFAULT_FETCH_SECTION: FetchSection = {
   adapter: 'readable-http',
   adapters: {
     'readable-http': DEFAULT_READABLE_HTTP_CONFIG as unknown as JsonObject,
+    'jina-reader': DEFAULT_JINA_READER_CONFIG as unknown as JsonObject,
   },
 }
 
@@ -75,4 +77,4 @@ export const DEFAULT_STORED_CONFIG: StoredConfig = {
 }
 
 /** Built-in adapter config types, re-exported for adapter implementations. */
-export type { ReadableHttpConfig, SearxngConfig }
+export type { JinaReaderConfig, ReadableHttpConfig, SearxngConfig }

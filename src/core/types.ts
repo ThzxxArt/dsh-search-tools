@@ -135,7 +135,7 @@ export interface InstancesField extends FieldBase {
   kind: 'instances'
 }
 
-export type AdapterCapability = 'json' | 'html' | 'probe' | 'cache' | 'pagination' | 'readability'
+export type AdapterCapability = 'json' | 'html' | 'probe' | 'cache' | 'pagination' | 'readability' | 'browser' | 'pdf'
 
 /** One labeled block of adapter fields; `advanced` blocks start collapsed. */
 export interface AdapterGroup {
@@ -151,6 +151,12 @@ export interface AdapterManifest {
   id: string
   label: LocalizedText
   description: LocalizedText
+  /**
+   * Optional data-boundary / service warning rendered above the adapter form.
+   * Kept in the manifest so every adapter can carry its own notice without a
+   * page-specific component.
+   */
+  notice?: LocalizedText
   /** Optional field grouping; a manifest without groups renders one Configuration block. */
   groups?: readonly AdapterGroup[]
   fields: readonly AdapterField[]

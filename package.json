@@ -1,14 +1,16 @@
 {
   "name": "dsh-search-tools",
-  "version": "0.1.4",
-  "description": "Adapter-first web search and readable page fetching for DeepSeek Harness, configured entirely in the Web UI.",
+  "version": "0.1.5",
+  "description": "Adapter-first web search and page fetching for DeepSeek Harness: SearXNG, Readability HTTP, and optional Jina Reader, configured in the Web UI.",
   "keywords": [
     "deepseek-harness",
     "dsh",
     "searxng",
     "web-search",
     "web-fetch",
-    "readability"
+    "readability",
+    "jina-reader",
+    "pdf"
   ],
   "type": "module",
   "license": "MIT",
@@ -80,6 +82,7 @@
     "@joplin/turndown-plugin-gfm": "^1.0.67",
     "@mozilla/readability": "^0.6.0",
     "cheerio": "^1.1.2",
+    "ipaddr.js": "^2.5.0",
     "linkedom": "^0.18.13",
     "lru-cache": "^11.2.2",
     "normalize-url": "^8.1.0",

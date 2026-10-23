@@ -17,6 +17,9 @@ importers:
       cheerio:
         specifier: ^1.1.2
         version: 1.2.0
+      ipaddr.js:
+        specifier: ^2.5.0
+        version: 2.5.0
       linkedom:
         specifier: ^0.18.13
         version: 0.18.13

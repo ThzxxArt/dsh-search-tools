@@ -25,7 +25,7 @@ export const DEFAULT_READABLE_HTTP_CONFIG: ReadableHttpConfig = {
   maxBodyChars: 2_000_000,
   timeoutMs: 20_000,
   maxRedirects: 5,
-  userAgent: 'dsh-search-tools/0.1.4 (+https://github.com/ThzxxArt/dsh-search-tools)',
+  userAgent: 'dsh-search-tools/0.1.5 (+https://github.com/ThzxxArt/dsh-search-tools)',
   failOpen: true,
 }
 

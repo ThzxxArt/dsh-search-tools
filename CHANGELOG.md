@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.1.5 — 2026-10-23
+
+### Added
+
+- New opt-in `jina-reader` fetch adapter: auto/browser/curl engines, Markdown/
+  HTML/text responses, CSS selectors, wait-for selector, iframe/Shadow DOM, no-cache,
+  robots.txt, image/link retention, locale, custom target UA, Reader proxy
+  selection, and hosted or self-hosted endpoints.
+- `JINA_API_KEY` is a write-only DSH credential; no key or URL query leaks into
+  YAML, logs, or diagnostics.
+- Public-target guard rejects credentials, non-HTTP(S) URLs, loopback/private/
+  link-local literals, and hostnames with any non-public DNS answer before the
+  URL leaves the plugin. Common NAT64 and IPv4-mapped addresses are handled.
+- Generic `manifest.notice` support and `browser`/`pdf` adapter capabilities;
+  the Jina manifest renders a data-boundary notice in the existing form.
+- Fetch preview/probe route signals now follow the draft `timeoutMs` (base
+  30s/30s, plus 5s, capped at 190s), so a 60s Jina draft no longer dies at 30s.
+- `X-Timeout` is sent one second below the local `timeoutMs` (Reader wait budget,
+  not a hard deadline); HTML/text modes read `data.html`/`data.text` and Markdown
+  reads `data.content`.
+- Contract tests for request headers/body, key isolation, target 404 mapping,
+  401/403/429/5xx, timeout/abort, clipping, response caps, bad JSON, probe, UI
+  notice/validation/credential write, defaults, and host timeout wiring.
+
+### Changed
+
+- Version metadata and default User-Agents report `0.1.5`.
+- `fetch.adapter` remains `readable-http` by default; selecting `jina-reader` is
+  explicit and persisted per profile.
+- `web_fetch`'s 30s tool timeout is unchanged. A Reader timeout above 30s also
+  requires raising DSH `tool-web.fetchTimeoutMs`; the README documents this.
+- README, README.en, SECURITY, architecture, and design now scope JS/SSRF
+  claims to `readable-http` and describe Jina's data boundary and residual
+  DNS-rebinding limitation.
+
+### Security
+
+- Hosted Jina sends target URLs off-machine and may cache them; only a
+  self-hosted Reader keeps content local. The Reader may also follow redirects
+  or browser navigations after our pre-flight guard; self-hosted Reader egress
+  must be restricted. The adapter does not sign in, bypass paywalls, or solve
+  CAPTCHAs.
+- Remote Reader endpoints require HTTPS; plain HTTP is loopback-only. Endpoint
+  credentials, query, and hash are rejected.
+- `ipaddr.js` is a direct dependency for address classification.
+- No change to stable provider ids, `readable-http`'s DSH SSRF path, or DSH's
+  permission/approval model.
+
+### Verified
+
+- `pnpm release`: 154 tests / 22 files, typecheck, build, pack, and publint pass.
+- Real DSH GUI with a local fake Jina Reader: adapter cards/notice, request
+  shape including `x-timeout=59` for a 60s local deadline, Markdown/HTML/text
+  response modes, key write/read/clear, config save/reload (timeout 61000),
+  adapter switch persistence, private-target rejection, invalid-endpoint
+  blocking, 31s success with `timeoutMs=60000`, 700/560 layout, and version
+  `0.1.5` all pass; no page/console errors.
+- Hosted `r.jina.ai` anonymous request returns HTTP 401 in 588ms through the
+  real GUI, mapped to `JINA_AUTH`; this proves reachability and error mapping,
+  not a successful hosted run. A real key/self-hosted success path remains an
+  environment gap.
+
 ## 0.1.4 — 2026-10-23
 
 ### Added

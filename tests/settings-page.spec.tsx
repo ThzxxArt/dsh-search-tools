@@ -8,6 +8,7 @@ import { DEFAULT_STORED_CONFIG, type StoredConfig } from '../src/shared/defaults
 import { en } from '../src/client/locales.ts'
 import { SettingsPage, type WebSelection } from '../src/client/SettingsPage.tsx'
 import { searxngManifest } from '../src/search/adapters/searxng/manifest.ts'
+import { jinaReaderManifest } from '../src/fetch/adapters/jina-reader/manifest.ts'
 import { readableHttpManifest } from '../src/fetch/adapters/readable-http/manifest.ts'
 import { fetchAdapters, fetchStatus, previewFetch, previewSearch, probeSearch } from '../src/client/api.ts'
 
@@ -24,7 +25,7 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.4',
+  version: '0.1.5',
   configPath: '/tmp/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0 },
   fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
@@ -36,7 +37,7 @@ const STATUS: StatusResponse = {
 
 const ADAPTERS: AdapterListResponse = {
   search: [searxngManifest],
-  fetch: [readableHttpManifest],
+  fetch: [readableHttpManifest, jinaReaderManifest],
 }
 
 function translate(key: string, params?: Record<string, unknown>): string {
@@ -504,7 +505,7 @@ describe('SettingsPage', () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.4')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.5')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
     expect(screen.getByTestId('runtime-state')).toHaveTextContent('Fetch: available · Research: registered')
   })
@@ -579,5 +580,43 @@ describe('SettingsPage', () => {
     const diagnostics = screen.getByRole('tab', { name: 'Diagnostics' })
     fireEvent.keyDown(diagnostics, { key: 'Home' })
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
+describe('Jina Reader settings integration', () => {
+  async function openJina(): Promise<void> {
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: /^Fetch$/ }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Jina Reader/ }))
+    await screen.findByText(/The target URL leaves this machine/)
+  }
+
+  it('renders the manifest notice, browser/pdf capabilities, and Jina fields', async () => {
+    await openJina()
+    expect(screen.getByText('browser')).toBeInTheDocument()
+    expect(screen.getByText('pdf')).toBeInTheDocument()
+    expect(screen.getByLabelText('Reader endpoint')).toHaveValue('https://r.jina.ai/')
+    expect(screen.getByLabelText('Fetch engine')).toBeInTheDocument()
+    expect(screen.getByLabelText('Response format')).toBeInTheDocument()
+  })
+
+  it('blocks save on an insecure remote endpoint', async () => {
+    await openJina()
+    fireEvent.change(screen.getByLabelText('Reader endpoint'), { target: { value: 'http://reader.example.com' } })
+    expect(await screen.findByLabelText('Reader endpoint')).toHaveAttribute('aria-invalid', 'true')
+    expect((await screen.findAllByText('A remote Reader endpoint must use HTTPS; only loopback may use HTTP.')).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Save and apply' })).toBeDisabled()
+  })
+
+  it('writes the Jina API key through credentials, not the config form', async () => {
+    const { credentials, form } = renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: /^Fetch$/ }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Jina Reader/ }))
+    const secret = await screen.findByLabelText('Jina API key')
+    fireEvent.change(secret, { target: { value: 'jina-token-123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save secret' }))
+
+    await waitFor(() => expect(credentials.set).toHaveBeenCalledWith('JINA_API_KEY', 'jina-token-123'))
+    expect(JSON.stringify(form.mutate.mock.calls)).not.toContain('jina-token-123')
   })
 })

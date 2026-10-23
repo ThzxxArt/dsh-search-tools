@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Config } from '../src/config.ts'
 import type { FetchDispatcher, SearchDispatcher } from '../src/core/dispatchers.ts'
 import { Diagnostics } from '../src/core/diagnostics.ts'
@@ -103,5 +103,51 @@ describe('host route config contract', () => {
 
     expect(seen).toHaveLength(1)
     expect(seen[0]?.request.maxResults).toBe(17)
+  })
+})
+
+describe('fetch route timeout wiring', () => {
+  it('passes the draft Jina timeout through the host preview and probe signals', async () => {
+    const timeouts: number[] = []
+    const original = AbortSignal.timeout.bind(AbortSignal)
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      timeouts.push(ms)
+      return original(ms)
+    })
+    const fetch = {
+      preview: async () => ({
+        url: 'https://target.example/',
+        statusCode: 200,
+        body: { kind: 'text' as const, content: 'ok' },
+        truncated: false,
+      }),
+      probe: async () => ({ ok: true, latencyMs: 1, statusCode: 200, contentType: 'text' as const }),
+    } as unknown as FetchDispatcher
+    const deps: RouteDeps = {
+      config: configOf(),
+      search: { probe: async () => ({ ok: true, latencyMs: 1 }) } as unknown as SearchDispatcher,
+      fetch,
+      adapters: { listAdapters: () => ({ search: [], fetch: [] }) } as unknown as SearchToolsService,
+      diagnostics: new Diagnostics(),
+    }
+    const { ctx, handlers } = fakeContext()
+    registerRoutes(ctx, deps)
+
+    const preview = responseOf()
+    await handlers.get(`${BASE}/fetch-preview`)!(requestOf({
+      adapter: 'jina-reader',
+      url: 'https://target.example/',
+      config: { timeoutMs: 60_000 },
+    }), preview)
+    const probe = responseOf()
+    await handlers.get(`${BASE}/probe`)!(requestOf({
+      kind: 'fetch',
+      adapter: 'jina-reader',
+      url: 'https://target.example/',
+      config: { timeoutMs: 60_000 },
+    }), probe)
+
+    expect(timeouts).toEqual([65_000, 65_000])
+    timeoutSpy.mockRestore()
   })
 })

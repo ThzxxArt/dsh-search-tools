@@ -17,7 +17,11 @@ import { isRecord, readBoolean } from '../shared/validation.ts'
 
 const BASE = '/api/dsh-search-tools'
 const MAX_BODY_BYTES = 64 * 1024
-const VERSION = '0.1.4'
+const VERSION = '0.1.5'
+const FETCH_PREVIEW_BASE_TIMEOUT_MS = 30_000
+const FETCH_PROBE_BASE_TIMEOUT_MS = 30_000
+const FETCH_ROUTE_MAX_TIMEOUT_MS = 190_000
+const FETCH_ROUTE_TIMEOUT_OVERHEAD_MS = 5_000
 
 interface ConnectionFence {
   requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
@@ -93,11 +97,12 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
       const config = isRecord(body.config) ? body.config as JsonObject : {}
       const started = Date.now()
       try {
+        const timeoutMs = body.kind === 'fetch' ? fetchProbeTimeoutMs(config) : 20_000
         const result = adapter.length === 0
           ? { ok: false, code: 'ADAPTER_REQUIRED', message: 'adapter is required', latencyMs: 0 }
           : body.kind === 'fetch'
-            ? await deps.fetch.probe(adapter, config, typeof body.url === 'string' ? body.url : '', AbortSignal.timeout(20_000))
-            : await deps.search.probe(adapter, config, AbortSignal.timeout(20_000))
+            ? await deps.fetch.probe(adapter, config, typeof body.url === 'string' ? body.url : '', AbortSignal.timeout(timeoutMs))
+            : await deps.search.probe(adapter, config, AbortSignal.timeout(timeoutMs))
         sendJson(res, 200, { ...result, elapsedMs: Date.now() - started })
       } catch (error) {
         sendError(res, error, started)
@@ -147,7 +152,7 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
         if (url.length === 0) throw new SearchToolsError('url is required', 'BAD_REQUEST')
         const adapter = typeof body.adapter === 'string' ? body.adapter : snapshot(deps.config).fetch.adapter
         const config = isRecord(body.config) ? body.config as JsonObject : {}
-        const result = await deps.fetch.preview(adapter, config, { url }, AbortSignal.timeout(30_000))
+        const result = await deps.fetch.preview(adapter, config, { url }, AbortSignal.timeout(fetchPreviewTimeoutMs(config)))
         sendJson(res, 200, {
           ok: result.statusCode >= 200 && result.statusCode < 300,
           url: result.url,
@@ -189,6 +194,27 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
 
 async function sendStatus(ctx: Context, deps: RouteDeps, res: ServerResponse): Promise<void> {
   sendJson(res, 200, await buildStatus(ctx, deps))
+}
+
+/**
+ * The fetch preview route must outlive the adapter's own timeout. Jina Reader
+ * can wait up to 180s; the route signal adds five seconds of host overhead and
+ * never exceeds 190s. Missing or malformed drafts keep the historical defaults.
+ */
+export function fetchPreviewTimeoutMs(config: unknown): number {
+  return fetchRouteTimeoutMs(config, FETCH_PREVIEW_BASE_TIMEOUT_MS)
+}
+
+/** Fetch probe timeout: same draft-aware rule with a 30s floor for Jina's default. */
+export function fetchProbeTimeoutMs(config: unknown): number {
+  return fetchRouteTimeoutMs(config, FETCH_PROBE_BASE_TIMEOUT_MS)
+}
+
+function fetchRouteTimeoutMs(config: unknown, base: number): number {
+  if (!isRecord(config)) return base
+  const value = config.timeoutMs
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return base
+  return Math.min(FETCH_ROUTE_MAX_TIMEOUT_MS, Math.max(base, Math.ceil(value) + FETCH_ROUTE_TIMEOUT_OVERHEAD_MS))
 }
 
 /** Build the same payload the wire route returns; exported for contract tests. */
