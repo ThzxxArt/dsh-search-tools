@@ -6,15 +6,8 @@ npm: https://www.npmjs.com/package/dsh-search-tools<br>
 DSH target: `0.2.1-rc.2` (`>=0.2.1-rc.2 <0.3.0`)<br>
 Node target: `^22.19.0 || >=24.0.0`
 
-Status: **release candidate; code gate and real GUI passed after the
-2026-10-23 gap-closure audit.** Publication evidence is appended after the
-publish gate.
-
-Publication gate (2026-10-23): pending. The local GitHub credential is invalid
-and npm has no authenticated user, so `main`/`v0.1.4` were not pushed and no
-npm/GitHub release was created. Push attempts returned
-`could not read Username for 'https://github.com'`; remote `main` remains
-`be2f1c2`.
+Status: **published 2026-10-23.** Code gate, real GUI, npm, and GitHub Release
+all passed after the gap-closure audit.
 
 ## Actual GUI evidence (2026-10-23)
 
@@ -138,6 +131,27 @@ git push origin main --follow-tags
 The tag runs `.github/workflows/release.yml`, which repeats the release gate,
 publishes with provenance using `NPM_TOKEN`, downloads the published registry
 tarball, and attaches that exact file to the GitHub release.
+
+## Publication (2026-10-23)
+
+- Release workflow
+  [39914636598](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39914636598)
+  completed successfully; its `publish` job completed successfully.
+- npm `dsh-search-tools@0.1.4` is published and is the `latest` dist-tag on
+  `https://registry.npmjs.org`.
+- GitHub Release
+  [v0.1.4](https://github.com/ThzxxArt/dsh-search-tools/releases/tag/v0.1.4)
+  is published (not draft/prerelease) with
+  `dsh-search-tools-0.1.4.tgz`.
+- The npm and GitHub tarballs are both 239,240 bytes and hash to
+  `4da7625d6a17d46b2bbebb0cbb53a65947d6c1dc0dbb23c3cb5d0b65c35f41b9`.
+- npm integrity:
+  `sha512-CkgrDnLm/QKElzCn+WlyB4o74LiOawj9PFyowg/sEAOo75AKZgYjV7nCrh5/s5W/1yfzDJPgqSp9ZBdCP8BK5Q==`.
+- `main` CI run
+  [39914616653](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39914616653)
+  completed successfully.
+- The published tarball contains the gap-closure symbols
+  (`SEARCH_CONFIG_INVALID`, `retryAfterMs`, and `RESEARCH_CONFIG_INVALID`).
 
 ## Post-publish smoke test
 

@@ -64,6 +64,9 @@
 - `pnpm typecheck`: pass.
 - `pnpm test`: 119 tests / 19 files.
 - `pnpm build`: host, client, and types pass.
+- npm `0.1.4` is published as `latest`; GitHub Release `v0.1.4` is published;
+  both tarballs are 239,240 bytes and hash to
+  `4da7625d6a17d46b2bbebb0cbb53a65947d6c1dc0dbb23c3cb5d0b65c35f41b9`.
 - No new adapter, no stable provider-id change, and no SSRF/permission changes.
 
 ## 0.1.3 — 2026-10-23

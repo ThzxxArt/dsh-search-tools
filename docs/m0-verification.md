@@ -309,6 +309,22 @@ own abort path is separately asserted to return `WEB_RESEARCH_TIMEOUT`.
 Still not covered: real SearXNG engine quality, real credential/conflict
 injection, physical 560px device, screen reader, and non-Chromium engines.
 
+## 0.1.4 publication (2026-10-23)
+
+- Release workflow
+  [39914636598](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39914636598)
+  completed successfully; `publish` job succeeded.
+- npm `dsh-search-tools@0.1.4` is the `latest` dist-tag on
+  `https://registry.npmjs.org`.
+- GitHub Release
+  [v0.1.4](https://github.com/ThzxxArt/dsh-search-tools/releases/tag/v0.1.4)
+  is published with `dsh-search-tools-0.1.4.tgz`.
+- npm and GitHub tarballs are both 239,240 bytes and hash to
+  `4da7625d6a17d46b2bbebb0cbb53a65947d6c1dc0dbb23c3cb5d0b65c35f41b9`.
+- `main` CI run
+  [39914616653](https://github.com/ThzxxArt/dsh-search-tools/actions/runs/39914616653)
+  completed successfully.
+
 ## Remaining
 
 - Additional adapter packages beyond SearXNG / Readability HTTP.

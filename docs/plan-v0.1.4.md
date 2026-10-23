@@ -1,6 +1,6 @@
 # dsh-search-tools v0.1.4 迭代方案
 
-> 状态：**已实施；真实 GUI 已复验，待推送与 npm/GitHub 发布。**
+> 状态：**已发布（2026-10-23）；npm 0.1.4 与 GitHub Release v0.1.4 均已上线。**
 >
 > 基线：`be2f1c2`（0.1.3，2026-10-23）
 >
@@ -403,8 +403,8 @@ T1–T4 已按计划落地，T5 的版本、文档、构建和真实 GUI 复验�
 - 版本/门禁：`0.1.4`；`pnpm typecheck`、`pnpm test`（119 tests / 19 files）、
   `pnpm build` 通过；真实 DSH GUI 覆盖成功/失败态、host 配置拒绝、草稿
   `maxResults`、format 回退、研究短超时与 700/560 布局。
-- 发布：`docs/release-v0.1.4.md` 记录候选状态与真实 GUI 证据；tag/npm/GitHub
-  Release 在发布后追加。
+- 发布：`docs/release-v0.1.4.md` 记录真实 GUI 与发布证据；Release workflow
+  `39914636598` 成功，npm `0.1.4` 为 `latest`，GitHub Release `v0.1.4` 已发布。
 
 ### 12.1 审计缺口收口（2026-10-23 第二轮）
 
