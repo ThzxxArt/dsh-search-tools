@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Current version: 0.1.2 (2026-10-22).** This is the UI/UX polish release after 0.1.0: the settings page now uses the DSH design system, with a rebuilt information architecture, instance cards, collapsed advanced settings, research budgets, and diagnostics, plus a 416px single-column layout and keyboard focus. Search, fetch, takeover, and credential behavior are unchanged. 0.1.0 was verified against a real DSH instance, a real SearXNG instance, real model tool turns, and the Web GUI; build, test, pack, and publint gates pass. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
+> **Current version: 0.1.3 (2026-10-23).** This closes the 0.1.2 gaps: Search has Connection / Search behavior sub-tabs, Fetch has a copyable and collapsible content reader, conflict and credential failures have field-level states, the settings page is split into five tab components, the action bar reserves its own height, and the 560px, failure, read-only, and keyboard evidence is recorded. Search, fetch, takeover, and credential semantics are unchanged. 0.1.0 was verified against a real DSH instance, a real SearXNG instance, real model tool turns, and the Web GUI; build, test, pack, and publint gates pass. Evidence is recorded in the [M0 verification note](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md).
 
 ---
 
@@ -51,6 +51,16 @@ DSH ships built-in `web_search` and `web_fetch`, but the default backends do not
 
 It does **not** provide a public search API, bypass logins or paywalls, execute page JavaScript, render a browser, or replace DSH's permission and sandbox model.
 
+## Screenshots
+
+These screenshots use demo data (`https://searxng.example.com`, no real credentials):
+
+![Search Tools overview](https://raw.githubusercontent.com/ThzxxArt/dsh-search-tools/main/docs/assets/settings-overview.png)
+
+![Search backend and instance card](https://raw.githubusercontent.com/ThzxxArt/dsh-search-tools/main/docs/assets/settings-search.png)
+
+![Fetch content reader](https://raw.githubusercontent.com/ThzxxArt/dsh-search-tools/main/docs/assets/settings-fetch-reader.png)
+
 ## Features
 
 | Capability | Description |
@@ -59,7 +69,7 @@ It does **not** provide a public search API, bypass logins or paywalls, execute 
 | Built-in search adapter | SearXNG: multiple instances, ordered/round-robin, failover, JSON/HTML, GET/POST, Bearer/Basic auth, proxy, cache, pagination, domain filters |
 | Built-in fetch adapter | Readability HTTP: reuses DSH safe HTTP, extracts article text with Readability, can fall back to raw content |
 | Research tool | `web_research`: search, fetch top N concurrently, per-page/total clipping, sources + readable content |
-| Web settings page | Overview, Search, Fetch, Research, Diagnostics; grouped fields, instance cards, inline tests, budget meters, diagnostics, cache clear, keyboard save |
+| Web settings page | Overview, Search, Fetch, Research, Diagnostics; Connection / Search behavior sub-tabs, instance cards, inline tests, content reader, budget meters, field-level errors, diagnostics, cache clear, keyboard save |
 | Credential isolation | Search tokens go to DSH credentials, never YAML, logs, or diagnostic text |
 | Takeover and restore | Optionally route built-in `web_search` / `web_fetch` through this plugin; restore the previous provider when disabled |
 | External adapters | Register backends through `ctx.searchTools`; the settings page renders manifest fields generically |
@@ -134,10 +144,10 @@ dsh --profile <profile>
 
 ### Option 3: Offline tarball
 
-Download `dsh-search-tools-0.1.2.tgz` from [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases), then:
+Download `dsh-search-tools-0.1.3.tgz` from [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases), then:
 
 ```sh
-dsh plugin --profile <profile> add ./dsh-search-tools-0.1.2.tgz
+dsh plugin --profile <profile> add ./dsh-search-tools-0.1.3.tgz
 ```
 
 The tarball is byte-identical to the npm artifact and works on isolated networks.
@@ -321,7 +331,7 @@ The shape is roughly:
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -337,7 +347,7 @@ The shape is roughly:
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
     research:
       enabled: true
@@ -644,7 +654,7 @@ Readability runs inside the Host. `jsdom`'s `tr46` dependency calls `createRequi
 
 Before releasing:
 
-- `package.json` version is `0.1.2`;
+- `package.json` version is `0.1.3`;
 - `CHANGELOG.md` has the matching entry;
 - `pnpm release` passes;
 - the worktree is clean;
@@ -661,7 +671,7 @@ pnpm pack --pack-destination dist
 Tag and push:
 
 ```sh
-git tag -a v0.1.2 -m "dsh-search-tools v0.1.2"
+git tag -a v0.1.3 -m "dsh-search-tools v0.1.3"
 git push origin main --follow-tags
 ```
 
@@ -678,7 +688,7 @@ Manual publish:
 npm publish --provenance --access public
 ```
 
-After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run search and fetch tests, and make one `web_research` call. See the [v0.1.2 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.2.md).
+After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run search and fetch tests, and make one `web_research` call. See the [v0.1.3 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.3.md).
 
 ## Troubleshooting
 

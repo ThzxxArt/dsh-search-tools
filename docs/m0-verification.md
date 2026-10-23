@@ -215,6 +215,32 @@ earlier 1,000px Search-height target was not met without hiding controls.
   `registry.npmjs.org`; the settings page reported `0.1.2`, all five tabs
   rendered, and there were no browser errors.
 
+## 0.1.3 gap-closure verification (2026-10-23)
+
+Environment: real DSH `0.2.1-rc.2`, profile `m0web`, local
+`dsh-search-tools@0.1.3` tarball, Chromium via Playwright, demo data
+(`https://searxng.example.com`, no real credentials).
+
+| Check | Evidence |
+|---|---|
+| Search sub-tabs | Connection and Search behavior are separate panels; the current backend is a compact summary with a Change backend action. |
+| Search heights at 564px content | Connection panel 772px; Search behavior panel 928px; both inside the 1,000px target. |
+| Search heights at 416px content | Connection panel 842px; Search behavior panel 1,194px; both inside the 1,400px target. |
+| Search heights at 560px content | Controlled 560px content width: Connection 772px; Search behavior 928px; no horizontal overflow. |
+| Fetch reader | Real fetch preview renders `Page content`, Copy content, and Hide content. Copy writes the body; Hide removes the code block; Show restores it. Reader element 526×293. |
+| Conflict state | Component test: rejected save renders the conflict text in the unsaved-state notice and the action bar remains enabled. |
+| Credential error state | Component test: rejected `credentials.set` renders `vault locked` as a field-level alert and sets `aria-invalid="true"`. |
+| Read-only / unavailable | Component test: unavailable status renders its notice and disables Save; ready + unwritable renders the overridden notice. |
+| Keyboard | Adapter card 2px focus ring; field focus border; Arrow/Home/End tests for the five top tabs; Enter/Space on the native advanced disclosure. |
+| Action bar | Page reserves 104px; real bar is 54px at 564px and 83px at 416px; final controls remain reachable. |
+| Tests | 73 passed / 13 files; 30 settings tests, 8 new since 0.1.1. |
+| Screenshots | `docs/assets/settings-overview.png`, `settings-search.png`, `settings-fetch-reader.png` use demo data. |
+
+Not covered: injecting real credential-store and conflict failures into the live
+profile; those two states are covered by component tests. The 560px case uses a
+controlled content width, not a physical device. No screen-reader or non-Chromium
+run in this round.
+
 ## Remaining
 
 - Additional adapter packages beyond SearXNG / Readability HTTP.

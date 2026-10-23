@@ -17,7 +17,7 @@ import { isRecord } from '../shared/validation.ts'
 
 const BASE = '/api/dsh-search-tools'
 const MAX_BODY_BYTES = 64 * 1024
-const VERSION = '0.1.2'
+const VERSION = '0.1.3'
 
 interface ConnectionFence {
   requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined

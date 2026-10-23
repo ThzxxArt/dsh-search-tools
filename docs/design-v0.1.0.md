@@ -2,7 +2,7 @@
 
 > 状态：**v3 方案已确认，工程骨架已开工（2026-10-22）**
 >
-> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。0.1.2 已完成设置页 UI/UX 修订（设计 token、分组、实例卡、研究预算、诊断页、416px 布局），详见附录 E。架构速查见 [architecture.md](architecture.md)。
+> 实现说明：当前仓库已搭好 Host/Client 骨架、adapter registry、稳定 dispatcher、SearXNG/Readability adapter、设置路由和 `web_research` 工具。真实 DSH GUI 冒烟、脚本模型与真实模型的 `web_research` 回放、卡片渲染、设置页内联测试/诊断/键盘操作和激活提示/空状态视觉验收已完成；真实模型也分别调用了内置 `web_search` 与 `web_fetch`，搜索走真实 SearXNG 实例。0.1.2 完成设置页 UI/UX 修订，0.1.3 补齐审计缺口（Search 子页、Fetch reader、字段级错误、五个 tab 组件、操作条留白），详见附录 E/F。架构速查见 [architecture.md](architecture.md)。
 >
 > 目标仓库：`https://github.com/ThzxxArt/dsh-search-tools`
 >
@@ -1676,3 +1676,34 @@ export function apply(ctx: Context): void {
 ### E.4 Manifest 扩展
 
 `groups`、`field.group`、`field.advanced`、`field.unit`、`secret.group` 都是可选展示元数据。无 groups 的外部 adapter 仍按一个 Configuration 块渲染；未知 group 回退到第一个组；`advanced` 字段自动进入折叠区。校验和存储结构完全不变。
+
+---
+
+## 附录 F：0.1.3 缺口补齐
+
+0.1.3 只补 0.1.2 审计中的缺口，不新增搜索/抓取能力。
+
+### F.1 Search 高度
+
+Search 内部分为 Connection / Search behavior 两个子页；当前后端在全量 picker 之外提供紧凑摘要和 Change backend。面板高度（不含全局 hero/tabs/actionbar）：
+
+| 内容宽度 | Connection | Search behavior | 目标 |
+|---|---:|---:|---:|
+| 564px | 772px | 928px | ≤ 1,000px |
+| 416px | 842px | 1,194px | ≤ 1,400px |
+| 560px 受控宽度 | 772px | 928px | ≤ 1,000px |
+
+### F.2 Fetch reader
+
+Fetch 结果使用 DSH `CodeBlock`，支持 Copy content、Hide content / Show content；每次新 preview 自动展开并重置复制状态。原始正文和 reader 都只来自已通过 DSH SSRF 防护的抓取结果。
+
+### F.3 状态与拆分
+
+- 冲突：表单拒绝保存时同时显示独立 warning notice 和 actionbar 状态。
+- 凭据：写入/清除失败显示字段级 `role="alert"` 错误和 `aria-invalid`，用户重新输入时清除。
+- 组件：`SettingsPage.tsx` 保留状态与编排，五个 tab、AdapterPicker、TestConsole、ResearchBudget、ResearchPrompt、SettingRows、Feedback 分别拆文件；主文件 691 行。
+- 操作条：页面底部预留 104px，覆盖 564px 下 54px、416px 下 83px 的 actionbar。
+
+### F.4 证据
+
+560px 使用受控容器宽度；失败/只读/冲突/凭据错误由组件测试覆盖，真实 GUI 覆盖成功态、reader、焦点和 564/416 布局。未把受控 560px 当作物理设备验证。

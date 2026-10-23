@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.1.3 — 2026-10-23
+
+### Added
+
+- Search now has Connection / Search behavior sub-tabs derived from manifest
+  groups, with a compact current-backend summary and a Change backend action.
+  The tab content (excluding the global hero/tabs/action bar) measures 772px /
+  928px at 564px and 842px / 1,194px at 416px, inside the 1,000px / 1,400px
+  targets.
+- Fetch results now render a reader card with the DSH `CodeBlock`, Copy content,
+  Hide content / Show content, and a reset on every new preview.
+- Save conflicts now render a distinct warning notice in addition to the
+  action-bar message.
+- Credential write and clear failures now render as field-level red errors with
+  `aria-invalid`, and clear as soon as the user edits the secret.
+- The settings page is split into five tab components
+  (`OverviewTab`, `SearchTab`, `FetchTab`, `ResearchTab`, `DiagnosticsTab`) plus
+  `AdapterPicker`, `TestConsole`, `ResearchBudget`, `ResearchPrompt`,
+  `SettingRows`, `Feedback`, and `settings-utils`; the page component is 691
+  lines instead of 1,421.
+- The page reserves 104px of bottom padding for the sticky action bar (54px at
+  564px, 83px at 416px).
+- Four new component tests — fetch reader copy/collapse, credential field error,
+  conflict notice, and unavailable/read-only states — plus Home/End coverage on
+  the existing tab test. The settings file has 30 tests; the package has 73.
+- README screenshots use demo data in `docs/assets/`.
+- Version metadata, status, and default User-Agents report `0.1.3`.
+
+### Changed
+
+- The one-screen Search form is now two focused sub-views. Backend selection is
+  a compact summary until the user chooses Change backend.
+- The old full `pre` fetch body is replaced by a collapsible reader with a copy
+  action and code-block wrapping.
+- The action-bar surface remains opaque and now has enough bottom padding that
+  the final actions are reachable after scrolling.
+
+### Fixed
+
+- Closed the 0.1.2 audit gaps: Search height, Fetch reader, conflict state,
+  credential field errors, main-page split, action-bar reserve, test count, and
+  README screenshots.
+- Fetch and conflict feedback no longer rely only on the global action-bar
+  message.
+- The short 560px content case is exercised with a controlled container width
+  and recorded in the verification note.
+
 ## 0.1.2 — 2026-10-23
 
 ### Added

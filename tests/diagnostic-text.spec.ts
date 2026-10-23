@@ -3,7 +3,7 @@ import type { StatusResponse } from '../src/core/types.ts'
 import { formatDiagnostics } from '../src/client/diagnostic-text.ts'
 
 const status: StatusResponse = {
-  version: '0.1.2',
+  version: '0.1.3',
   configPath: '/home/user/.dsh/profiles/demo/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0 },
   fetch: { enabled: true, registered: true, adapter: 'readable-http' },

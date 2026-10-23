@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { AdapterListResponse, AdapterManifest, StatusResponse } from '../src/core/types.ts'
@@ -24,7 +24,7 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.2',
+  version: '0.1.3',
   configPath: '/tmp/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0 },
   fetch: { enabled: true, registered: true, adapter: 'readable-http' },
@@ -44,7 +44,11 @@ function translate(key: string, params?: Record<string, unknown>): string {
   return template.replace(/\{(\w+)\}/g, (_match, name: string) => String(params?.[name] ?? `{${name}}`))
 }
 
-function createForm<T>(initial: T): { form: ConfigForm<T>; mutate: ReturnType<typeof vi.fn> } {
+function createForm<T>(initial: T): {
+  form: ConfigForm<T>
+  mutate: ReturnType<typeof vi.fn>
+  setSnapshot: (patch: Partial<ConfigFormSnapshot<T>>) => void
+} {
   let snapshot: ConfigFormSnapshot<T> = {
     status: 'ready',
     value: structuredClone(initial),
@@ -67,6 +71,10 @@ function createForm<T>(initial: T): { form: ConfigForm<T>; mutate: ReturnType<ty
     for (const listener of listeners) listener()
     return true
   })
+  const setSnapshot = (patch: Partial<ConfigFormSnapshot<T>>): void => {
+    snapshot = { ...snapshot, ...patch }
+    for (const listener of listeners) listener()
+  }
   return {
     form: {
       getSnapshot: () => snapshot,
@@ -76,6 +84,7 @@ function createForm<T>(initial: T): { form: ConfigForm<T>; mutate: ReturnType<ty
       unset: vi.fn(async () => true) as unknown as ConfigForm<T>['unset'],
     },
     mutate,
+    setSnapshot,
   }
 }
 
@@ -154,6 +163,20 @@ describe('SettingsPage', () => {
     expect(JSON.stringify(form.mutate.mock.calls)).not.toContain('token-123')
   })
 
+  it('shows a credential write failure at the field', async () => {
+    const { credentials } = renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: 'Search' }))
+    await screen.findByText('Instances')
+    fireEvent.change(screen.getByLabelText('Authentication'), { target: { value: 'basic' } })
+    const secret = await screen.findByLabelText('Basic username:password')
+    fireEvent.change(secret, { target: { value: 'user:pass' } })
+    credentials.set.mockRejectedValueOnce(new Error('vault locked'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save secret' }))
+
+    expect(await screen.findByText('vault locked')).toBeInTheDocument()
+    expect(screen.getByLabelText('Basic username:password')).toHaveAttribute('aria-invalid', 'true')
+  })
+
   it('renders the adapter picker as a radio group and switches backends', async () => {
     const fixture: AdapterManifest = {
       kind: 'search',
@@ -169,6 +192,7 @@ describe('SettingsPage', () => {
     })
     renderPage()
     fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Change backend' }))
 
     expect(await screen.findByRole('radiogroup', { name: 'Backend' })).toBeInTheDocument()
     const searxngCard = screen.getByRole('radio', { name: /SearXNG/ }).closest('label')
@@ -192,6 +216,7 @@ describe('SettingsPage', () => {
     }
     renderPage(undefined, config)
     fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Change backend' }))
 
     expect(await screen.findByText('Needs attention')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /SearXNG/ })).toBeChecked()
@@ -216,6 +241,7 @@ describe('SettingsPage', () => {
       .mockRejectedValueOnce(new Error('offline'))
     renderPage()
     fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Change backend' }))
     await screen.findByRole('radiogroup', { name: 'Backend' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh adapters' }))
@@ -226,6 +252,7 @@ describe('SettingsPage', () => {
   it('refreshes the adapter list from the picker', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Change backend' }))
     await screen.findByRole('radiogroup', { name: 'Backend' })
     expect(fetchAdapters).toHaveBeenCalledTimes(1)
 
@@ -390,6 +417,25 @@ describe('SettingsPage', () => {
     expect(screen.getByText('ok')).toBeInTheDocument()
   })
 
+  it('renders fetch content in a copyable, collapsible reader', async () => {
+    const writeText = vi.fn(async (_text: string) => undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: /^Fetch$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Test Enter a URL' }))
+
+    expect(await screen.findByText('Page content')).toBeInTheDocument()
+    expect(screen.getByText('ok')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy content' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('ok'))
+    expect(await screen.findByRole('button', { name: 'Copy content' })).toHaveTextContent('Copied')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide content' }))
+    expect(screen.queryByText('ok')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show content' }))
+    expect(screen.getByText('ok')).toBeInTheDocument()
+  })
+
   it('does not let an invalid search draft block the fetch test', async () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: /^Search$/ }))
@@ -413,13 +459,35 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(form.mutate).toHaveBeenCalled())
   })
 
+  it('shows a conflict notice when the form rejects a save', async () => {
+    const { form } = renderPage()
+    fireEvent.click(screen.getByRole('tab', { name: 'Research' }))
+    fireEvent.click(await screen.findByRole('switch', { name: 'Enable web_research' }))
+    form.mutate.mockResolvedValueOnce(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }))
+
+    expect((await screen.findAllByText(/Configuration changed elsewhere/)).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Save and apply' })).toBeEnabled()
+  })
+
+  it('renders unavailable and read-only states without hiding the page', async () => {
+    const { form } = renderPage()
+    act(() => { form.setSnapshot({ status: 'unavailable', writable: false }) })
+
+    expect(await screen.findByText('Configuration service is unavailable')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save and apply' })).toBeDisabled()
+
+    act(() => { form.setSnapshot({ status: 'ready', writable: false }) })
+    expect(await screen.findByText(/Configuration is overridden by a higher layer/)).toBeInTheDocument()
+  })
+
   it('copies a credential-free diagnostics summary from Diagnostics', async () => {
     const writeText = vi.fn(async (_text: string) => undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.2')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.3')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
   })
 
@@ -437,6 +505,7 @@ describe('SettingsPage', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
 
     expect(await screen.findByRole('heading', { name: 'Connection' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Search behavior' }))
     expect(screen.getByRole('heading', { name: 'Search behavior' })).toBeInTheDocument()
     const advanced = screen.getByTestId('adapter-group-advanced')
     expect(advanced.tagName).toBe('DETAILS')
@@ -476,7 +545,7 @@ describe('SettingsPage', () => {
     expect(screen.getByText(/Some fields are invalid; fix them before saving\./)).toBeInTheDocument()
   })
 
-  it('exposes tab semantics and arrow-key navigation', async () => {
+  it('exposes tab semantics and arrow/Home/End navigation', async () => {
     renderPage()
     await screen.findByText('Search backend not configured')
     const search = screen.getByRole('tab', { name: 'Search' })
@@ -485,5 +554,12 @@ describe('SettingsPage', () => {
 
     expect(screen.getByRole('tab', { name: 'Fetch' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tabpanel', { name: 'Fetch' })).toBeInTheDocument()
+
+    const fetchTab = screen.getByRole('tab', { name: 'Fetch' })
+    fireEvent.keyDown(fetchTab, { key: 'End' })
+    expect(screen.getByRole('tab', { name: 'Diagnostics' })).toHaveAttribute('aria-selected', 'true')
+    const diagnostics = screen.getByRole('tab', { name: 'Diagnostics' })
+    fireEvent.keyDown(diagnostics, { key: 'Home' })
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
   })
 })

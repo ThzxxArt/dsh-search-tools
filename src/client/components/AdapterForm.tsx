@@ -87,8 +87,8 @@ export function resolveAdapterGroups(
 }
 
 export function AdapterForm({
-  manifest, config, errors, disabled, text, t, onTestInstance, testingInstanceUrl, instanceResults,
-  secretInfo, secretDrafts, secretBusy, onSecretDraft, onSecretSave, onSecretClear, onChange,
+  manifest, config, errors, disabled, text, t, groupIds, onTestInstance, testingInstanceUrl, instanceResults,
+  secretInfo, secretDrafts, secretBusy, secretErrors, onSecretDraft, onSecretSave, onSecretClear, onChange,
 }: {
   manifest: AdapterManifest
   config: JsonObject
@@ -96,18 +96,21 @@ export function AdapterForm({
   disabled: boolean
   text: (value: LocalizedText) => string
   t: Translate
+  groupIds?: readonly string[] | undefined
   onTestInstance?: ((instance: InstanceValue) => void) | undefined
   testingInstanceUrl?: string | undefined
   instanceResults?: Record<string, InstanceTestResult> | undefined
   secretInfo: Record<string, CredentialInfo>
   secretDrafts: Record<string, string>
   secretBusy: string | undefined
+  secretErrors?: Record<string, string> | undefined
   onSecretDraft: (ref: string, value: string) => void
   onSecretSave: (ref: string) => void
   onSecretClear: (ref: string) => void
   onChange: (config: JsonObject) => void
 }): React.ReactElement {
   const groups = resolveAdapterGroups(manifest, text, t)
+    .filter(group => groupIds === undefined || groupIds.includes(group.id))
   return (
     <div className="dshst-group-list">
       {groups.map(group => (
@@ -125,6 +128,7 @@ export function AdapterForm({
           secretInfo={secretInfo}
           secretDrafts={secretDrafts}
           secretBusy={secretBusy}
+          secretErrors={secretErrors}
           onSecretDraft={onSecretDraft}
           onSecretSave={onSecretSave}
           onSecretClear={onSecretClear}
@@ -137,7 +141,7 @@ export function AdapterForm({
 
 function GroupBlock({
   group, config, errors, disabled, text, t, onTestInstance, testingInstanceUrl, instanceResults,
-  secretInfo, secretDrafts, secretBusy, onSecretDraft, onSecretSave, onSecretClear, onChange,
+  secretInfo, secretDrafts, secretBusy, secretErrors, onSecretDraft, onSecretSave, onSecretClear, onChange,
 }: {
   group: ResolvedAdapterGroup
   config: JsonObject
@@ -151,6 +155,7 @@ function GroupBlock({
   secretInfo: Record<string, CredentialInfo>
   secretDrafts: Record<string, string>
   secretBusy: string | undefined
+  secretErrors?: Record<string, string> | undefined
   onSecretDraft: (ref: string, value: string) => void
   onSecretSave: (ref: string) => void
   onSecretClear: (ref: string) => void
@@ -203,6 +208,7 @@ function GroupBlock({
           info={secretInfo[secret.ref]}
           draft={secretDrafts[secret.ref] ?? ''}
           busy={secretBusy === secret.ref}
+          error={secretErrors?.[secret.ref]}
           disabled={disabled}
           text={text}
           t={t}
@@ -239,12 +245,13 @@ function GroupBlock({
   )
 }
 
-function SecretField({ secret, config, info, draft, busy, disabled, text, t, onDraft, onSave, onClear }: {
+function SecretField({ secret, config, info, draft, busy, error, disabled, text, t, onDraft, onSave, onClear }: {
   secret: SecretRef
   config: JsonObject
   info: CredentialInfo | undefined
   draft: string
   busy: boolean
+  error?: string | undefined
   disabled: boolean
   text: (value: LocalizedText) => string
   t: Translate
@@ -258,7 +265,7 @@ function SecretField({ secret, config, info, draft, busy, disabled, text, t, onD
   const configured = info?.configured === true
   const writable = info?.writable !== false && !disabled
   return (
-    <div className="dshst-field" data-kind="secret">
+    <div className="dshst-field" data-kind="secret" data-invalid={error === undefined ? undefined : 'true'}>
       <div className="dshst-field-head">
         <label className="dshst-field-label" htmlFor={`${id}-secret`}>{text(secret.label)}</label>
         <Tag tone={configured ? 'success' : 'outline'}>{configured ? t('secretConfigured') : t('secretUnset')}</Tag>
@@ -270,8 +277,10 @@ function SecretField({ secret, config, info, draft, busy, disabled, text, t, onD
         autoComplete="new-password"
         value={draft}
         disabled={!writable || busy}
+        aria-invalid={error !== undefined}
         onChange={event => { onDraft(secret.ref, event.target.value) }}
       />
+      {error === undefined ? null : <p className="dshst-field-error" role="alert">{error}</p>}
       <p className="dshst-field-hint">
         {configured ? t('secretConfiguredHint') : t('secretUnsetHint')}
         {info?.source === undefined ? '' : ` · ${t('secretSource', { source: info.source })}`}

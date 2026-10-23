@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **当前版本：0.1.2（2026-10-22）。** 这是 0.1.0 之后的 UI/UX 打磨版：设置页接回 DSH 设计系统，重做信息架构、实例卡、进阶折叠、研究预算与诊断页，并补上 416px 单列布局和键盘焦点。搜索、抓取、接管和凭据行为不变。0.1.0 已完成真实 DSH、真实 SearXNG、真实模型工具回合和 Web GUI 验收；构建、测试、打包与 publint 门禁通过。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
+> **当前版本：0.1.3（2026-10-23）。** 这是 0.1.2 的缺口补齐版：Search 增加 Connection / Search behavior 子页，Fetch 升级为可复制、可折叠的正文 reader，补齐冲突与凭据字段级错误，设置页拆成五个 tab 组件，操作条留出等高空间，并补上 560px、失败态、只读态和键盘证据。搜索、抓取、接管和凭据语义不变。0.1.0 已完成真实 DSH、真实 SearXNG、真实模型工具回合和 Web GUI 验收；构建、测试、打包与 publint 门禁通过。详细证据见 [M0 验收记录](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/m0-verification.md)。
 
 ---
 
@@ -51,6 +51,16 @@ DSH 自带 `web_search` 和 `web_fetch`，但默认后端不一定适合每个�
 
 它**不**做这些事：不提供公共搜索 API，不绕过目标站点的登录/付费墙，不执行页面 JavaScript，不做浏览器渲染，也不替代 DSH 的权限与沙箱模型。
 
+## 界面预览
+
+以下截图使用 demo 数据（`https://searxng.example.com`，无真实凭据）：
+
+![搜索工具概览](https://raw.githubusercontent.com/ThzxxArt/dsh-search-tools/main/docs/assets/settings-overview.png)
+
+![搜索后端与实例卡](https://raw.githubusercontent.com/ThzxxArt/dsh-search-tools/main/docs/assets/settings-search.png)
+
+![Fetch 正文 reader](https://raw.githubusercontent.com/ThzxxArt/dsh-search-tools/main/docs/assets/settings-fetch-reader.png)
+
 ## 功能一览
 
 | 能力 | 说明 |
@@ -59,7 +69,7 @@ DSH 自带 `web_search` 和 `web_fetch`，但默认后端不一定适合每个�
 | 内置搜索 adapter | SearXNG：多实例、顺序/轮询、故障转移、JSON/HTML、GET/POST、Bearer/Basic、代理、缓存、分页、域名过滤 |
 | 内置抓取 adapter | Readability HTTP：复用 DSH 安全 HTTP，Readability 提取正文，失败可回退原文 |
 | 研究工具 | `web_research`：搜索、按并发抓取前 N 页、按页/总预算截断、返回来源与正文 |
-| Web 设置页 | 概览、搜索、抓取、研究、诊断五个页签；分组字段、实例卡、内联测试、预算条、诊断、缓存清理、键盘保存 |
+| Web 设置页 | 概览、搜索、抓取、研究、诊断五个页签；Connection / Search behavior 子页、实例卡、内联测试、正文 reader、预算条、字段级错误、诊断、缓存清理、键盘保存 |
 | 凭据隔离 | 搜索 token 写入 DSH credentials，不落 YAML、不进日志、不出现在诊断文本 |
 | 接管与恢复 | 可选让内置 `web_search` / `web_fetch` 使用本插件；关闭时恢复之前的 provider |
 | 外部 adapter | 通过 `ctx.searchTools` 注册新后端；设置页自动渲染 manifest 字段 |
@@ -134,10 +144,10 @@ dsh --profile <profile>
 
 ### 方式三：离线 tarball
 
-从 [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases) 下载 `dsh-search-tools-0.1.2.tgz`，然后：
+从 [GitHub Releases](https://github.com/ThzxxArt/dsh-search-tools/releases) 下载 `dsh-search-tools-0.1.3.tgz`，然后：
 
 ```sh
-dsh plugin --profile <profile> add ./dsh-search-tools-0.1.2.tgz
+dsh plugin --profile <profile> add ./dsh-search-tools-0.1.3.tgz
 ```
 
 tarball 与 npm 产物字节一致，适合内网或无法访问 npm 的环境。
@@ -321,7 +331,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -337,7 +347,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.2 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.3 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
     research:
       enabled: true
@@ -648,7 +658,7 @@ Readability 运行在 Host 内。`jsdom` 的 `tr46` 依赖会调用 `createRequi
 
 发布前确认：
 
-- `package.json` 版本是 `0.1.2`；
+- `package.json` 版本是 `0.1.3`；
 - `CHANGELOG.md` 有对应条目；
 - `pnpm release` 全绿；
 - 工作区干净；
@@ -665,7 +675,7 @@ pnpm pack --pack-destination dist
 打 tag 并推送：
 
 ```sh
-git tag -a v0.1.2 -m "dsh-search-tools v0.1.2"
+git tag -a v0.1.3 -m "dsh-search-tools v0.1.3"
 git push origin main --follow-tags
 ```
 
@@ -682,7 +692,7 @@ git push origin main --follow-tags
 npm publish --provenance --access public
 ```
 
-发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、搜索测试、抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.2 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.2.md)。
+发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、搜索测试、抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.3 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.3.md)。
 
 ## 故障排查
 

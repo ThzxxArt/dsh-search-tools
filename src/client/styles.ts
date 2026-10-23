@@ -13,7 +13,7 @@ export const STYLES = `
   display: flex;
   flex-direction: column;
   gap: var(--dshst-gap);
-  padding: 4px 2px 28px;
+  padding: 4px 2px 104px;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   line-height: 20px;
@@ -80,6 +80,12 @@ export const STYLES = `
 .dshst-tabs { width: 100%; }
 .dshst-tabs [role="tab"] { min-width: 0; padding: 0 8px; font-size: 13px; white-space: nowrap; }
 .dshst-tabs [role="tab"]:focus-visible { text-underline-offset: 3px; }
+.dshst-subtabs {
+  align-self: flex-start;
+  width: min(100%, 320px);
+  margin: 2px 0 4px;
+}
+.dshst-subtabs [role="tab"] { height: 30px; padding: 0 10px; font-size: 12px; }
 
 /* Notices --------------------------------------------------------------- */
 .dshst-notice-stack { display: flex; flex-direction: column; gap: 8px; }
@@ -201,6 +207,13 @@ export const STYLES = `
 .dshst-tag-add .dshst-input { flex: 1; }
 
 /* Provider picker ------------------------------------------------------- */
+.dshst-backend-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dshst-radius-sm); background: var(--dshst-sunken);
+}
+.dshst-backend-current { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.dshst-backend-current strong { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .dshst-picker { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .dshst-picker-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .dshst-picker-label { font-size: 13px; line-height: 20px; font-weight: 500; }
@@ -387,6 +400,14 @@ export const STYLES = `
   padding: 12px;
 }
 .dshst-code-frame { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.dshst-reader {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  padding: 10px; border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dshst-radius-sm); background: var(--dshst-sunken);
+}
+.dshst-reader-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dshst-fetch-code { max-height: 280px; }
+.dshst-fetch-code > div { max-height: 280px; }
 .dshst-codeblock { min-width: 0; max-height: 360px; overflow: auto; border-radius: var(--dshst-radius-sm); }
 .dshst-codeblock > div { max-height: 360px; }
 .dshst-codeblock pre {

@@ -1,6 +1,6 @@
 {
   "name": "dsh-search-tools",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Adapter-first web search and readable page fetching for DeepSeek Harness, configured entirely in the Web UI.",
   "keywords": [
     "deepseek-harness",
