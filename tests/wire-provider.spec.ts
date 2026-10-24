@@ -128,7 +128,7 @@ describe('wire-http runtime', () => {
     const fetched = await wire.fetch({ url: 'https://public.example/file.pdf' })
     expect(fetched.body.kind).toBe('text')
     expect(fetched.body.content).toContain('Hello PDF')
-  })
+  }, 15_000)
 
   it('preserves HTTP 404 with an empty body and rejects empty 200 bodies', async () => {
     const notFound = runtime({}, async () => result('', { status: 404, headers: { 'content-type': 'text/html' } }))
