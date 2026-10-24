@@ -43,4 +43,18 @@ describe('local-direct HTML parsers', () => {
     expect(parseBing('<li class="b_algo"><h2><a href="javascript:alert(1)">x</a></h2></li>').sources)
       .toEqual([])
   })
+
+  it('decodes padded and URL-encoded Bing payloads', () => {
+    expect(unwrapBing(
+      'https://www.bing.com/ck/a?u=a1aHR0cHM6Ly9leGFtcGxlLmNvbS9wYWRkZWQ%3D',
+      'https://www.bing.com',
+    )).toBe('https://example.com/padded')
+  })
+
+  it('drops credential-bearing result URLs and Bing ads that also use b_algo', () => {
+    expect(parseBing('<li class="b_algo b_ad"><h2><a href="https://ads.example/one">Ad</a></h2></li>').sources)
+      .toEqual([])
+    expect(parseBing('<li class="b_algo"><h2><a href="https://user:pass@example.com/secret">Secret</a></h2></li>').sources)
+      .toEqual([])
+  })
 })

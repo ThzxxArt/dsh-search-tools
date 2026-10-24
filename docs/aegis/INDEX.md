@@ -30,3 +30,4 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-10-24 | work | docs/aegis/work/2026-10-24-local-direct-0.1.7/90-evidence.md | 0.1.7 Local Direct search evidence |
 | 2026-10-24 | work | docs/aegis/work/2026-10-24-local-direct-0.1.7/99-reflection.md | 0.1.7 Local Direct search reflection |
 | 2026-10-24 | release | docs/release-v0.1.7.md | 0.1.7 release checklist |
+| 2026-10-24 | release | docs/release-v0.1.8.md | 0.1.8 Local Direct regression review release checklist |

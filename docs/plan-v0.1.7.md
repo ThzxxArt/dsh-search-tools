@@ -47,9 +47,9 @@ tests/fixtures/local-direct-ddg.html
 tests/fixtures/local-direct-bing.html
 tests/local-direct-schema.spec.ts
 tests/local-direct-parse.spec.ts
-tests/local-direct-fusion.spec.ts
 tests/local-direct-runtime.spec.ts
 tests/local-direct-worker.spec.ts
+tests/local-direct-transport.spec.ts
 tests/local-direct-live.spec.ts
 ```
 

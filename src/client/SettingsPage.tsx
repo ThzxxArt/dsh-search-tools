@@ -1,6 +1,6 @@
 /** Settings → Search Tools page. The only editable surface for this plugin. */
 
-import { useEffect, useSyncExternalStore, useState } from 'react'
+import { useEffect, useRef, useSyncExternalStore, useState } from 'react'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 import {
@@ -102,6 +102,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   const [instanceTesting, setInstanceTesting] = useState<string>()
   const [instanceResults, setInstanceResults] = useState<Record<string, InstanceTestResult>>({})
   const [refreshingAdapters, setRefreshingAdapters] = useState(false)
+  const probeGeneration = useRef(0)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -127,7 +128,10 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
 
   useEffect(() => {
     if (dirty || snapshot.status !== 'ready') return
+    probeGeneration.current += 1
     setDraft(normalize(snapshot.value))
+    setSearchProbe(undefined)
+    setProbingSearch(false)
   }, [dirty, snapshot.revision, snapshot.status])
 
   const readOnly = snapshot.status !== 'ready' || snapshot.writable === false
@@ -155,11 +159,13 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
         : tab === 'research' ? researchIssues : []
 
   const edit = (next: StoredConfig): void => {
+    probeGeneration.current += 1
     setDraft(next)
     setDirty(true)
     setMessage(undefined)
     setConflict(false)
     setSearchProbe(undefined)
+    setProbingSearch(false)
   }
 
   const refreshStatus = async (): Promise<void> => {
@@ -385,19 +391,23 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
       setMessage(t('fixErrorsFirst'))
       return
     }
+    const generation = ++probeGeneration.current
+    const adapter = draft.search.adapter
+    const config = adapterConfig(draft.search, adapter)
     setProbingSearch(true)
+    setSearchProbe(undefined)
     try {
-      const adapter = draft.search.adapter
-      const config = adapterConfig(draft.search, adapter)
       const result = await probeSearch(adapter, config)
-      setSearchProbe({ adapter, result })
+      if (generation === probeGeneration.current) setSearchProbe({ adapter, result })
     } catch (error) {
-      setSearchProbe({
-        adapter: draft.search.adapter,
-        result: { ok: false, code: 'SEARCH_PROBE_FAILED', message: errorText(error), latencyMs: 0 },
-      })
+      if (generation === probeGeneration.current) {
+        setSearchProbe({
+          adapter,
+          result: { ok: false, code: 'SEARCH_PROBE_FAILED', message: errorText(error), latencyMs: 0 },
+        })
+      }
     } finally {
-      setProbingSearch(false)
+      if (generation === probeGeneration.current) setProbingSearch(false)
     }
   }
 
@@ -661,7 +671,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
             : dirty ? `${t('dirty')}${message === undefined ? '' : ` · ${message}`}` : message ?? t('clean')}</span>
         </div>
         <div className="dshst-actionbar-actions">
-          <Button variant="ghost" disabled={!dirty || saving} onClick={() => { setDraft(normalize(snapshot.value)); setDirty(false); setMessage(undefined); setConflict(false) }}>{t('discard')}</Button>
+          <Button variant="ghost" disabled={!dirty || saving} onClick={() => { probeGeneration.current += 1; setDraft(normalize(snapshot.value)); setDirty(false); setMessage(undefined); setConflict(false); setSearchProbe(undefined); setProbingSearch(false) }}>{t('discard')}</Button>
           <Button variant="primary" disabled={!dirty || saving || errors.length > 0 || readOnly} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
         </div>
       </footer>

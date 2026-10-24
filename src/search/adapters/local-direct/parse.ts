@@ -13,17 +13,20 @@ export interface LocalDirectParseOptions {
   excludeDomains?: readonly string[]
 }
 
+/** `rawSources` includes results removed by the domain filters. */
+export type LocalDirectParseResult = SearchResult & { readonly rawSources: readonly SearchSource[] }
+
 export function parseLocalDirectHtml(
   engine: LocalDirectEngine,
   html: string,
   options: LocalDirectParseOptions = {},
-): SearchResult {
+): LocalDirectParseResult {
   return engine === 'duckduckgo'
     ? parseDuckDuckGo(html, options)
     : parseBing(html, options)
 }
 
-export function parseDuckDuckGo(html: string, options: LocalDirectParseOptions = {}): SearchResult {
+export function parseDuckDuckGo(html: string, options: LocalDirectParseOptions = {}): LocalDirectParseResult {
   const $ = load(html)
   const sources = new Map<string, SearchSource>()
   $('.result').each((_index, element) => {
@@ -33,15 +36,16 @@ export function parseDuckDuckGo(html: string, options: LocalDirectParseOptions =
     const rawHref = link.attr('href')
     if (rawHref === undefined || rawHref.length === 0) return
     const url = safeSourceUrl(unwrapDuckDuckGo(rawHref, 'https://html.duckduckgo.com'))
-    if (url === undefined || !allowed(url, options)) return
+    if (url === undefined) return
     const title = cleanText(link.text())
     const snippet = cleanText(node.find('.result__snippet').first().text())
     addSource(sources, url, title, snippet)
   })
-  return { sources: [...sources.values()], truncated: false }
+  const rawSources = [...sources.values()]
+  return { sources: rawSources.filter(source => allowed(source.url, options)), rawSources, truncated: false }
 }
 
-export function parseBing(html: string, options: LocalDirectParseOptions = {}): SearchResult {
+export function parseBing(html: string, options: LocalDirectParseOptions = {}): LocalDirectParseResult {
   const $ = load(html)
   const sources = new Map<string, SearchSource>()
   $('li.b_algo').each((_index, element) => {
@@ -51,7 +55,7 @@ export function parseBing(html: string, options: LocalDirectParseOptions = {}): 
     const rawHref = link.attr('href')
     if (rawHref === undefined || rawHref.length === 0) return
     const url = safeSourceUrl(unwrapBing(rawHref, 'https://www.bing.com'))
-    if (url === undefined || !allowed(url, options)) return
+    if (url === undefined) return
     const title = cleanText(link.text())
     const snippet = cleanText(
       node.find('.b_caption p').first().text()
@@ -59,7 +63,8 @@ export function parseBing(html: string, options: LocalDirectParseOptions = {}): 
     )
     addSource(sources, url, title, snippet)
   })
-  return { sources: [...sources.values()], truncated: false }
+  const rawSources = [...sources.values()]
+  return { sources: rawSources.filter(source => allowed(source.url, options)), rawSources, truncated: false }
 }
 
 /** Resolve a DDG `/l/?uddg=...` link without fetching the redirector. */
@@ -109,7 +114,10 @@ function decodeBingPayload(value: string): string | undefined {
   }
   if (/^https?:\/\//iu.test(candidate)) return candidate
   if (candidate.startsWith('a1')) candidate = candidate.slice(2)
-  if (candidate.length === 0 || !/^[A-Za-z0-9_-]+$/u.test(candidate)) return undefined
+  // Bing emits URL-safe base64, sometimes padded (`=`) after URL decoding.
+  // Buffer accepts either alphabet, but validate after normalizing the padding.
+  candidate = candidate.replace(/=+$/u, '').replace(/\+/gu, '-').replace(/\//gu, '_')
+  if (candidate.length === 0 || candidate.length % 4 === 1 || !/^[A-Za-z0-9_-]+$/u.test(candidate)) return undefined
   try {
     const decoded = Buffer.from(candidate, 'base64url').toString('utf8')
     return /^https?:\/\//iu.test(decoded) ? decoded : undefined
@@ -127,6 +135,8 @@ function safeSourceUrl(raw: string | undefined): string | undefined {
   try {
     const url = new URL(raw)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
+    // Search-result URLs must not carry credentials into the preview or a later fetch.
+    if (url.username.length > 0 || url.password.length > 0) return undefined
     return normalizeResultUrl(url.toString())
   } catch {
     return undefined

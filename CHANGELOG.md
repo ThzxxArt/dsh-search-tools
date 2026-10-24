@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.1.8 — 2026-10-24
+
+### Fixed
+
+- Local Direct now returns already-successful engine results when the deadline
+  or retry budget is exhausted, instead of converting a partial success into
+  `LOCAL_DIRECT_DEADLINE`.
+- A 200 HTML response whose parsed results are all removed by domain filters is
+  treated as a successful, empty engine result; it no longer turns into
+  `LOCAL_DIRECT_ALL_FAILED` (or makes a probe look unreachable). A 200 page
+  with zero parsed hits, and HTTP 202/204 challenge/rate-limit responses, stay
+  explicit failures instead of being reported as a reachable empty search.
+- Complete success after a retry drops stale per-engine failure notes and never
+  caches a partial/failed note; cache writes also skip empty result sets.
+- A fatal native-runtime or invalid-target worker failure is propagated as its
+  own code instead of being retried and flattened into
+  `LOCAL_DIRECT_ALL_FAILED`.
+- A cached result is never returned after the caller has already aborted.
+- The one-shot worker is terminated even when `postMessage` throws or the
+  caller signal aborts between the initial check and listener attachment.
+- Bing redirect payloads with URL-encoded/padded base64 decode correctly;
+  credential-bearing search-result URLs are rejected.
+- `StatusResponse.search.sources` normalizes engine case/whitespace and returns
+  zero for a malformed/null engine list instead of reporting manifest defaults.
+- Local Direct probes show a distinct partial-success state and surface the
+  failed-engine notes instead of hiding them when at least one engine worked.
+- In-flight engine probes cannot overwrite a newer draft; editing, discarding,
+  or an external revision invalidates the pending probe.
+- Search probe/preview routes honor the draft search deadline with a small
+  margin instead of fixed 20s/30s caps.
+- Engine rate gates are shared by probe and live runtimes, and waiting for the
+  gate is abortible instead of sleeping through the caller's cancellation.
+- Checkbox values are matched case/whitespace-insensitively, preserve defaults,
+  and cannot be duplicated by toggling.
+- The settings page falls back to the manifest default for an unset checkbox
+  group and uses an existing DSH accent token for checkbox controls.
+
+### Changed
+
+- Version metadata and default User-Agents report `0.1.8`.
+- Release workflow verifies the tag matches `package.json`, requires the tag
+  commit on `main`, runs the full Ubuntu/Windows × Node 22/24 matrix before
+  publishing, and uses `docs/release-v0.1.8.md` as the GitHub Release body.
+- `pnpm check:package` asserts the built tarball contains both worker entries
+  and the host/client entries; CI and the release workflow run it.
+- Added regression coverage for partial deadline results, fatal runtime
+  propagation, cached aborts, retries, cache TTL/eviction, Bing padding and
+  credential URLs, status normalization, partial/stale probes, and search route
+  timeouts.
+
+### Verified
+
+- `pnpm release`: typecheck, 260 passed / 8 live-skipped (35 files), host/client/
+  types build, `check:package`, pack dry run, publint.
+- `SEARCH_LIVE=1` local-direct live tests: 3/3 passed.
+- `WIRE_LIVE=1` wire-http live tests: 5/5 passed.
+
 ## 0.1.7 — 2026-10-24
 
 ### Added

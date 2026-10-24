@@ -136,7 +136,7 @@ async function readBounded(response: ResponseLike, maxBytes: number): Promise<Ui
       if (done) break
       total += value.byteLength
       if (total > maxBytes) {
-        await reader.cancel()
+        await reader.cancel().catch(() => {})
         throw new LocalDirectWorkerFailureError(
           'LOCAL_DIRECT_RESPONSE_TOO_LARGE',
           `response exceeds ${maxBytes} bytes`,

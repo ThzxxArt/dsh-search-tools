@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Repository version: 0.1.7 (2026-10-24).** Adds **Local Direct**, a zero-deployment search adapter that queries DuckDuckGo and Bing HTML endpoints directly from the host, then parses, deduplicates, RRF-fuses, diversifies, and caches results locally. It needs no SearXNG, API key, Reader, browser, or aggregator. Queries leave the machine to the enabled engines, but never go through SearXNG/Reader; page JavaScript is not executed. The default search remains `searxng`, and the stable provider ids/tool schemas are unchanged. See [Local Direct search settings](#local-direct-search-settings) and the [v0.1.7 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.7.md).
+> **Repository version: 0.1.8 (2026-10-24).** This release closes the 0.1.7 regression-review gaps in Local Direct search, worker lifecycle, status counts, test/probe timeouts, and release gates. It adds **Local Direct**, a zero-deployment search adapter that queries DuckDuckGo and Bing HTML endpoints directly from the host, then parses, deduplicates, RRF-fuses, diversifies, and caches results locally. It needs no SearXNG, API key, Reader, browser, or aggregator. Queries leave the machine to the enabled engines, but never go through SearXNG/Reader; page JavaScript is not executed. The default search remains `searxng`, and the stable provider ids/tool schemas are unchanged. See [Local Direct search settings](#local-direct-search-settings) and the [v0.1.8 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.8.md).
 
 ---
 
@@ -345,7 +345,7 @@ The shape is roughly:
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -379,7 +379,7 @@ The shape is roughly:
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
         wire-http:
           enabled: true
@@ -510,10 +510,10 @@ Behavior:
 - **No redirect following.** Impit uses `followRedirects:false` + `redirect:'manual'`; a 3xx fails that engine.
 - **No cookies, Authorization, or JS.** Each search uses a fresh Impit worker; no login state and no page scripts. The worker terminates on success, failure, abort, and deadline.
 - **Local RRF.** Each engine contributes `1/(60+rank+1)`; duplicate URLs merge longer titles/snippets; hostname diversity trims the tail. No second-stage LLM reranking.
-- **Partial success.** One failed engine returns the other engine's results plus `notes`; only all-engine failure raises `LOCAL_DIRECT_ALL_FAILED`. There is no automatic fallback to SearXNG/Jina.
-- **Complete-only cache.** A partial response is not cached; the next call retries the failed engine.
+- **Partial success.** One failed engine returns the other engine's results plus `notes`; only all-engine failure raises `LOCAL_DIRECT_ALL_FAILED`. There is no automatic fallback to SearXNG/Jina. A 200 page whose results are all removed by `includeDomains`/`excludeDomains` is a successful empty engine result with a note, not a total failure.
+- **Complete-only cache.** Only a complete success with no failure note and at least one source is cached; partial and empty results retry on the next call.
 - **Probe.** **Test engines** uses the fixed query `dsh-search-tools probe`, does not write the cache, and lists reachable engines.
-- **Ads and redirects.** DDG `result--ad` and Bing `b_ad` items are dropped; DDG `uddg` and Bing `ck/a?u=a1...` links are unwrapped locally.
+- **Ads and redirects.** DDG `result--ad` and Bing `li.b_ad` items (even when they also carry `b_algo`) are dropped; DDG `uddg` and Bing `ck/a?u=a1...` links are unwrapped locally.
 - **No engine SLA.** Either engine can rate-limit, return 202/403, or change markup. Check `notes` and **Test engines**, then switch to SearXNG if needed.
 
 ### Readability HTTP fetch settings
@@ -834,7 +834,7 @@ Readability runs inside the Host. `jsdom`'s `tr46` dependency calls `createRequi
 
 Before releasing:
 
-- `package.json` version is `0.1.7`;
+- `package.json` version is `0.1.8`;
 - `CHANGELOG.md` has the matching entry;
 - `pnpm release` passes;
 - the worktree is clean;
@@ -851,16 +851,18 @@ pnpm pack --pack-destination dist
 Tag and push:
 
 ```sh
-git tag -a v0.1.7 -m "dsh-search-tools v0.1.7"
+git tag -a v0.1.8 -m "dsh-search-tools v0.1.8"
 git push origin main --follow-tags
 ```
 
 Pushing a `v*` tag triggers `.github/workflows/release.yml`:
 
-1. re-runs `pnpm release`;
-2. checks whether the version is already published and skips if so;
-3. publishes to npm with provenance using `NPM_TOKEN`;
-4. attaches the tarball to the GitHub Release.
+1. runs the full verification matrix on Ubuntu/Windows × Node 22/24, including `check:package`;
+2. verifies the tag matches `package.json` and the tag commit is on `main`;
+3. re-runs `pnpm release`;
+4. checks whether the version is already published and skips if so;
+5. publishes to npm with provenance using `NPM_TOKEN`;
+6. attaches the tarball to the GitHub Release and uses `docs/release-v<version>.md` as the body.
 
 Manual publish (does not attach provenance; prefer the tag workflow):
 
@@ -868,7 +870,7 @@ Manual publish (does not attach provenance; prefer the tag workflow):
 npm publish --access public
 ```
 
-After publishing, smoke-test a fresh profile: install, enable, run search tests through `local-direct` and `searxng`, run fetch tests through `readable-http`, `wire-http`, and `jina-reader`, and make one `web_research` call. See the [v0.1.7 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.7.md).
+After publishing, smoke-test a fresh profile: install, enable, run search tests through `local-direct` and `searxng`, run fetch tests through `readable-http`, `wire-http`, and `jina-reader`, and make one `web_research` call. See the [v0.1.8 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.8.md).
 
 ## Troubleshooting
 

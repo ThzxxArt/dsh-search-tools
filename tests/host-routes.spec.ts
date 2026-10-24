@@ -6,7 +6,9 @@ import type { FetchDispatcher, SearchDispatcher } from '../src/core/dispatchers.
 import { Diagnostics } from '../src/core/diagnostics.ts'
 import type { SearchToolsService } from '../src/core/service.ts'
 import type { JsonObject } from '../src/core/types.ts'
-import { registerRoutes, type RouteDeps } from '../src/host/routes.ts'
+import {
+  registerRoutes, searchPreviewTimeoutMs, searchProbeTimeoutMs, type RouteDeps,
+} from '../src/host/routes.ts'
 import { DEFAULT_ACTIVATION_CONFIG, DEFAULT_RESEARCH_CONFIG } from '../src/shared/defaults.ts'
 
 const BASE = '/api/dsh-search-tools'
@@ -103,6 +105,42 @@ describe('host route config contract', () => {
 
     expect(seen).toHaveLength(1)
     expect(seen[0]?.request.maxResults).toBe(17)
+  })
+})
+
+describe('search route timeout wiring', () => {
+  it('derives probe and preview signals from the draft search deadline', () => {
+    expect(searchProbeTimeoutMs({ deadlineMs: 60_000 })).toBe(65_000)
+    expect(searchPreviewTimeoutMs({ deadlineMs: 60_000 })).toBe(65_000)
+    expect(searchProbeTimeoutMs({ requestTimeoutMs: 30_000 })).toBe(35_000)
+    expect(searchPreviewTimeoutMs({})).toBe(30_000)
+    expect(searchProbeTimeoutMs({ deadlineMs: 999_999 })).toBe(190_000)
+  })
+})
+
+describe('probe route error contract', () => {
+  it('includes latencyMs when a probe throws', async () => {
+    const deps: RouteDeps = {
+      config: configOf(),
+      search: {
+        probe: async () => { throw new Error('probe exploded') },
+      } as unknown as SearchDispatcher,
+      fetch: {} as unknown as FetchDispatcher,
+      adapters: { listAdapters: () => ({ search: [], fetch: [] }) } as unknown as SearchToolsService,
+      diagnostics: new Diagnostics(),
+    }
+    const { ctx, handlers } = fakeContext()
+    registerRoutes(ctx, deps)
+    const response = responseOf()
+    await handlers.get(`${BASE}/probe`)!(requestOf({
+      kind: 'search',
+      adapter: 'local-direct',
+      config: { deadlineMs: 60_000 },
+    }), response)
+    const body = JSON.parse(response.body) as { ok: boolean; latencyMs: number; elapsedMs: number; message: string }
+    expect(body).toMatchObject({ ok: false, message: 'probe exploded' })
+    expect(body.latencyMs).toBeGreaterThanOrEqual(0)
+    expect(body.elapsedMs).toBeGreaterThanOrEqual(0)
   })
 })
 

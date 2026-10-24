@@ -32,7 +32,16 @@ export async function runOneShotWorker<TRequest, TResult>(
   options: OneShotWorkerOptions,
 ): Promise<TResult> {
   if (options.signal?.aborted === true) throw abortError(options)
-  const worker = new Worker(options.workerFile)
+  let worker: Worker
+  try {
+    worker = new Worker(options.workerFile)
+  } catch (error) {
+    throw new SearchToolsError(
+      `${options.label} worker could not start: ${errorMessage(error)}`,
+      options.runtimeCode,
+      { cause: error },
+    )
+  }
   let settled = false
 
   return await new Promise<TResult>((resolve, reject) => {
@@ -48,7 +57,11 @@ export async function runOneShotWorker<TRequest, TResult>(
     const cleanup = (): void => {
       clearTimeout(timer)
       options.signal?.removeEventListener('abort', onAbort)
-      void worker.terminate().catch(() => {})
+      try {
+        void worker.terminate().catch(() => {})
+      } catch {
+        // The worker may already be gone; nothing else owns it.
+      }
     }
     const finish = (error?: unknown, result?: TResult): void => {
       if (settled) return
@@ -58,12 +71,14 @@ export async function runOneShotWorker<TRequest, TResult>(
       else resolve(result as TResult)
     }
 
-    options.signal?.addEventListener('abort', onAbort, { once: true })
-    worker.once('message', (reply: WorkerReply<TResult>) => {
-      if (reply.ok) finish(undefined, reply.result)
-      else finish(new SearchToolsError(
-        reply.error?.message ?? `${options.label} worker failed`,
-        reply.error?.code ?? options.runtimeCode,
+    worker.once('message', (reply: WorkerReply<TResult> | undefined) => {
+      if (reply?.ok === true) {
+        finish(undefined, reply.result)
+        return
+      }
+      finish(new SearchToolsError(
+        reply?.error?.message ?? `${options.label} worker failed`,
+        reply?.error?.code ?? options.runtimeCode,
       ))
     })
     worker.once('error', (error) => {
@@ -80,7 +95,22 @@ export async function runOneShotWorker<TRequest, TResult>(
         options.runtimeCode,
       ))
     })
-    worker.postMessage(request)
+
+    options.signal?.addEventListener('abort', onAbort, { once: true })
+    // Close the race between the initial aborted check and listener attach.
+    if (options.signal?.aborted === true) {
+      onAbort()
+      return
+    }
+    try {
+      worker.postMessage(request)
+    } catch (error) {
+      finish(new SearchToolsError(
+        `${options.label} worker request could not be sent: ${errorMessage(error)}`,
+        options.runtimeCode,
+        { cause: error },
+      ))
+    }
   })
 }
 

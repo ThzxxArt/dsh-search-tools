@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **仓库版本：0.1.7（2026-10-24）。** 新增 **Local Direct** 搜索 adapter：本机直接查询 DuckDuckGo 和 Bing 的公开 HTML 结果页，解析、去重、RRF 融合、域名多样性和缓存都在本地完成；不需要 SearXNG、API key、Reader、浏览器或第三方聚合服务。查询会直接发往启用的公网搜索引擎，但不会经过 SearXNG/Reader；不执行页面 JavaScript。默认搜索仍是 `searxng`，稳定 provider id 和工具 schema 不变。详细边界见 [Local Direct 搜索配置](#local-direct-搜索配置) 与 [v0.1.7 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.7.md)。
+> **仓库版本：0.1.8（2026-10-24）。** 本版对 0.1.7 的 Local Direct 搜索、worker 生命周期、状态计数、测试/探测超时和发布门禁做了完整回归修复；新增 **Local Direct** 搜索 adapter：本机直接查询 DuckDuckGo 和 Bing 的公开 HTML 结果页，解析、去重、RRF 融合、域名多样性和缓存都在本地完成；不需要 SearXNG、API key、Reader、浏览器或第三方聚合服务。查询会直接发往启用的公网搜索引擎，但不会经过 SearXNG/Reader；不执行页面 JavaScript。默认搜索仍是 `searxng`，稳定 provider id 和工具 schema 不变。详细边界见 [Local Direct 搜索配置](#local-direct-搜索配置) 与 [v0.1.8 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.8.md)。
 
 ---
 
@@ -345,7 +345,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -379,7 +379,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
         wire-http:
           enabled: true
@@ -510,10 +510,10 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 - **不跟随重定向。** Impit 使用 `followRedirects:false` + `redirect:'manual'`；3xx 视为该引擎失败，不会跟随到未知 host。
 - **无 Cookie / Authorization / JS。** 每次搜索新建一个 Impit worker；不发送登录态，不执行页面脚本；worker 在成功、失败、abort、deadline 后都会终止。
 - **本地 RRF。** 每个引擎按排名贡献 `1/(60+rank+1)`；同 URL 合并更长标题/摘要；再按 hostname 多样性截断。查询词不参与第二阶段 LLM 重排。
-- **部分成功。** 一个引擎失败时返回另一个引擎的结果，并在 `notes` 写明失败引擎与原因；全部失败抛 `LOCAL_DIRECT_ALL_FAILED`，**不会**自动 fallback 到 SearXNG/Jina。
-- **缓存只写完整成功。** 只有所有启用引擎都成功且解析出结果才写缓存；部分成功不缓存，下一次会重试失败引擎。
+- **部分成功。** 一个引擎失败时返回另一个引擎的结果，并在 `notes` 写明失败引擎与原因；全部失败抛 `LOCAL_DIRECT_ALL_FAILED`，**不会**自动 fallback 到 SearXNG/Jina。若 200 页面的结果全部被 `includeDomains`/`excludeDomains` 过滤掉，该引擎仍算成功（空结果 + note），不会误报全部失败。
+- **缓存只写完整成功。** 只有所有启用引擎都成功、没有失败 note、且至少有结果时才写缓存；部分成功/空结果不缓存，下一次会重试失败引擎。
 - **探测。** Search 页的 **测试搜索引擎** 使用固定查询 `dsh-search-tools probe`，不写缓存；返回可达引擎列表。
-- **不解析广告。** DDG 的 `result--ad` 和 Bing 的 `b.ad`/`b_algo` 广告项会被丢弃；DDG `uddg` 和 Bing `ck/a?u=a1...` 的跳转链接在本地解包为真实结果 URL。
+- **不解析广告。** DDG 的 `result--ad` 和 Bing 的 `li.b_ad`（即使同时带 `b_algo`）广告项会被丢弃；DDG `uddg` 和 Bing `ck/a?u=a1...` 的跳转链接在本地解包为真实结果 URL。
 - **引擎可用性不是 SLA。** 两家都可能限流、返回 202/403 或改版；这是公开 HTML 路径的固有风险。出现空结果时先看 `notes` 和 **测试搜索引擎**，必要时切回 SearXNG。
 
 ### Readability HTTP 抓取配置
@@ -838,7 +838,7 @@ Readability 运行在 Host 内。`jsdom` 的 `tr46` 依赖会调用 `createRequi
 
 发布前确认：
 
-- `package.json` 版本是 `0.1.7`；
+- `package.json` 版本是 `0.1.8`；
 - `CHANGELOG.md` 有对应条目；
 - `pnpm release` 全绿；
 - 工作区干净；
@@ -855,16 +855,18 @@ pnpm pack --pack-destination dist
 打 tag 并推送：
 
 ```sh
-git tag -a v0.1.7 -m "dsh-search-tools v0.1.7"
+git tag -a v0.1.8 -m "dsh-search-tools v0.1.8"
 git push origin main --follow-tags
 ```
 
 推送 `v*` tag 会触发 `.github/workflows/release.yml`：
 
-1. 重复 `pnpm release`；
-2. 检查该版本是否已发布，已存在则跳过；
-3. 用 `NPM_TOKEN` 发布到 npm（provenance）；
-4. 把 tarball 附加到 GitHub Release。
+1. 在 Ubuntu/Windows × Node 22/24 上先跑完整验证矩阵（含 `check:package`）；
+2. 校验 tag 名与 `package.json` 版本一致，且 tag commit 在 `main` 上；
+3. 重复 `pnpm release`；
+4. 检查该版本是否已发布，已存在则跳过；
+5. 用 `NPM_TOKEN` 发布到 npm（provenance）；
+6. 把 tarball 附加到 GitHub Release，并使用 `docs/release-v<version>.md` 作为发布说明。
 
 手动发布（不产生 provenance；正式发布走 tag workflow）：
 
@@ -872,7 +874,7 @@ git push origin main --follow-tags
 npm publish --access public
 ```
 
-发布后做一次全新 profile 冒烟：安装、启用、分别用 `local-direct` 和 `searxng` 做搜索测试、分别用 `readable-http`、`wire-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.7 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.7.md)。
+发布后做一次全新 profile 冒烟：安装、启用、分别用 `local-direct` 和 `searxng` 做搜索测试、分别用 `readable-http`、`wire-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.8 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.8.md)。
 
 ## 故障排查
 

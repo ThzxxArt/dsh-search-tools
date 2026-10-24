@@ -195,7 +195,7 @@ export const STYLES = `
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 28px; color: var(--dsw-alias-label-secondary); font-size: 12px;
 }
-.dshst-checkbox-list input { width: 15px; height: 15px; margin: 0; accent-color: var(--dsw-alias-brand-primary); }
+.dshst-checkbox-list input { width: 15px; height: 15px; margin: 0; accent-color: var(--dsw-alias-state-business-primary); }
 .dshst-checkbox-list input:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }
 .dshst-field[data-invalid="true"] .dshst-checkbox-fieldset { color: var(--dsw-alias-state-error-primary); }
 .dshst-unit-wrap { display: flex; align-items: center; gap: 8px; }

@@ -27,7 +27,7 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.7',
+  version: '0.1.8',
   configPath: '/tmp/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0, sources: 0 },
   fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
@@ -507,7 +507,7 @@ describe('SettingsPage', () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.7')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.8')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
     expect(screen.getByTestId('runtime-state')).toHaveTextContent('Fetch: available · Research: registered')
   })
@@ -636,6 +636,40 @@ describe('Local Direct settings integration', () => {
     expect(screen.getByText('all local-direct engines failed')).toBeInTheDocument()
   })
 
+  it('shows partial engine probe results and their notes', async () => {
+    vi.mocked(probeSearch).mockResolvedValue({
+      ok: true,
+      latencyMs: 9,
+      engines: ['DuckDuckGo'],
+      message: 'Bing: engine request timed out',
+    })
+    await openLocalDirect()
+    fireEvent.click(screen.getByRole('button', { name: 'Test engines' }))
+
+    expect(await screen.findByText('Some engines are available')).toBeInTheDocument()
+    expect(screen.getByText('Bing: engine request timed out')).toBeInTheDocument()
+  })
+
+  it('does not let a stale probe overwrite a newer draft', async () => {
+    let resolveProbe!: (value: {
+      ok: boolean
+      latencyMs: number
+      engines: string[]
+    }) => void
+    vi.mocked(probeSearch).mockReturnValue(new Promise((resolve) => {
+      resolveProbe = resolve
+    }))
+    await openLocalDirect()
+    fireEvent.click(screen.getByRole('button', { name: 'Test engines' }))
+    fireEvent.click(screen.getByLabelText('Bing'))
+
+    await act(async () => {
+      resolveProbe({ ok: true, latencyMs: 7, engines: ['DuckDuckGo', 'Bing'] })
+    })
+    expect(screen.queryByText('Reachable engines')).not.toBeInTheDocument()
+    expect(screen.queryByText('Some engines are available')).not.toBeInTheDocument()
+  })
+
   it('uses sources rather than instance count for an engine-only backend', async () => {
     vi.mocked(fetchStatus).mockResolvedValue({
       ...STATUS,
@@ -644,6 +678,35 @@ describe('Local Direct settings integration', () => {
     renderPage()
     expect(await screen.findByText('2 sources')).toBeInTheDocument()
     expect(screen.getByText('Search sources')).toBeInTheDocument()
+  })
+
+  it('treats an explicit empty adapter object as manifest defaults', async () => {
+    const initial: StoredConfig = {
+      ...DEFAULT_STORED_CONFIG,
+      search: { adapter: 'local-direct', adapters: { 'local-direct': {} } },
+    }
+    renderPage(undefined, initial)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    expect(await screen.findByLabelText('DuckDuckGo')).toBeChecked()
+    expect(screen.getByLabelText('Bing')).toBeChecked()
+    expect(screen.queryByText('Needs setup')).not.toBeInTheDocument()
+  })
+
+  it('saves a checkbox toggle and blocks saving with no engines', async () => {
+    const { form } = renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Change backend' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Local Direct/ }))
+    await screen.findByText(/Runs locally/)
+
+    fireEvent.click(screen.getByLabelText('Bing'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save and apply' }))
+    await waitFor(() => expect(form.mutate).toHaveBeenCalled())
+    expect(JSON.stringify(form.mutate.mock.calls)).toContain('"engines":["duckduckgo"]')
+
+    fireEvent.click(screen.getByLabelText('DuckDuckGo'))
+    expect(screen.getByRole('button', { name: 'Save and apply' })).toBeDisabled()
+    expect(screen.getAllByText(/Enable at least one search engine/).length).toBeGreaterThan(0)
   })
 })
 

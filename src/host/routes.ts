@@ -13,15 +13,20 @@ import type { SearchToolsService } from '../core/service.ts'
 import type { Diagnostics } from '../core/diagnostics.ts'
 import type { CacheStats, JsonObject, StatusResponse } from '../core/types.ts'
 import { SearchToolsError, errorCode, errorMessage } from '../shared/errors.ts'
+import { getPath } from '../shared/path.ts'
 import { isRecord, readBoolean } from '../shared/validation.ts'
 
 const BASE = '/api/dsh-search-tools'
 const MAX_BODY_BYTES = 64 * 1024
-const VERSION = '0.1.7'
+const VERSION = '0.1.8'
 const FETCH_PREVIEW_BASE_TIMEOUT_MS = 30_000
 const FETCH_PROBE_BASE_TIMEOUT_MS = 30_000
 const FETCH_ROUTE_MAX_TIMEOUT_MS = 190_000
 const FETCH_ROUTE_TIMEOUT_OVERHEAD_MS = 5_000
+const SEARCH_PREVIEW_BASE_TIMEOUT_MS = 30_000
+const SEARCH_PROBE_BASE_TIMEOUT_MS = 20_000
+const SEARCH_ROUTE_MAX_TIMEOUT_MS = 190_000
+const SEARCH_ROUTE_TIMEOUT_OVERHEAD_MS = 5_000
 
 interface ConnectionFence {
   requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
@@ -97,7 +102,7 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
       const config = isRecord(body.config) ? body.config as JsonObject : {}
       const started = Date.now()
       try {
-        const timeoutMs = body.kind === 'fetch' ? fetchProbeTimeoutMs(config) : 20_000
+        const timeoutMs = body.kind === 'fetch' ? fetchProbeTimeoutMs(config) : searchProbeTimeoutMs(config)
         const result = adapter.length === 0
           ? { ok: false, code: 'ADAPTER_REQUIRED', message: 'adapter is required', latencyMs: 0 }
           : body.kind === 'fetch'
@@ -105,7 +110,7 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
             : await deps.search.probe(adapter, config, AbortSignal.timeout(timeoutMs))
         sendJson(res, 200, { ...result, elapsedMs: Date.now() - started })
       } catch (error) {
-        sendError(res, error, started)
+        sendProbeError(res, error, started)
       }
     },
   }), 'dsh-search-tools: probe route')
@@ -129,7 +134,7 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
           adapter,
           config,
           { query, ...(maxResults === undefined ? {} : { maxResults }) },
-          AbortSignal.timeout(30_000),
+          AbortSignal.timeout(searchPreviewTimeoutMs(config)),
         )
         sendJson(res, 200, { ok: true, ...result, elapsedMs: Date.now() - started })
       } catch (error) {
@@ -219,6 +224,30 @@ function fetchRouteTimeoutMs(config: unknown, base: number): number {
   return Math.min(FETCH_ROUTE_MAX_TIMEOUT_MS, Math.max(base, Math.ceil(value) + FETCH_ROUTE_TIMEOUT_OVERHEAD_MS))
 }
 
+/**
+ * Search probe/preview must outlive the adapter's own deadline. Local Direct
+ * allows 60s and SearXNG allows 300s; the outer route signal gets the same
+ * small overhead as fetch and a hard cap so a bad draft cannot hang the route.
+ */
+export function searchProbeTimeoutMs(config: unknown): number {
+  return searchRouteTimeoutMs(config, SEARCH_PROBE_BASE_TIMEOUT_MS)
+}
+
+export function searchPreviewTimeoutMs(config: unknown): number {
+  return searchRouteTimeoutMs(config, SEARCH_PREVIEW_BASE_TIMEOUT_MS)
+}
+
+function searchRouteTimeoutMs(config: unknown, base: number): number {
+  if (!isRecord(config)) return base
+  const value = typeof config.deadlineMs === 'number' && Number.isFinite(config.deadlineMs) && config.deadlineMs > 0
+    ? config.deadlineMs
+    : typeof config.requestTimeoutMs === 'number' && Number.isFinite(config.requestTimeoutMs) && config.requestTimeoutMs > 0
+      ? config.requestTimeoutMs
+      : undefined
+  if (value === undefined) return base
+  return Math.min(SEARCH_ROUTE_MAX_TIMEOUT_MS, Math.max(base, Math.ceil(value) + SEARCH_ROUTE_TIMEOUT_OVERHEAD_MS))
+}
+
 /** Build the same payload the wire route returns; exported for contract tests. */
 export async function buildStatus(ctx: Context, deps: RouteDeps): Promise<StatusResponse> {
   const state = snapshot(deps.config)
@@ -228,8 +257,8 @@ export async function buildStatus(ctx: Context, deps: RouteDeps): Promise<Status
   const searchConfig = state.search.adapters[state.search.adapter]
   const searchManifest = deps.adapters.getSearchAdapter(state.search.adapter)?.manifest
   const searchInstances = countInstances(searchConfig)
-  const searchSources = countSearchSources(searchManifest, searchConfig)
   const searchEnabled = adapterEnabled(searchConfig)
+  const searchSources = searchEnabled ? countSearchSources(searchManifest, searchConfig) : 0
   const fetchEnabled = adapterEnabled(state.fetch.adapters[state.fetch.adapter])
   return {
     version: VERSION,
@@ -300,27 +329,45 @@ function adapterEnabled(raw: unknown): boolean {
 }
 
 function countInstances(raw: unknown): number {
-  if (!isRecord(raw) || !Array.isArray(raw.instances)) return 0
-  return raw.instances.filter(entry => isRecord(entry) && entry.enabled !== false && typeof entry.url === 'string' && entry.url.length > 0).length
+  const instances = Array.isArray(raw)
+    ? raw
+    : isRecord(raw) && Array.isArray(raw.instances)
+      ? raw.instances
+      : undefined
+  if (instances === undefined) return 0
+  return instances.filter(entry => isRecord(entry) && entry.enabled !== false && typeof entry.url === 'string' && entry.url.length > 0).length
 }
 
 function countSearchSources(manifest: {
   fields: readonly { kind: string; key: string; options?: readonly { value: string }[] }[]
   defaults?: unknown
 } | undefined, raw: unknown): number {
-  if (manifest === undefined) return 0
+  if (manifest === undefined) {
+    // An adapter that was uninstalled can still have preserved instance config.
+    return countInstances(getPath(isRecord(raw) ? raw : {}, 'instances'))
+  }
   const config = isRecord(raw) ? raw : {}
   const defaults = isRecord(manifest.defaults) ? manifest.defaults : {}
   const instances = manifest.fields.find(field => field.kind === 'instances')
-  if (instances !== undefined) return countInstances(config)
+  if (instances !== undefined) return countInstances(getPath(config, instances.key))
   const checkboxes = manifest.fields.find(field => field.kind === 'checkboxes')
   if (checkboxes !== undefined) {
-    const value = config[checkboxes.key] ?? defaults[checkboxes.key]
+    // `undefined` means "not persisted" and uses the manifest default. `null`,
+    // a malformed value, or `[]` must not inflate the count.
+    const stored = getPath(config, checkboxes.key)
+    const value = stored === undefined ? getPath(defaults, checkboxes.key) : stored
     if (!Array.isArray(value)) return 0
-    const allowed = new Set((checkboxes.options ?? []).map(option => option.value))
-    return new Set(value.filter((entry): entry is string => typeof entry === 'string' && allowed.has(entry))).size
+    const allowed = new Set((checkboxes.options ?? []).map(option => option.value.trim().toLowerCase()))
+    const selected = value.flatMap((entry): string[] => {
+      if (typeof entry !== 'string') return []
+      const normalized = entry.trim().toLowerCase()
+      return allowed.has(normalized) ? [normalized] : []
+    })
+    return new Set(selected).size
   }
-  return 1
+  // Generic field-only adapters have no instance/engine list. A non-empty
+  // stored config represents one source; an empty object does not.
+  return Object.keys(config).length > 0 ? 1 : 0
 }
 
 async function readJson(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | undefined> {
@@ -359,6 +406,18 @@ function sendError(res: ServerResponse, error: unknown, started: number): void {
     code: errorCode(error, 'INTERNAL'),
     message: errorMessage(error),
     elapsedMs: Date.now() - started,
+  })
+}
+
+/** Keep the failed probe shape compatible with ProbeResult, including latency. */
+function sendProbeError(res: ServerResponse, error: unknown, started: number): void {
+  const elapsed = Date.now() - started
+  sendJson(res, 200, {
+    ok: false,
+    code: errorCode(error, 'INTERNAL'),
+    message: errorMessage(error),
+    latencyMs: elapsed,
+    elapsedMs: elapsed,
   })
 }
 

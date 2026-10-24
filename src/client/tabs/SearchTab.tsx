@@ -1,9 +1,9 @@
 /** Search tab: backend, connection, behavior, advanced fields, and test console. */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Button, IconPlayOutlineRegular, IconSlidersTwoOutlineRegular, SegmentedTabs, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SegmentedTab } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SettingsModel } from '../settings-model.ts'
+import type { SearchProbeState, SettingsModel } from '../settings-model.ts'
 import { AdapterPicker } from '../components/AdapterPicker.tsx'
 import { AdapterForm, resolveAdapterGroups } from '../components/AdapterForm.tsx'
 import { SectionCard } from '../components/SectionCard.tsx'
@@ -20,10 +20,12 @@ export function SearchTab({ model }: { model: SettingsModel }): React.ReactEleme
     onSecretDraft, onSecretSave, onSecretClear, runSearchTest, probeSearch,
   } = model
   const manifest = findManifest(adapters.search, draft.search.adapter)
+  const supportsEngineProbe = manifest?.fields.some(field => field.kind === 'checkboxes') === true
   const groups = manifest === undefined ? [] : resolveAdapterGroups(manifest, text, t)
   const canSplit = groups.length > 1
   const [view, setView] = useState<SearchView>('connection')
   const [pickerOpen, setPickerOpen] = useState(manifest === undefined)
+  const probeHintId = useId()
 
   useEffect(() => {
     if (!canSplit) setView('connection')
@@ -117,34 +119,25 @@ export function SearchTab({ model }: { model: SettingsModel }): React.ReactEleme
         title={t('testConsole')}
         description={t('testSearchHint')}
       >
-        <div className="dshst-probe-bar">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={readOnly || probingSearch || testing !== undefined}
-            onClick={() => { void probeSearch() }}
-          >
-            {probingSearch ? t('testingEngines') : t('testEngines')}
-          </Button>
-          <span className="dshst-field-hint">{t('engineProbeHint')}</span>
-        </div>
-        {searchProbe?.adapter === draft.search.adapter ? (
-          <div className="dshst-probe-result" data-ok={searchProbe.result.ok}>
-            <div className="dshst-probe-head">
-              <Tag tone={searchProbe.result.ok ? 'success' : 'danger'}>
-                {searchProbe.result.ok ? t('enginesReachable') : t('enginesFailed')}
-              </Tag>
-              <span className="dshst-field-hint">{t('elapsedMs', { ms: searchProbe.result.latencyMs })}</span>
+        {supportsEngineProbe ? (
+          <>
+            <div className="dshst-probe-bar">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={readOnly || probingSearch || testing !== undefined}
+                aria-describedby={probeHintId}
+                aria-busy={probingSearch}
+                onClick={() => { void probeSearch() }}
+              >
+                {probingSearch ? t('testingEngines') : t('testEngines')}
+              </Button>
+              <span className="dshst-field-hint" id={probeHintId}>{t('engineProbeHint')}</span>
             </div>
-            {searchProbe.result.engines === undefined || searchProbe.result.engines.length === 0 ? null : (
-              <div className="dshst-probe-engines">
-                {searchProbe.result.engines.map(engine => <Tag key={engine} tone="outline">{engine}</Tag>)}
-              </div>
-            )}
-            {searchProbe.result.ok || searchProbe.result.message === undefined ? null : (
-              <p className="dshst-field-error">{searchProbe.result.message}</p>
-            )}
-          </div>
+            {searchProbe?.adapter === draft.search.adapter ? (
+              <ProbeResultCard probe={searchProbe} t={t} />
+            ) : null}
+          </>
         ) : null}
         <TestConsole
           t={t}
@@ -153,12 +146,35 @@ export function SearchTab({ model }: { model: SettingsModel }): React.ReactEleme
           placeholder={t('query')}
           label={t('query')}
           testing={testing === 'search'}
-          disabled={testing !== undefined}
+          disabled={testing !== undefined || probingSearch}
           onChange={setQuery}
           onTest={() => { void runSearchTest() }}
         />
         <TestResult preview={preview?.kind === 'search' ? preview : undefined} t={t} />
       </SectionCard>
+    </div>
+  )
+}
+
+function ProbeResultCard({ probe, t }: { probe: SearchProbeState; t: SettingsModel['t'] }): React.ReactElement {
+  const { result } = probe
+  const partial = result.ok && result.message !== undefined && result.message.length > 0
+  return (
+    <div className="dshst-probe-result" data-ok={result.ok} role="status" aria-live="polite">
+      <div className="dshst-probe-head">
+        <Tag tone={partial ? 'warning' : result.ok ? 'success' : 'danger'}>
+          {partial ? t('enginesPartial') : result.ok ? t('enginesReachable') : t('enginesFailed')}
+        </Tag>
+        <span className="dshst-field-hint">{t('elapsedMs', { ms: result.latencyMs ?? 0 })}</span>
+      </div>
+      {result.engines === undefined || result.engines.length === 0 ? null : (
+        <div className="dshst-probe-engines">
+          {result.engines.map(engine => <Tag key={engine} tone="outline">{engine}</Tag>)}
+        </div>
+      )}
+      {result.message === undefined ? null : (
+        <p className={partial ? 'dshst-field-hint' : 'dshst-field-error'} role={partial ? undefined : 'alert'}>{result.message}</p>
+      )}
     </div>
   )
 }

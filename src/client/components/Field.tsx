@@ -53,22 +53,34 @@ export function Field({
   }
 
   if (field.kind === 'checkboxes') {
-    const selected = Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
+    const selected = Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === 'string')
+      : Array.isArray(field.default)
+        ? field.default.filter((entry): entry is string => typeof entry === 'string')
+        : []
+    // Adapters may normalize values to lower case (Local Direct does). Match
+    // those values without rewriting the user's stored strings during render.
+    const caseInsensitive = field.options.every(option => option.value === option.value.toLowerCase())
+    const matches = (entry: string, option: string): boolean => entry === option
+      || (caseInsensitive && entry.trim().toLowerCase() === option)
     const toggle = (option: string, checked: boolean): void => {
-      const next = checked
-        ? [...new Set([...selected, option])]
-        : selected.filter(entry => entry !== option)
-      onChange(next)
+      const without = selected.filter(entry => !matches(entry, option))
+      onChange(checked ? [...new Set([...without, option])] : without)
     }
     return (
       <div className="dshst-field" data-kind="checkboxes" data-invalid={error === undefined ? undefined : 'true'}>
-        <fieldset className="dshst-checkbox-fieldset" aria-describedby={describedBy} aria-invalid={error !== undefined}>
+        <fieldset
+          className="dshst-checkbox-fieldset"
+          aria-describedby={describedBy}
+          aria-invalid={error !== undefined}
+          aria-required={field.required === true}
+        >
           <legend className="dshst-field-label">{label}</legend>
           <div className="dshst-checkbox-list">
             {field.options.map(option => (
               <Checkbox
                 key={option.value}
-                checked={selected.includes(option.value)}
+                checked={selected.some(entry => matches(entry, option.value))}
                 label={text(option.label)}
                 disabled={disabled}
                 onChange={checked => { toggle(option.value, checked) }}

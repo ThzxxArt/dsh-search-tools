@@ -32,7 +32,9 @@ export function hasMeaningfulConfig(manifest: AdapterManifest, config: JsonObjec
   return manifest.fields
     .filter(field => field.kind !== 'boolean' && field.kind !== 'instances')
     .some((field) => {
-      const value = getPath(config, field.key)
+      // An explicit empty adapter object still inherits manifest defaults.
+      const stored = getPath(config, field.key)
+      const value = stored === undefined ? getPath(manifest.defaults, field.key) : stored
       if (typeof value === 'string') return value.trim().length > 0
       if (Array.isArray(value)) return value.length > 0
       return value !== undefined && value !== null

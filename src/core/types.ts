@@ -226,7 +226,7 @@ export interface StatusResponse {
     /** Enabled instances/sources for the current search adapter. */
     instances: number
     /** Adapter-neutral source count: engines for local-direct, instances for SearXNG. */
-    sources: number
+    sources?: number
   }
   fetch: {
     enabled: boolean

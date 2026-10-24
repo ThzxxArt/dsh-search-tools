@@ -22,6 +22,16 @@ const PROBE_QUERY = 'dsh-search-tools probe'
 const MAX_QUERY_CHARS = 500
 const RETRY_BASE_MS = 500
 
+/**
+ * Engine gates are process-wide, not runtime-instance-wide. A draft probe
+ * creates a fresh runtime; sharing the gate prevents probe → live-search bursts
+ * from bypassing `minIntervalMs`.
+ */
+const ENGINE_GATES: { chain: Promise<void>; lastRequestAt: Map<LocalDirectEngine, number> } = {
+  chain: Promise.resolve(),
+  lastRequestAt: new Map(),
+}
+
 export interface LocalDirectRuntimeOptions {
   /** Test seam for the built worker file. */
   workerFile?: URL | string
@@ -40,8 +50,6 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
   private cacheTtl = -1
   private hits = 0
   private misses = 0
-  private gateChain: Promise<void> = Promise.resolve()
-  private readonly lastRequestAt = new Map<LocalDirectEngine, number>()
 
   constructor(
     private readonly ctx: AdapterContext,
@@ -120,6 +128,7 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
     callerSignal: AbortSignal | undefined,
     useCache: boolean,
   ): Promise<SearchExecution> {
+    if (callerSignal?.aborted === true) throw abortError(callerSignal)
     const config = this.config()
     if (!config.enabled) throw new SearchToolsError('local-direct adapter is disabled', 'LOCAL_DIRECT_DISABLED')
     const engines = enabledEngines(config)
@@ -129,7 +138,13 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
     if (query.length === 0 || query.length > MAX_QUERY_CHARS) {
       throw new SearchToolsError(`query must be 1-${MAX_QUERY_CHARS} characters`, 'LOCAL_DIRECT_QUERY_INVALID')
     }
-    const limit = Math.max(1, Math.min(config.maxResults, request.maxResults ?? config.maxResults))
+    const requestedLimit = request.maxResults
+    const limit = Math.max(1, Math.min(
+      config.maxResults,
+      typeof requestedLimit === 'number' && Number.isFinite(requestedLimit)
+        ? Math.trunc(requestedLimit)
+        : config.maxResults,
+    ))
     const key = stableKey({
       query,
       limit,
@@ -147,6 +162,7 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
     const cache = useCache ? this.cacheFor(config) : undefined
     const cached = cache?.get(key)
     if (cached !== undefined) {
+      if ((callerSignal as AbortSignal | undefined)?.aborted === true) throw abortError(callerSignal)
       this.hits++
       return { result: cloneResult(cached), succeeded: [] }
     }
@@ -166,13 +182,40 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
 
     const pending = new Set<LocalDirectEngine>(engines)
     const succeeded = new Map<LocalDirectEngine, SearchSource[]>()
-    const notes: string[] = []
+    const roundNotes: string[] = []
+    const engineNotes = new Map<LocalDirectEngine, string>()
     let lastError: unknown
+
+    const finalize = (): SearchExecution => {
+      const fused = fuseSources(
+        [...succeeded.entries()].map(([engine, sources]) => ({ engine, sources })),
+        limit,
+        config.maxPerHost,
+      )
+      const complete = pending.size === 0 && succeeded.size === engines.length
+      // A complete success must not retain a transient failure note from an
+      // earlier round. Informational notes from an accepted empty/filtered
+      // result may remain, but only note-free complete results are cached.
+      const finalNotes = complete
+        ? [...engineNotes.values()]
+        : [...roundNotes, ...engineNotes.values()]
+      const uniqueNotes = [...new Set(finalNotes)].slice(0, 8)
+      const result: SearchResult = {
+        sources: fused.sources,
+        truncated: fused.truncated,
+        ...(uniqueNotes.length === 0 ? {} : { notes: uniqueNotes }),
+      }
+      if (complete && uniqueNotes.length === 0 && fused.sources.length > 0) cache?.set(key, cloneResult(result))
+      return { result, succeeded: [...succeeded.keys()] }
+    }
 
     try {
       for (let attempt = 0; attempt <= config.retries && pending.size > 0; attempt++) {
         if (callerSignal !== undefined && callerSignal.aborted) throw abortError(callerSignal)
-        if (timedOut || Date.now() >= deadlineAt) throw deadlineError(config.deadlineMs)
+        if (timedOut || Date.now() >= deadlineAt) {
+          if (succeeded.size > 0) break
+          throw deadlineError(config.deadlineMs)
+        }
         const targets = [...pending].map(engine => {
           const url = buildEngineUrl(engine, query, config).toString()
           assertFixedOrigin(engine, url)
@@ -195,33 +238,44 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
           })
         } catch (error) {
           if (callerSignal !== undefined && callerSignal.aborted) throw abortError(callerSignal)
-          if (timedOut || Date.now() >= deadlineAt) throw deadlineError(config.deadlineMs)
+          if (isFatalWorkerError(error)) throw error
+          if (timedOut || Date.now() >= deadlineAt) {
+            if (succeeded.size > 0) break
+            throw deadlineError(config.deadlineMs)
+          }
           lastError = error
-          notes.push(`round ${attempt + 1}: ${errorMessage(error)}`)
+          roundNotes.push(`round ${attempt + 1}: ${errorMessage(error)}`)
           if (attempt < config.retries) await this.sleep(retryDelay(attempt), signal)
           continue
         }
 
         for (const target of workerResult.targets) {
           if (!pending.has(target.engine)) continue
-          const failure = this.evaluateTarget(target, config)
-          if ('sources' in failure) {
-            succeeded.set(target.engine, failure.sources)
+          const evaluation = this.evaluateTarget(target, config)
+          if ('sources' in evaluation) {
+            succeeded.set(target.engine, evaluation.sources)
             pending.delete(target.engine)
+            if (evaluation.note === undefined) engineNotes.delete(target.engine)
+            else engineNotes.set(target.engine, `${LOCAL_DIRECT_ENGINE_LABELS[target.engine]}: ${evaluation.note}`)
           } else {
-            lastError = failure
-            notes.push(`${LOCAL_DIRECT_ENGINE_LABELS[target.engine]}: ${failure.message}`)
+            lastError = evaluation
+            engineNotes.set(target.engine, `${LOCAL_DIRECT_ENGINE_LABELS[target.engine]}: ${evaluation.message}`)
           }
         }
         if (pending.size > 0 && attempt < config.retries) {
           if (callerSignal !== undefined && callerSignal.aborted) throw abortError(callerSignal)
-          if (Date.now() + retryDelay(attempt) >= deadlineAt) throw deadlineError(config.deadlineMs)
+          if (Date.now() + retryDelay(attempt) >= deadlineAt) {
+            if (succeeded.size > 0) break
+            throw deadlineError(config.deadlineMs)
+          }
           await this.sleep(retryDelay(attempt), signal)
         }
       }
 
       if (callerSignal !== undefined && callerSignal.aborted) throw abortError(callerSignal)
-      if (timedOut || Date.now() >= deadlineAt) throw deadlineError(config.deadlineMs)
+      if ((timedOut || Date.now() >= deadlineAt) && succeeded.size === 0) {
+        throw deadlineError(config.deadlineMs)
+      }
       if (succeeded.size === 0) {
         const detail = lastError === undefined ? 'no engine returned a result' : errorMessage(lastError)
         throw new SearchToolsError(
@@ -230,23 +284,14 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
           lastError === undefined ? undefined : { cause: lastError },
         )
       }
-
-      const fused = fuseSources(
-        [...succeeded.entries()].map(([engine, sources]) => ({ engine, sources })),
-        limit,
-        config.maxPerHost,
-      )
-      const uniqueNotes = [...new Set(notes)].slice(0, 8)
-      const result: SearchResult = {
-        sources: fused.sources,
-        truncated: fused.truncated,
-        ...(uniqueNotes.length === 0 ? {} : { notes: uniqueNotes }),
-      }
-      if (pending.size === 0 && succeeded.size === engines.length) cache?.set(key, cloneResult(result))
-      return { result, succeeded: [...succeeded.keys()] }
+      return finalize()
     } catch (error) {
       if (callerSignal !== undefined && callerSignal.aborted) throw abortError(callerSignal)
-      if (timedOut || Date.now() >= deadlineAt) throw deadlineError(config.deadlineMs)
+      if (isFatalWorkerError(error)) throw error
+      if (timedOut || Date.now() >= deadlineAt) {
+        if (succeeded.size > 0) return finalize()
+        throw deadlineError(config.deadlineMs)
+      }
       throw error
     } finally {
       clearTimeout(timer)
@@ -256,15 +301,23 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
   private evaluateTarget(
     target: LocalDirectTargetResult,
     config: LocalDirectConfig,
-  ): { sources: SearchSource[] } | SearchToolsError {
+  ): { sources: SearchSource[]; note?: string } | SearchToolsError {
     if (!target.ok) {
       return new SearchToolsError(
         target.message ?? target.code ?? 'engine request failed',
         target.code ?? 'LOCAL_DIRECT_NETWORK',
       )
     }
-    if (target.status === undefined || target.status < 200 || target.status >= 300) {
+    if (target.status === undefined || !Number.isInteger(target.status) || target.status < 200 || target.status >= 300) {
       return new SearchToolsError(`engine returned HTTP ${target.status ?? 'unknown'}`, 'LOCAL_DIRECT_HTTP')
+    }
+    // DDG commonly answers challenges/rate limits with 202 (and some engines
+    // use 204); these are not a successful result page.
+    if (target.status === 202 || target.status === 204) {
+      return new SearchToolsError(
+        `engine returned HTTP ${target.status} (challenge or rate limit)`,
+        'LOCAL_DIRECT_HTTP',
+      )
     }
     if (target.body === undefined || target.body.byteLength === 0) {
       return new SearchToolsError('engine returned an empty body', 'LOCAL_DIRECT_EMPTY')
@@ -275,19 +328,37 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
     } catch (error) {
       return new SearchToolsError(`engine body could not be decoded: ${errorMessage(error)}`, 'LOCAL_DIRECT_DECODE')
     }
-    const parsed = parseLocalDirectHtml(target.engine, html, {
-      includeDomains: config.includeDomains,
-      excludeDomains: config.excludeDomains,
-    })
-    if (parsed.sources.length === 0) {
+    let parsed: ReturnType<typeof parseLocalDirectHtml>
+    try {
+      parsed = parseLocalDirectHtml(target.engine, html, {
+        includeDomains: config.includeDomains,
+        excludeDomains: config.excludeDomains,
+      })
+    } catch (error) {
+      return new SearchToolsError(
+        `engine HTML could not be parsed: ${errorMessage(error)}`,
+        'LOCAL_DIRECT_PARSE',
+        { cause: error },
+      )
+    }
+    // A page with parsed hits that are all removed by domain filters is a
+    // successful empty engine result. A 200 page with no parsed hits at all is
+    // more likely a challenge/consent/markup change; keep that explicit.
+    if (parsed.rawSources.length === 0) {
       return new SearchToolsError('engine returned no parseable results', 'LOCAL_DIRECT_EMPTY')
     }
-    return { sources: parsed.sources.map(source => ({
-      url: source.url,
-      ...(source.title === undefined ? {} : { title: source.title }),
-      ...(source.snippet === undefined ? {} : { snippet: source.snippet }),
-      ...(source.publishedAt === undefined ? {} : { publishedAt: source.publishedAt }),
-    })) }
+    const note = parsed.sources.length === 0
+      ? 'all results were removed by the domain filters'
+      : undefined
+    return {
+      sources: parsed.sources.map(source => ({
+        url: source.url,
+        ...(source.title === undefined ? {} : { title: source.title }),
+        ...(source.snippet === undefined ? {} : { snippet: source.snippet }),
+        ...(source.publishedAt === undefined ? {} : { publishedAt: source.publishedAt }),
+      })),
+      ...(note === undefined ? {} : { note }),
+    }
   }
 
   private async waitForGates(
@@ -296,18 +367,17 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
     signal: AbortSignal,
   ): Promise<void> {
     if (intervalMs <= 0 || engines.length === 0) return
-    const previous = this.gateChain
+    const previous = ENGINE_GATES.chain
     let release!: () => void
-    this.gateChain = new Promise<void>((resolve) => { release = resolve })
+    ENGINE_GATES.chain = new Promise<void>((resolve) => { release = resolve })
     try {
-      await previous
-      if (signal.aborted) throw abortError(signal)
+      await waitForGate(previous, signal)
       const now = this.ctx.now()
-      const waitUntil = Math.max(...engines.map(engine => (this.lastRequestAt.get(engine) ?? 0) + intervalMs))
+      const waitUntil = Math.max(...engines.map(engine => (ENGINE_GATES.lastRequestAt.get(engine) ?? 0) + intervalMs))
       const wait = waitUntil - now
       if (wait > 0) await this.sleep(wait, signal)
       const startedAt = this.ctx.now()
-      for (const engine of engines) this.lastRequestAt.set(engine, startedAt)
+      for (const engine of engines) ENGINE_GATES.lastRequestAt.set(engine, startedAt)
     } finally {
       release()
     }
@@ -326,6 +396,10 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
         reject(abortError(signal))
       }
       signal.addEventListener('abort', onAbort, { once: true })
+      if (signal.aborted) {
+        onAbort()
+        return
+      }
     })
   }
 }
@@ -350,6 +424,45 @@ function cloneResult(result: SearchResult, notes = result.notes): SearchResult {
 
 function retryDelay(attempt: number): number {
   return Math.min(2_000, RETRY_BASE_MS * 2 ** attempt + Math.floor(Math.random() * 250))
+}
+
+/** Wait for the previous gate holder, but let caller cancellation win immediately. */
+async function waitForGate(previous: Promise<void>, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw abortError(signal)
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    const cleanup = (): void => { signal.removeEventListener('abort', onAbort) }
+    const onAbort = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(abortError(signal))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    void previous.then(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve()
+    }, (error: unknown) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    })
+  })
+}
+
+/** Native-runtime and invalid-target failures cannot be fixed by retrying. */
+function isFatalWorkerError(error: unknown): boolean {
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? (error as { code?: unknown }).code
+    : undefined
+  return code === 'LOCAL_DIRECT_RUNTIME_UNAVAILABLE' || code === 'LOCAL_DIRECT_INVALID_TARGET'
 }
 
 function abortError(signal: AbortSignal | undefined): SearchToolsError {

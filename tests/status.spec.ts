@@ -10,6 +10,7 @@ import { DEFAULT_READABLE_HTTP_CONFIG } from '../src/fetch/adapters/readable-htt
 import { DEFAULT_ACTIVATION_CONFIG, DEFAULT_RESEARCH_CONFIG } from '../src/shared/defaults.ts'
 import { localDirectManifest } from '../src/search/adapters/local-direct/manifest.ts'
 import { DEFAULT_LOCAL_DIRECT_CONFIG } from '../src/search/adapters/local-direct/schema.ts'
+import { searxngManifest } from '../src/search/adapters/searxng/manifest.ts'
 import { DEFAULT_SEARXNG_CONFIG } from '../src/search/adapters/searxng/schema.ts'
 
 function configOf(
@@ -88,7 +89,7 @@ describe('status truth', () => {
       fetchAvailable: true,
       researchRegistered: true,
     }))
-    expect(status.version).toBe('0.1.7')
+    expect(status.version).toBe('0.1.8')
     expect(status.search.available).toBe(true)
     expect(status.search.registered).toBe(true)
     expect(status.search.sources).toBe(0)
@@ -147,6 +148,67 @@ describe('status truth', () => {
       search: { get: () => ({ adapter: 'local-direct', adapters: { 'local-direct': {} } }) },
     } as unknown as Config
     expect((await buildStatus(ctx, deps)).search.sources).toBe(2)
+
+    deps.config = {
+      ...deps.config,
+      search: {
+        get: () => ({
+          adapter: 'local-direct',
+          adapters: { 'local-direct': { engines: [' BING ', 'bing'] } },
+        }),
+      },
+    } as unknown as Config
+    expect((await buildStatus(ctx, deps)).search.sources).toBe(1)
+
+    deps.config = {
+      ...deps.config,
+      search: {
+        get: () => ({
+          adapter: 'local-direct',
+          adapters: { 'local-direct': { engines: null } },
+        }),
+      },
+    } as unknown as Config
+    expect((await buildStatus(ctx, deps)).search.sources).toBe(0)
+  })
+
+  it('counts enabled SearXNG instances and clears sources when the adapter is disabled', async () => {
+    const deps = depsOf()
+    deps.adapters = {
+      getSearchAdapter: (id: string) => id === 'searxng' ? { manifest: searxngManifest } : undefined,
+      getFetchAdapter: () => undefined,
+      listAdapters: () => ({ search: [searxngManifest], fetch: [] }),
+    } as unknown as SearchToolsService
+    const base = configOf(false)
+    deps.config = {
+      ...base,
+      search: {
+        get: () => ({
+          adapter: 'searxng',
+          adapters: {
+            searxng: {
+              ...DEFAULT_SEARXNG_CONFIG,
+              instances: [
+                { url: 'https://one.example', label: 'one', enabled: true },
+                { url: 'https://two.example', label: 'two', enabled: false },
+              ],
+            },
+          },
+        }),
+      },
+    } as unknown as Config
+    expect((await buildStatus(ctx, deps)).search.sources).toBe(1)
+
+    deps.config = {
+      ...base,
+      search: {
+        get: () => ({
+          adapter: 'searxng',
+          adapters: { searxng: { ...DEFAULT_SEARXNG_CONFIG, enabled: false, instances: [{ url: 'https://one.example', label: 'one', enabled: true }] } },
+        }),
+      },
+    } as unknown as Config
+    expect((await buildStatus(ctx, deps)).search.sources).toBe(0)
   })
 
   it('reports adapter enabled flags instead of hard-coding them', async () => {

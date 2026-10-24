@@ -57,7 +57,7 @@ switching back does not lose it.
       enabled: true
 ```
 
-`search.search` and `fetch` are volatile sections; `adapters` is an open
+`search` and `fetch` are volatile sections; `adapters` is an open
 dictionary. Adding an adapter does not require a core schema change. The adapter
 owns its defaults and validation.
 
@@ -104,8 +104,10 @@ probe through the same `/probe` route.
 Every route uses `connection.requestRejection`; bodies are JSON, bounded to
 64 KiB, and secrets are never logged or returned. `fetch-preview` and the fetch
 branch of `probe` derive their signals from the draft `timeoutMs`
-(30s/30s base, +5s, 190s cap); DSH's own `web_fetch` 30s tool timeout remains an
-outer bound outside this plugin.
+(30s/30s base, +5s, 190s cap); the search preview/probe branches do the same
+from `deadlineMs` (falling back to `requestTimeoutMs`), so a valid 60s Local
+Direct draft is not cut to 20/30s. DSH's own `web_fetch` 30s tool timeout
+remains an outer bound outside this plugin.
 
 ## Settings entry
 
@@ -126,8 +128,10 @@ Cookie/Authorization, executes no page JavaScript, and raises
 
 Parsing, ad removal, redirect unwrapping, RRF fusion, per-host diversity, and
 caching are local. A one-shot worker owns the native Impit client; it is
-terminated on reply, error, abort, and deadline. Per-engine failures are data
-(partial result + `notes`), not a reason to fail the other engine.
+terminated on reply, error, abort, and deadline, including request-clone and
+abort-race failures. Per-engine failures are data (partial result + `notes`),
+not a reason to fail the other engine; if the deadline stops a retry after one
+engine already succeeded, that partial result is returned rather than throwing.
 
 `web_research`'s search phase follows the selected search adapter; its fetch
 phase still requires public pages, so local/private result URLs are not read.

@@ -12,7 +12,7 @@ import {
 import { resolveJinaTarget } from './target.ts'
 
 const API_KEY_REF = 'JINA_API_KEY'
-const CLIENT_USER_AGENT = 'dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)'
+const CLIENT_USER_AGENT = 'dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)'
 const MAX_URL_LENGTH = 2_048
 /** Bound a hostile/accidental Retry-After value before exposing it as a hint. */
 const MAX_RETRY_AFTER_MS = 3_600_000

@@ -1,5 +1,10 @@
 # Release v0.1.7 — Local Direct search
 
+> **Status: published 2026-10-24.** Tag `v0.1.7` points at `9c58f23`; npm
+> `dsh-search-tools@0.1.7` and GitHub Release `v0.1.7` exist. Do not move or
+> recreate the tag. The post-release regression review shipped as
+> [v0.1.8](release-v0.1.8.md); 0.1.7 remains as the historical version.
+
 ## What ships
 
 - New `search:local-direct` adapter: DuckDuckGo + Bing public HTML first pages,
@@ -71,6 +76,9 @@ Expected evidence (2026-10-24 baseline: **240 passed / 8 live-skipped**):
     (`local-direct`) or enabled instances (`searxng`).
 
 ## Publish
+
+> Historical procedure only: v0.1.7 is already published. Do not run these
+> commands for it. Use [v0.1.8](release-v0.1.8.md) for the corrective release.
 
 Preferred: push the `v0.1.7` tag so `.github/workflows/release.yml` reruns
 `pnpm release`, publishes to npm with provenance when the version is not already
