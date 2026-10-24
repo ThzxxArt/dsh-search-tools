@@ -7,7 +7,14 @@
  * re-resolves the hostname. A redirect therefore hits the same guard again.
  */
 
-import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import {
+  createServer,
+  request as httpRequest,
+  type ClientRequestArgs,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from 'node:http'
 import { connect as netConnect, type Socket } from 'node:net'
 import { resolvePublicHost, stripIpv6Brackets, type PublicAddressResolver } from '../../../shared/public-target.ts'
 import { errorCode } from '../../../shared/errors.ts'
@@ -31,6 +38,8 @@ export interface EgressGuardOptions {
   resolver?: PublicAddressResolver
   /** Test seam; production connects to the validated IP with `net.connect`. */
   connector?: EgressConnector
+  /** Test seam for absolute-form HTTP requests; production uses Node's default socket. */
+  createConnection?: ClientRequestArgs['createConnection']
   maxHeaderBytes?: number
   idleTimeoutMs?: number
 }
@@ -42,6 +51,7 @@ export class EgressGuard {
   private readonly sockets = new Set<Socket>()
   private readonly resolver: PublicAddressResolver | undefined
   private readonly connector: EgressConnector
+  private readonly createConnection: ClientRequestArgs['createConnection'] | undefined
   private readonly maxHeaderBytes: number
   private readonly idleTimeoutMs: number
   private closed = false
@@ -49,6 +59,7 @@ export class EgressGuard {
   constructor(options: EgressGuardOptions = {}) {
     this.resolver = options.resolver
     this.connector = options.connector ?? ((address, port, family) => netConnect({ host: address, port, family }))
+    this.createConnection = options.createConnection
     this.maxHeaderBytes = options.maxHeaderBytes ?? DEFAULT_MAX_HEADER_BYTES
     this.idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
   }
@@ -222,6 +233,7 @@ export class EgressGuard {
           method: req.method,
           path: `${target.pathname}${target.search}`,
           headers,
+          ...(this.createConnection === undefined ? {} : { createConnection: this.createConnection }),
         })
         upstream = request
         request.on('socket', (socket) => {

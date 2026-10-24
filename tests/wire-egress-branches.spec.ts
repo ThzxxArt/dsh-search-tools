@@ -1,3 +1,4 @@
+import { createServer as createHttpServer, type IncomingHttpHeaders } from 'node:http'
 import { connect as netConnect, createServer as createNetServer, Socket, type AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { EgressGuard } from '../src/fetch/adapters/wire-http/egress-proxy.ts'
@@ -13,7 +14,7 @@ afterEach(async () => {
   })))
 })
 
-function listen(server: ReturnType<typeof createNetServer>): Promise<number> {
+function listen(server: ReturnType<typeof createNetServer> | ReturnType<typeof createHttpServer>): Promise<number> {
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => resolve((server.address() as AddressInfo).port))
   })
@@ -254,20 +255,53 @@ describe('absolute-form HTTP requests', () => {
   })
 
   it('tries the next validated address and strips hop-by-hop headers on a refused upstream', async () => {
+    const requests: IncomingHttpHeaders[] = []
+    const upstream = createHttpServer((req, res) => {
+      requests.push(req.headers)
+      res.writeHead(200, { 'content-type': 'text/plain' })
+      res.end('upstream ok')
+    })
+    servers.push(upstream)
+    const upstreamPort = await listen(upstream)
+
+    let attempts = 0
     const guard = new EgressGuard({
       resolver: async () => [
         { address: '8.8.8.8', family: 4 },
         { address: '8.8.4.4', family: 4 },
       ],
-      idleTimeoutMs: 100,
+      createConnection: (_options, oncreate) => {
+        attempts++
+        const socket = new Socket()
+        if (attempts === 1) {
+          // No public address is reliably refused on every CI network. Fail
+          // the first validated address through the documented test seam,
+          // then use a real local upstream for the second attempt.
+          process.nextTick(() => {
+            oncreate(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }), socket)
+          })
+          return socket
+        }
+        socket.connect(upstreamPort, '127.0.0.1', () => { oncreate(null, socket) })
+        return socket
+      },
+      idleTimeoutMs: 1_000,
     })
     guards.push(guard)
     await guard.start()
     const response = await rawExchange(
       proxyPort(guard.proxyUrl()),
-      'HEAD http://public.example/ HTTP/1.1\r\nHost: public.example\r\nConnection: keep-alive\r\nCookie: secret\r\nAuthorization: Bearer token\r\nProxy-Connection: keep-alive\r\nX-Test: yes\r\n\r\n',
-      1_500,
+      'GET http://public.example/ HTTP/1.1\r\nHost: public.example\r\nConnection: keep-alive\r\nCookie: secret\r\nAuthorization: Bearer token\r\nProxy-Connection: keep-alive\r\nX-Test: yes\r\n\r\n',
+      3_000,
     )
-    expect(response).toContain('502 Bad Gateway')
+    expect(response).toContain('200 OK')
+    expect(response).toContain('upstream ok')
+    expect(attempts).toBe(2)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.cookie).toBeUndefined()
+    expect(requests[0]?.authorization).toBeUndefined()
+    expect(requests[0]?.['proxy-connection']).toBeUndefined()
+    expect(requests[0]?.['x-test']).toBe('yes')
+    expect(requests[0]?.host).toBe('public.example')
   })
 })
