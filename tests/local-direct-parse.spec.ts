@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  parseBing, parseDuckDuckGo, unwrapBing, unwrapDuckDuckGo,
+  isLocalDirectNoResults, parseBing, parseDuckDuckGo, parseSo360,
+  unwrapBing, unwrapDuckDuckGo,
 } from '../src/search/adapters/local-direct/parse.ts'
 
 const ddg = readFileSync(new URL('./fixtures/local-direct-ddg.html', import.meta.url), 'utf8')
 const bing = readFileSync(new URL('./fixtures/local-direct-bing.html', import.meta.url), 'utf8')
+const so360 = readFileSync(new URL('./fixtures/local-direct-so360.html', import.meta.url), 'utf8')
 
 describe('local-direct HTML parsers', () => {
   it('parses DDG results, unwraps redirects, drops ads/tracking, and cleans text', () => {
@@ -56,5 +58,24 @@ describe('local-direct HTML parsers', () => {
       .toEqual([])
     expect(parseBing('<li class="b_algo"><h2><a href="https://user:pass@example.com/secret">Secret</a></h2></li>').sources)
       .toEqual([])
+  })
+
+  it('parses 360 through data-mdurl and ignores non-normal result types', () => {
+    const result = parseSo360(so360)
+    expect(result.sources.map(source => source.url)).toEqual([
+      'https://example.com/360-one',
+      'https://example.org/360-two',
+    ])
+    expect(result.sources[0]?.title).toBe('360 One')
+    expect(result.sources[0]?.snippet).toBe('First 360 snippet.')
+    expect(result.sources.some(source => source.url.includes('ads.example'))).toBe(false)
+  })
+
+  it('recognises explicit no-results pages without treating challenges as success', () => {
+    expect(isLocalDirectNoResults('duckduckgo', '<div class="no-results">No results.</div>')).toBe(true)
+    expect(isLocalDirectNoResults('bing', '<div id="b_results"><div class="b_no">There are no results for x</div></div>')).toBe(true)
+    expect(isLocalDirectNoResults('so360', '<div class="no-result">没有找到相关结果</div>')).toBe(true)
+    expect(isLocalDirectNoResults('duckduckgo', '<html><h1>CAPTCHA</h1></html>')).toBe(false)
+    expect(isLocalDirectNoResults('so360', '<html><h1>验证码</h1></html>')).toBe(false)
   })
 })

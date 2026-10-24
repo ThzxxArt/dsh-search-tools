@@ -87,10 +87,11 @@ describe('SearXNG request contract', () => {
     })
   })
 
-  it('merges successful pages and records a failed page as a note', async () => {
+  it('merges successful pages, records a failed page as a note, and never caches the partial result', async () => {
     const recorder = new Recorder()
     const runtime = new SearxngRuntime(context(recordingFetch((call) => {
-      if (call === 1) return jsonResponse([{ url: 'https://example.com/a', title: 'A' }])
+      const page = recorder.calls[call - 1]?.url.searchParams.get('pageno')
+      if (page === '1') return jsonResponse([{ url: 'https://example.com/a', title: 'A' }])
       return new Response('boom', { status: 500 })
     }, recorder)), () => config({ pages: 2, cacheMaxEntries: 10, cacheTtlMs: 10_000 }))
 
@@ -98,6 +99,10 @@ describe('SearXNG request contract', () => {
 
     expect(result.sources.map(source => source.url)).toEqual(['https://example.com/a'])
     expect(result.notes?.join(' ')).toContain('page 2')
+    expect(runtime.cacheStats().size).toBe(0)
+
+    await runtime.search({ query: 'partial' })
+    expect(recorder.calls).toHaveLength(4)
   })
 
   it('uses POST form bodies, round-robin order, and the request result cap', async () => {
@@ -222,6 +227,51 @@ describe('SearXNG request contract', () => {
 })
 
 describe('SearXNG cache contract', () => {
+  it('does not cache an empty result', async () => {
+    const recorder = new Recorder()
+    const runtime = new SearxngRuntime(context(recordingFetch(() => jsonResponse([]), recorder)), () => config({
+      cacheMaxEntries: 10,
+      cacheTtlMs: 10_000,
+    }))
+    await runtime.search({ query: 'empty' })
+    await runtime.search({ query: 'empty' })
+    expect(recorder.calls).toHaveLength(2)
+    expect(runtime.cacheStats().size).toBe(0)
+  })
+
+  it('checks caller cancellation before serving a cache hit', async () => {
+    const recorder = new Recorder()
+    const runtime = new SearxngRuntime(context(recordingFetch(() => jsonResponse(), recorder)), () => config({
+      cacheMaxEntries: 10,
+      cacheTtlMs: 10_000,
+    }))
+    await runtime.search({ query: 'cached abort' })
+    const controller = new AbortController()
+    controller.abort()
+    await expect(runtime.search({ query: 'cached abort' }, controller.signal)).rejects.toMatchObject({
+      code: 'WEB_ABORTED',
+    })
+    expect(recorder.calls).toHaveLength(1)
+    expect(runtime.cacheStats().hits).toBe(0)
+  })
+
+  it('bounds a hanging credential lookup by the search deadline', async () => {
+    const started = Date.now()
+    const credentials: CredentialLookup = {
+      resolve: async () => await new Promise<never>(() => {}),
+    }
+    const runtime = new SearxngRuntime(context(recordingFetch(() => jsonResponse(), new Recorder()), credentials), () => config({
+      auth: { type: 'bearer' },
+      deadlineMs: 1_000,
+      requestTimeoutMs: 5_000,
+      retries: 0,
+    }))
+    await expect(runtime.search({ query: 'credential-hang' })).rejects.toMatchObject({
+      code: 'SEARXNG_DEADLINE',
+    })
+    expect(Date.now() - started).toBeLessThan(2_000)
+  })
+
   it('honors TTL 0 as disabled', async () => {
     const recorder = new Recorder()
     const runtime = new SearxngRuntime(context(recordingFetch(() => jsonResponse(), recorder)), () => config({

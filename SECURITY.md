@@ -3,10 +3,9 @@
 ## Supported versions
 
 v0.1.x is the current preview line. DSH itself is preview software; treat this
-plugin as preview too. 0.1.8 fixes the 0.1.7 local-direct regression review and
-adds the opt-in local `local-direct` search path; the default `searxng` search
-and `readable-http` fetch boundaries are unchanged. The `wire-http` fetch path
-introduced in 0.1.6 remains opt-in.
+plugin as preview too. 0.1.9 adds 360 Search as an opt-in Local Direct HTML engine and runs one worker per engine; DuckDuckGo/Bing remain the defaults.
+The default `searxng` search and `readable-http` fetch boundaries are unchanged.
+The `wire-http` fetch path introduced in 0.1.6 remains opt-in.
 
 ## Reporting
 

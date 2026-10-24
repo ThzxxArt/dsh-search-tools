@@ -51,6 +51,15 @@ export interface FetchResult {
   truncated: boolean
 }
 
+export interface ProbeEngineResult {
+  engine: string
+  ok: boolean
+  latencyMs: number
+  code?: string
+  message?: string
+  sources?: number
+}
+
 /** Normalised probe outcome for the settings page. */
 export interface ProbeResult {
   ok: boolean
@@ -62,6 +71,10 @@ export interface ProbeResult {
   html?: boolean
   engines?: string[]
   categories?: string[]
+  /** Explicit partial-success state; never inferred from a human message. */
+  partial?: boolean
+  failedEngines?: string[]
+  engineResults?: ProbeEngineResult[]
   /** Fetch probe details: HTTP status and decoded body kind. */
   statusCode?: number
   contentType?: 'html' | 'text'
@@ -168,6 +181,9 @@ export interface AdapterManifest {
   groups?: readonly AdapterGroup[]
   fields: readonly AdapterField[]
   defaults: JsonObject
+  /** Optional manifest metadata; replaces page-side field-kind heuristics. */
+  sourceCount?: { field: string }
+  engineProbe?: boolean
   capabilities?: readonly AdapterCapability[]
   /** Secret fields this adapter resolves; the page renders them as write-only. */
   secretRefs?: readonly {

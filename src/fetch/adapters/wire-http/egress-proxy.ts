@@ -118,22 +118,48 @@ export class EgressGuard {
     try {
       const addresses = await resolvePublicHost(authority.host, controller.signal, this.resolver, WIRE_CODES)
       if (client.destroyed) return
-      const address = addresses[0]!
-      const upstream = this.connector(address.address, authority.port, address.family === 6 ? 6 : 4)
+      // DNS order is not a reachability guarantee (an IPv6-first answer on an
+      // IPv4-only host is the common case). Try each already-validated address
+      // in order, never re-resolving the hostname.
+      const upstream = await this.connectAny(addresses, authority.port, controller.signal)
+      if (client.destroyed) { upstream.destroy(); return }
       this.sockets.add(upstream)
       upstream.once('close', () => { this.sockets.delete(upstream) })
       upstream.once('error', () => { client.destroy() })
       upstream.setTimeout(this.idleTimeoutMs, () => { upstream.destroy() })
-      upstream.once('connect', () => {
-        if (client.destroyed) { upstream.destroy(); return }
-        client.write('HTTP/1.1 200 Connection Established\r\n\r\n')
-        if (head.length > 0) upstream.write(head)
-        upstream.pipe(client)
-        client.pipe(upstream)
-      })
+      client.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+      if (head.length > 0) upstream.write(head)
+      upstream.pipe(client)
+      client.pipe(upstream)
     } catch (error) {
       rejectConnect(client, statusFor(error), errorCode(error, 'WIRE_TARGET_BLOCKED'))
     }
+  }
+
+  private async connectAny(
+    addresses: ReadonlyArray<{ address: string; family: number }>,
+    port: number,
+    signal: AbortSignal,
+  ): Promise<Socket> {
+    let lastError: unknown
+    for (const entry of addresses) {
+      if (signal.aborted) throw new Error('egress connection aborted')
+      try {
+        return await connectSocket(
+          this.connector,
+          entry.address,
+          port,
+          entry.family === 6 ? 6 : 4,
+          signal,
+        )
+      } catch (error) {
+        if (signal.aborted) throw error
+        lastError = error
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('all resolved addresses failed')
   }
 
   private async handleHttp(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -163,51 +189,120 @@ export class EgressGuard {
     try {
       const addresses = await resolvePublicHost(target.hostname, controller.signal, this.resolver, WIRE_CODES)
       if (res.destroyed) return
-      const address = addresses[0]!
       const hostname = stripIpv6Brackets(target.hostname)
-      upstream = httpRequest({
-        host: hostname,
-        family: address.family === 6 ? 6 : 4,
-        // Return the already-validated address from the resolver. Node never
-        // performs a second DNS query, so the Host header can stay the real
-        // target hostname while the TCP connection stays pinned.
-        lookup: (_hostname, _options, callback) => {
-          callback(null, address.address, address.family === 6 ? 6 : 4)
-        },
-        port: target.port.length > 0 ? Number(target.port) : 80,
-        method: req.method,
-        path: `${target.pathname}${target.search}`,
-        headers: {
-          ...stripHopByHop(req.headers),
-          host: target.host,
-          connection: 'close',
-        },
-      })
-      const request = upstream
-      request.on('socket', (socket) => {
-        this.sockets.add(socket)
-        socket.once('close', () => { this.sockets.delete(socket) })
-      })
-      request.setTimeout(this.idleTimeoutMs, () => { request.destroy() })
-      request.once('response', (response) => {
-        res.writeHead(response.statusCode ?? 502, response.headers)
-        response.pipe(res)
-      })
-      request.once('error', (error) => {
-        if (!res.headersSent) {
-          res.writeHead(502, { connection: 'close', 'content-type': 'text/plain; charset=utf-8' })
-          res.end(`wire-http egress upstream failed: ${error.message}`)
-        } else {
-          res.destroy()
+      const port = target.port.length > 0 ? Number(target.port) : 80
+      const headers = {
+        ...stripHopByHop(req.headers),
+        host: target.host,
+        connection: 'close',
+      }
+      let attempt = 0
+      const fail = (error: Error): void => {
+        if (res.headersSent) { res.destroy(); return }
+        res.writeHead(502, { connection: 'close', 'content-type': 'text/plain; charset=utf-8' })
+        res.end(`wire-http egress upstream failed: ${error.message}`)
+      }
+      const next = (): void => {
+        if (res.destroyed || controller.signal.aborted) return
+        const address = addresses[attempt++]
+        if (address === undefined) {
+          fail(new Error('all resolved addresses failed'))
+          return
         }
-      })
-      req.pipe(request)
+        const request = httpRequest({
+          host: hostname,
+          family: address.family === 6 ? 6 : 4,
+          // Return the already-validated address from the resolver. Node never
+          // performs a second DNS query, so the Host header can stay the real
+          // target hostname while the TCP connection stays pinned.
+          lookup: (_hostname, _options, callback) => {
+            callback(null, address.address, address.family === 6 ? 6 : 4)
+          },
+          port,
+          method: req.method,
+          path: `${target.pathname}${target.search}`,
+          headers,
+        })
+        upstream = request
+        request.on('socket', (socket) => {
+          this.sockets.add(socket)
+          socket.once('close', () => { this.sockets.delete(socket) })
+        })
+        request.setTimeout(this.idleTimeoutMs, () => { request.destroy() })
+        request.once('response', (response) => {
+          if (res.destroyed) { response.destroy(); return }
+          res.writeHead(response.statusCode ?? 502, response.headers)
+          response.once('error', () => { res.destroy() })
+          response.pipe(res)
+        })
+        request.once('error', (error) => {
+          if (res.destroyed || controller.signal.aborted) return
+          // A failed address is not a failed host: try the next validated
+          // address before surfacing a 502. GET/HEAD have no body to replay.
+          if (!res.headersSent && attempt < addresses.length) {
+            request.destroy()
+            next()
+            return
+          }
+          fail(error)
+        })
+        req.pipe(request)
+      }
+      next()
     } catch (error) {
       if (res.headersSent) { res.destroy(); return }
       res.writeHead(statusFor(error), { connection: 'close', 'content-type': 'text/plain; charset=utf-8' })
       res.end(errorCode(error, 'WIRE_TARGET_BLOCKED'))
     }
   }
+}
+
+function connectSocket(
+  connector: EgressConnector,
+  address: string,
+  port: number,
+  family: 4 | 6,
+  signal: AbortSignal,
+): Promise<Socket> {
+  if (signal.aborted) return Promise.reject(new Error('egress connection aborted'))
+  return new Promise<Socket>((resolve, reject) => {
+    let socket: Socket
+    try {
+      socket = connector(address, port, family)
+    } catch (error) {
+      reject(error)
+      return
+    }
+    let settled = false
+    const cleanup = (): void => {
+      socket.off('connect', onConnect)
+      socket.off('error', onError)
+      signal.removeEventListener('abort', onAbort)
+    }
+    const finish = (error?: Error): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      if (error === undefined) resolve(socket)
+      else reject(error)
+    }
+    const onConnect = (): void => { finish() }
+    const onError = (error: Error): void => { finish(error) }
+    const onAbort = (): void => {
+      socket.destroy()
+      finish(new Error('egress connection aborted'))
+    }
+    socket.once('connect', onConnect)
+    socket.once('error', onError)
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (socket.destroyed) {
+      finish(new Error('socket closed before connect'))
+      return
+    }
+    // A test seam or an already-open socket may not emit another `connect`.
+    if (!socket.connecting) onConnect()
+    if (signal.aborted) onAbort()
+  })
 }
 
 function parseAuthority(raw: string | undefined): { host: string; port: number } | undefined {

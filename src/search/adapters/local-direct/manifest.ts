@@ -10,6 +10,7 @@ import {
 const engineLabels: Record<(typeof LOCAL_DIRECT_ENGINES)[number], ReturnType<typeof lt>> = {
   duckduckgo: lt('DuckDuckGo', 'DuckDuckGo'),
   bing: lt('Bing', 'Bing'),
+  so360: lt('360 Search · Chinese market', '360 搜索 · 中文市场'),
 }
 
 const marketLabels: Record<(typeof LOCAL_DIRECT_MARKETS)[number], ReturnType<typeof lt>> = {
@@ -201,8 +202,8 @@ export const localDirectManifest: AdapterManifest = {
   id: 'local-direct',
   label: lt('Local Direct', '本地直连'),
   description: lt(
-    'Query DuckDuckGo and Bing directly and fuse their results on this machine. No service, key, or browser.',
-    '直接查询 DuckDuckGo 和 Bing，并在本机融合结果。不需要服务、Key 或浏览器。',
+    'Query public HTML engines directly and fuse their results on this machine. DuckDuckGo and Bing are enabled by default; 360 is optional.',
+    '直接查询公开 HTML 搜索引擎，并在本机融合结果。默认启用 DuckDuckGo 与 Bing；360 可选。',
   ),
   notice: lt(
     'Runs locally: queries leave this machine to the enabled engines, but parsing, fusion, ranking, and caching stay here. No SearXNG, Reader, API key, browser, or third-party aggregator. JavaScript is not executed.',
@@ -228,5 +229,7 @@ export const localDirectManifest: AdapterManifest = {
   ],
   defaults: DEFAULT_LOCAL_DIRECT_CONFIG as unknown as JsonObject,
   fields,
+  sourceCount: { field: 'engines' },
+  engineProbe: true,
   capabilities: ['html', 'probe', 'cache'],
 }

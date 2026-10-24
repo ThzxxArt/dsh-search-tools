@@ -1,8 +1,8 @@
 /** Host entry: stable providers, adapter registry, research tool, settings routes. */
 
-import type { Context, Fiber } from '@deepseek-ai/cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-web'
-import { Config, snapshot, type Config as ConfigShape } from './config.ts'
+import { Config, type Config as ConfigShape } from './config.ts'
 import { Diagnostics } from './core/diagnostics.ts'
 import { FetchDispatcher, SearchDispatcher } from './core/dispatchers.ts'
 import { SearchToolsService } from './core/service.ts'
@@ -10,7 +10,7 @@ import { jinaReaderAdapter } from './fetch/adapters/jina-reader/adapter.ts'
 import { readableHttpAdapter } from './fetch/adapters/readable-http/adapter.ts'
 import { wireHttpAdapter } from './fetch/adapters/wire-http/adapter.ts'
 import { registerRoutes } from './host/routes.ts'
-import { applyResearchTool } from './research/tool.ts'
+import { createResearchToolSync } from './research/lifecycle.ts'
 import { localDirectAdapter } from './search/adapters/local-direct/adapter.ts'
 import { searxngAdapter } from './search/adapters/searxng/adapter.ts'
 
@@ -43,35 +43,11 @@ export function apply(ctx: Context, config: ConfigShape): void {
   // The research tool follows the live config. Disabling it removes its schema
   // from the model instead of leaving a tool that always throws. The declared
   // deadline is re-registered when the configured timeout changes.
-  let toolFiber: Fiber | undefined
-  let toolTimeout = -1
-  let researchToolRegistered = false
-  const syncTool = (): void => {
-    const state = snapshot(config)
-    const enabled = state.research.enabled
-    const timeout = state.research.timeoutMs
-    if (enabled && (toolFiber === undefined || toolTimeout !== timeout)) {
-      if (toolFiber !== undefined) void toolFiber.dispose()
-      toolTimeout = timeout
-      toolFiber = ctx.inject(['tools'], (child) => {
-        child.effect(() => {
-          const dispose = applyResearchTool(child, config, timeout)
-          researchToolRegistered = true
-          return () => {
-            researchToolRegistered = false
-            dispose()
-          }
-        }, 'dsh-search-tools: web_research tool')
-      })
-    } else if (!enabled && toolFiber !== undefined) {
-      void toolFiber.dispose()
-      toolFiber = undefined
-      toolTimeout = -1
-      researchToolRegistered = false
-    }
-  }
-  ;(ctx.on as unknown as (event: string, listener: () => void) => void)('loader/volatile-update', syncTool)
-  syncTool()
+  const researchTool = createResearchToolSync(ctx, config)
+  ;(ctx.on as unknown as (event: string, listener: () => void) => void)('loader/volatile-update', () => {
+    void researchTool.sync()
+  })
+  void researchTool.sync()
 
   ctx.inject(['webServer', 'connection'], (webCtx) => {
     registerRoutes(webCtx, {
@@ -80,7 +56,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
       fetch,
       adapters,
       diagnostics,
-      researchRegistered: () => researchToolRegistered,
+      researchRegistered: () => researchTool.registered(),
     })
   })
 }

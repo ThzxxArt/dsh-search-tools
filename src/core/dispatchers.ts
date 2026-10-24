@@ -28,9 +28,19 @@ export function createAdapterContext(ctx: Context): AdapterContext {
   }
 }
 
+interface SearchRuntimeEntry {
+  adapter: SearchAdapter
+  runtime: ReturnType<SearchAdapter['create']>
+}
+
+interface FetchRuntimeEntry {
+  adapter: FetchAdapter
+  runtime: ReturnType<FetchAdapter['create']>
+}
+
 export class SearchDispatcher implements WebSearchProvider {
   readonly id = SEARCH_PROVIDER_ID
-  private readonly runtimes = new Map<string, ReturnType<SearchAdapter['create']>>()
+  private readonly runtimes = new Map<string, SearchRuntimeEntry>()
   private readonly diagnostics: Diagnostics
   private readonly adapterContext: AdapterContext
 
@@ -72,7 +82,7 @@ export class SearchDispatcher implements WebSearchProvider {
   }
 
   clearCache(): void {
-    for (const runtime of this.runtimes.values()) runtime.clearCache?.()
+    for (const entry of this.runtimes.values()) entry.runtime.clearCache?.()
   }
 
   cacheStats(): CacheStats {
@@ -117,15 +127,17 @@ export class SearchDispatcher implements WebSearchProvider {
   }
 
   private runtimeFor(adapterId: string): ReturnType<SearchAdapter['create']> | undefined {
-    const existing = this.runtimes.get(adapterId)
-    if (existing !== undefined) return existing
     const adapter = this.adapters.getSearchAdapter(adapterId)
     if (adapter === undefined) return undefined
+    const existing = this.runtimes.get(adapterId)
+    // The service can dispose and re-register an adapter with the same id.
+    // Reuse a runtime only for the exact adapter object that created it.
+    if (existing !== undefined && existing.adapter === adapter) return existing.runtime
     const runtime = adapter.create(this.adapterContext, () => {
       const state = snapshot(this.config)
       return state.search.adapters[adapterId] ?? {}
     })
-    this.runtimes.set(adapterId, runtime)
+    this.runtimes.set(adapterId, { adapter, runtime })
     return runtime
   }
 }
@@ -156,7 +168,7 @@ function validationSummary(validation: { issues: readonly { path: string; messag
 
 export class FetchDispatcher implements WebFetchProvider {
   readonly id = FETCH_PROVIDER_ID
-  private readonly runtimes = new Map<string, ReturnType<FetchAdapter['create']>>()
+  private readonly runtimes = new Map<string, FetchRuntimeEntry>()
   private readonly diagnostics: Diagnostics
   private readonly adapterContext: AdapterContext
 
@@ -228,15 +240,15 @@ export class FetchDispatcher implements WebFetchProvider {
   }
 
   private runtimeFor(adapterId: string): ReturnType<FetchAdapter['create']> | undefined {
-    const existing = this.runtimes.get(adapterId)
-    if (existing !== undefined) return existing
     const adapter = this.adapters.getFetchAdapter(adapterId)
     if (adapter === undefined) return undefined
+    const existing = this.runtimes.get(adapterId)
+    if (existing !== undefined && existing.adapter === adapter) return existing.runtime
     const runtime = adapter.create(this.adapterContext, () => {
       const state = snapshot(this.config)
       return state.fetch.adapters[adapterId] ?? {}
     })
-    this.runtimes.set(adapterId, runtime)
+    this.runtimes.set(adapterId, { adapter, runtime })
     return runtime
   }
 }

@@ -51,6 +51,11 @@ describe('wire-http PDF text extraction', () => {
     expect(capped.text).toContain('Second page')
     expect(capped.text).not.toContain('Third page')
     expect(capped.truncated).toBe(true)
+
+    // A character cap can stop after page 1 even though the page cap is 3.
+    const charCapped = await extractPdfText(bytes.slice(), 3, 5)
+    expect(charCapped.pagesRead).toBe(1)
+    expect(charCapped.truncated).toBe(true)
   })
 })
 

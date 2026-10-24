@@ -74,6 +74,40 @@ describe('web_research pipeline', () => {
     expect(meta.truncated).toBe(true)
   })
 
+  it('releases a failed page budget so a later page still gets content', async () => {
+    const ctx = contextOf(async (url) => {
+      if (url.endsWith('/a')) throw new Error('HTTP 500')
+      return { url, statusCode: 200, body: { kind: 'text', content: 'x'.repeat(40) }, truncated: false }
+    })
+    const config = configOf({
+      ...DEFAULT_STORED_CONFIG,
+      research: { ...DEFAULT_RESEARCH_CONFIG, maxCharsPerPage: 50, maxTotalChars: 50 },
+    })
+    const value = await runResearch(ctx, config, { query: 'budget', fetch_top: 2 }, new AbortController().signal)
+    expect(value.fetched[0]?.error).toContain('HTTP 500')
+    expect(value.fetched[1]?.content).toHaveLength(40)
+  })
+
+  it('falls back to safe defaults for non-finite numeric arguments', async () => {
+    const ctx = contextOf(async (url) => ({
+      url,
+      statusCode: 200,
+      body: { kind: 'text', content: 'finite output' },
+      truncated: false,
+    }))
+    const config = configOf({
+      ...DEFAULT_STORED_CONFIG,
+      research: { ...DEFAULT_RESEARCH_CONFIG, maxCharsPerPage: 100, maxTotalChars: 100 },
+    })
+    const value = await runResearch(ctx, config, {
+      query: 'non-finite',
+      max_results: Number.NaN,
+      fetch_top: Number.POSITIVE_INFINITY,
+      max_chars: Number.NaN,
+    }, new AbortController().signal)
+    expect(value.fetched[0]?.content).toBe('finite output')
+  })
+
   it('records a per-page fetch failure without failing the whole call', async () => {
     const ctx = contextOf(async (url) => {
       if (url.endsWith('/a')) throw new Error('HTTP 404')

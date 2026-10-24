@@ -61,6 +61,28 @@ describe.skipIf(!live)('local-direct real engines', () => {
     expect(probe.engines?.length).toBeGreaterThan(0)
   }, 40_000)
 
+  it('queries the optional 360 engine and reports its result', async () => {
+    const runtime = new LocalDirectRuntime(context(), () => ({
+      profile: 'chrome',
+      engines: ['so360'],
+      requestTimeoutMs: 15_000,
+      deadlineMs: 40_000,
+      retries: 2,
+      minIntervalMs: 0,
+      cacheTtlMs: 0,
+      maxResults: 5,
+    }), { workerFile })
+
+    const probe = await runtime.probe()
+    expect(probe.ok).toBe(true)
+    expect(probe.engineResults?.map(engine => engine.engine)).toEqual(['360 Search'])
+    expect(probe.engineResults?.map(engine => engine.ok)).toEqual([true])
+    expect(probe.failedEngines).toBeUndefined()
+
+    const result = await runtime.search({ query: 'deepseek harness', maxResults: 5 })
+    expect(result.sources.length).toBeGreaterThan(0)
+  }, 60_000)
+
   it('feeds local search results into web_research for three pages', async () => {
     const runtime = new LocalDirectRuntime(context(), () => ({
       profile: 'chrome',

@@ -60,9 +60,9 @@ export async function runResearch(
   }
   const query = args.query.trim()
   if (query.length === 0) throw new Error('query must not be empty')
-  const maxResults = clamp(args.max_results ?? state.research.maxResults, 1, state.research.maxResults)
-  const fetchTop = clamp(args.fetch_top ?? state.research.defaultFetchTop, 0, state.research.maxFetch)
-  const maxChars = clamp(args.max_chars ?? state.research.maxCharsPerPage, 1_000, state.research.maxCharsPerPage)
+  const maxResults = clamp(finite(args.max_results, state.research.maxResults), 1, state.research.maxResults)
+  const fetchTop = clamp(finite(args.fetch_top, state.research.defaultFetchTop), 0, state.research.maxFetch)
+  const maxChars = clamp(finite(args.max_chars, state.research.maxCharsPerPage), 1_000, state.research.maxCharsPerPage)
   const timeoutMs = state.research.timeoutMs
 
   const timeout = new AbortController()
@@ -81,21 +81,11 @@ export async function runResearch(
     const maxBodyChars = readNumber(fetchConfig?.maxBodyChars, 2_000_000)
     const minArticleChars = readNumber(fetchConfig?.minArticleChars, 200)
 
-    // Reserve each page's worst-case budget before fetching. This keeps the
-    // total work bounded even when extraction or Markdown conversion is slow;
-    // pages that receive no budget are not fetched at all.
-    let remainingTotal = state.research.maxTotalChars
+    // Each page may use the per-page cap; the final pass below applies the
+    // total cap in source order. This keeps a failed or empty page from
+    // consuming budget that a later page could use.
     const pages = await mapLimit(selected, state.research.concurrency, async (source) => {
-      const budget = Math.max(0, Math.min(maxChars, remainingTotal))
-      remainingTotal -= budget
-      if (budget <= 0) {
-        return {
-          url: source.url,
-          ...(source.title === undefined ? {} : { title: source.title }),
-          content: '',
-          truncated: true,
-        }
-      }
+      const budget = maxChars
       try {
         const result = await ctx.web.fetch({ url: source.url }, runSignal)
         if (result.statusCode < 200 || result.statusCode >= 300) {
@@ -121,8 +111,11 @@ export async function runResearch(
           maxArticleChars: budget,
           maxBodyChars,
         }).catch(() => undefined)
-        const html = readable?.html ?? result.body.content
-        const markdown = turndown.turndown(html)
+        // extractReadable may return text without HTML when the article cannot
+        // be safely truncated. That text is the extracted boundary; falling
+        // back to the raw HTML would bypass it and lose `truncated`.
+        const content = readable?.html ?? readable?.text ?? result.body.content
+        const markdown = turndown.turndown(content)
         const clipped = clip(markdown, budget)
         return {
           url: source.url,
@@ -201,6 +194,10 @@ function hostOf(url: string): string {
   } catch {
     return url
   }
+}
+
+function finite(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
 function clamp(value: number, min: number, max: number): number {

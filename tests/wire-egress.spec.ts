@@ -106,6 +106,41 @@ describe('wire-http loopback egress guard', () => {
     socket.destroy()
   })
 
+  it('falls back to the next validated address when the first connection fails', async () => {
+    let upstreamConnections = 0
+    const upstream = createNetServer((socket) => {
+      upstreamConnections++
+      socket.on('data', (chunk) => { socket.write(chunk) })
+    })
+    servers.push(upstream)
+    const upstreamPort = await listen(upstream)
+
+    const dead = createNetServer()
+    const deadPort = await listen(dead)
+    await new Promise<void>((resolve) => { dead.close(() => { resolve() }) })
+
+    let attempts = 0
+    const guard = new EgressGuard({
+      resolver: async () => [
+        { address: '93.184.216.34', family: 4 },
+        { address: '93.184.216.35', family: 4 },
+      ],
+      connector: () => {
+        attempts++
+        return attempts === 1
+          ? netConnect({ host: '127.0.0.1', port: deadPort })
+          : netConnect({ host: '127.0.0.1', port: upstreamPort })
+      },
+    })
+    guards.push(guard)
+    const proxy = await guard.start()
+    const { socket, response } = await connectTunnel(proxyPort(proxy), 'public.example:443')
+    expect(response).toContain('200 Connection Established')
+    expect(attempts).toBe(2)
+    expect(upstreamConnections).toBe(1)
+    socket.destroy()
+  })
+
   it('rejects private and mixed DNS answers before any upstream connection', async () => {
     let upstreamConnections = 0
     const upstream = createNetServer(() => { upstreamConnections++ })

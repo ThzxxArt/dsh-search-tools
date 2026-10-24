@@ -53,15 +53,17 @@ export async function extractPdfText(
   try {
     document = await loadingTask.promise
     throwIfAborted(signal)
-    const pagesRead = Math.min(document.numPages, maxPages)
+    const pageLimit = Math.min(document.numPages, maxPages)
+    let pagesRead = 0
     const parts: string[] = []
-    for (let pageNumber = 1; pageNumber <= pagesRead; pageNumber++) {
+    for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber++) {
       throwIfAborted(signal)
       const page = await document.getPage(pageNumber)
       throwIfAborted(signal)
       const content = await page.getTextContent()
       throwIfAborted(signal)
       parts.push(textOf(content.items))
+      pagesRead = pageNumber
       if (parts.join('\n').length > maxChars) break
     }
     const joined = parts.join('\n').replace(/[ \t]+\n/gu, '\n').replace(/\n{3,}/gu, '\n\n').trim()
@@ -70,7 +72,7 @@ export async function extractPdfText(
       text: clipped.text,
       pagesRead,
       totalPages: document.numPages,
-      truncated: document.numPages > pagesRead || clipped.truncated,
+      truncated: document.numPages > pageLimit || pagesRead < pageLimit || clipped.truncated,
     }
   } finally {
     await loadingTask.destroy().catch(() => {})

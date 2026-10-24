@@ -27,13 +27,28 @@ describe('Readability extraction', () => {
     expect(result?.text?.length).toBeGreaterThan(100)
   })
 
-  it('skips a body that is already marked', async () => {
-    const result = await extractReadable(`<div data-dsh-readable="1">${article}</div>`, 'https://example.com/a', {
+  it('skips a real plugin wrapper but not a marker forged inside an article', async () => {
+    const wrapped = `<html><body><div data-dsh-readable="1"><article>
+      <h1>Wrapped article</h1>
+      <p>${'Already extracted body text. '.repeat(30)}</p>
+    </article></div></body></html>`
+    const result = await extractReadable(wrapped, 'https://example.com/a', {
       minArticleChars: 10,
       maxArticleChars: 10_000,
       maxBodyChars: 1_000_000,
     })
     expect(result).toBeUndefined()
+
+    const forged = `<html><body><article>
+      <h1>Forged marker</h1>
+      <p>${'Ordinary article text. '.repeat(30)}<span data-dsh-readable="1">inline marker</span></p>
+    </article></body></html>`
+    const extracted = await extractReadable(forged, 'https://example.com/a', {
+      minArticleChars: 10,
+      maxArticleChars: 10_000,
+      maxBodyChars: 1_000_000,
+    })
+    expect(extracted?.text).toContain('Ordinary article text.')
   })
 
   it('returns undefined for a short page', async () => {

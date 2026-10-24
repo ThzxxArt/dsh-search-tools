@@ -15,10 +15,10 @@ import type { CacheStats, JsonObject, StatusResponse } from '../core/types.ts'
 import { SearchToolsError, errorCode, errorMessage } from '../shared/errors.ts'
 import { getPath } from '../shared/path.ts'
 import { isRecord, readBoolean } from '../shared/validation.ts'
+import { VERSION } from '../version.ts'
 
 const BASE = '/api/dsh-search-tools'
 const MAX_BODY_BYTES = 64 * 1024
-const VERSION = '0.1.8'
 const FETCH_PREVIEW_BASE_TIMEOUT_MS = 30_000
 const FETCH_PROBE_BASE_TIMEOUT_MS = 30_000
 const FETCH_ROUTE_MAX_TIMEOUT_MS = 190_000
@@ -27,6 +27,7 @@ const SEARCH_PREVIEW_BASE_TIMEOUT_MS = 30_000
 const SEARCH_PROBE_BASE_TIMEOUT_MS = 20_000
 const SEARCH_ROUTE_MAX_TIMEOUT_MS = 190_000
 const SEARCH_ROUTE_TIMEOUT_OVERHEAD_MS = 5_000
+const STATUS_LOOKUP_TIMEOUT_MS = 1_000
 
 interface ConnectionFence {
   requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
@@ -300,7 +301,11 @@ async function describeCredentials(
   }
   const entries = await Promise.all(refs.map(async ref => {
     try {
-      const info = await credentials.describe(ref)
+      const info = await withTimeout(
+        credentials.describe(ref),
+        STATUS_LOOKUP_TIMEOUT_MS,
+        'credential describe timed out',
+      )
       return [ref, { configured: info.configured, ...(info.source === undefined ? {} : { source: info.source }), writable: info.writable }] as const
     } catch {
       return [ref, { configured: false, writable: false }] as const
@@ -313,7 +318,11 @@ async function configPathOf(ctx: Context): Promise<string | null> {
   const settings = ctx.get('settings') as SettingsPathService | undefined
   if (settings?.prepareDocument !== undefined) {
     try {
-      return await settings.prepareDocument()
+      return await withTimeout(
+        settings.prepareDocument(),
+        STATUS_LOOKUP_TIMEOUT_MS,
+        'settings document lookup timed out',
+      )
     } catch {
       // Fall through to the stable profile path.
     }
@@ -341,6 +350,7 @@ function countInstances(raw: unknown): number {
 function countSearchSources(manifest: {
   fields: readonly { kind: string; key: string; options?: readonly { value: string }[] }[]
   defaults?: unknown
+  sourceCount?: { field: string }
 } | undefined, raw: unknown): number {
   if (manifest === undefined) {
     // An adapter that was uninstalled can still have preserved instance config.
@@ -348,16 +358,18 @@ function countSearchSources(manifest: {
   }
   const config = isRecord(raw) ? raw : {}
   const defaults = isRecord(manifest.defaults) ? manifest.defaults : {}
-  const instances = manifest.fields.find(field => field.kind === 'instances')
-  if (instances !== undefined) return countInstances(getPath(config, instances.key))
-  const checkboxes = manifest.fields.find(field => field.kind === 'checkboxes')
-  if (checkboxes !== undefined) {
+  const sourceField = manifest.sourceCount?.field
+    ?? manifest.fields.find(field => field.kind === 'instances')?.key
+    ?? manifest.fields.find(field => field.kind === 'checkboxes')?.key
+  const field = sourceField === undefined ? undefined : manifest.fields.find(entry => entry.key === sourceField)
+  if (field?.kind === 'instances') return countInstances(getPath(config, field.key))
+  if (field?.kind === 'checkboxes') {
     // `undefined` means "not persisted" and uses the manifest default. `null`,
     // a malformed value, or `[]` must not inflate the count.
-    const stored = getPath(config, checkboxes.key)
-    const value = stored === undefined ? getPath(defaults, checkboxes.key) : stored
+    const stored = getPath(config, field.key)
+    const value = stored === undefined ? getPath(defaults, field.key) : stored
     if (!Array.isArray(value)) return 0
-    const allowed = new Set((checkboxes.options ?? []).map(option => option.value.trim().toLowerCase()))
+    const allowed = new Set((field.options ?? []).map(option => option.value.trim().toLowerCase()))
     const selected = value.flatMap((entry): string[] => {
       if (typeof entry !== 'string') return []
       const normalized = entry.trim().toLowerCase()
@@ -368,6 +380,29 @@ function countSearchSources(manifest: {
   // Generic field-only adapters have no instance/engine list. A non-empty
   // stored config represents one source; an empty object does not.
   return Object.keys(config).length > 0 ? 1 : 0
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      reject(new Error(message))
+    }, ms)
+    timer.unref?.()
+    promise.then((value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(value)
+    }, (error: unknown) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reject(error)
+    })
+  })
 }
 
 async function readJson(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | undefined> {

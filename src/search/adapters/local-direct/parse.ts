@@ -1,4 +1,4 @@
-/** Local DDG/Bing HTML parsers. Fixtures own selector coverage. */
+/** Local HTML parsers. Fixtures own selector coverage. */
 
 import { load } from 'cheerio'
 import type { SearchResult, SearchSource } from '../../../core/types.ts'
@@ -16,16 +16,6 @@ export interface LocalDirectParseOptions {
 /** `rawSources` includes results removed by the domain filters. */
 export type LocalDirectParseResult = SearchResult & { readonly rawSources: readonly SearchSource[] }
 
-export function parseLocalDirectHtml(
-  engine: LocalDirectEngine,
-  html: string,
-  options: LocalDirectParseOptions = {},
-): LocalDirectParseResult {
-  return engine === 'duckduckgo'
-    ? parseDuckDuckGo(html, options)
-    : parseBing(html, options)
-}
-
 export function parseDuckDuckGo(html: string, options: LocalDirectParseOptions = {}): LocalDirectParseResult {
   const $ = load(html)
   const sources = new Map<string, SearchSource>()
@@ -41,8 +31,7 @@ export function parseDuckDuckGo(html: string, options: LocalDirectParseOptions =
     const snippet = cleanText(node.find('.result__snippet').first().text())
     addSource(sources, url, title, snippet)
   })
-  const rawSources = [...sources.values()]
-  return { sources: rawSources.filter(source => allowed(source.url, options)), rawSources, truncated: false }
+  return resultOf(sources, options)
 }
 
 export function parseBing(html: string, options: LocalDirectParseOptions = {}): LocalDirectParseResult {
@@ -63,8 +52,40 @@ export function parseBing(html: string, options: LocalDirectParseOptions = {}): 
     )
     addSource(sources, url, title, snippet)
   })
-  const rawSources = [...sources.values()]
-  return { sources: rawSources.filter(source => allowed(source.url, options)), rawSources, truncated: false }
+  return resultOf(sources, options)
+}
+
+/** 360's visible link is a `so.com/link` redirector; `data-mdurl` is the target. */
+export function parseSo360(html: string, options: LocalDirectParseOptions = {}): LocalDirectParseResult {
+  const $ = load(html)
+  const sources = new Map<string, SearchSource>()
+  $('li.res-list[data-result-type="normal"]').each((_index, element) => {
+    const node = $(element)
+    const link = node.find('.res-title a[href]').first()
+    const rawTarget = link.attr('data-mdurl')
+      ?? absoluteRedirectTarget(link.attr('href'), 'https://www.so.com')
+    const url = safeSourceUrl(rawTarget)
+    if (url === undefined) return
+    const title = cleanText(link.text())
+    const snippet = cleanText(node.find('.res-desc').first().text())
+    addSource(sources, url, title, snippet)
+  })
+  return resultOf(sources, options)
+}
+
+export function isLocalDirectNoResults(engine: LocalDirectEngine, html: string): boolean {
+  const $ = load(html)
+  switch (engine) {
+    case 'duckduckgo':
+      return $('.no-results, #links .no-results').length > 0
+        || /\bno results(?: found)?\b/iu.test($('body').text())
+    case 'bing':
+      return $('#b_results .b_no, .no-results, .no-result').length > 0
+        || /there are no results for/iu.test($('body').text())
+    case 'so360':
+      return $('.no-result, .no-results').length > 0
+        || /(?:没有找到|未找到相关结果)/u.test($('body').text())
+  }
 }
 
 /** Resolve a DDG `/l/?uddg=...` link without fetching the redirector. */
@@ -99,6 +120,26 @@ export function unwrapBing(raw: string, base: string): string | undefined {
       }
       return undefined
     }
+    return url.toString()
+  } catch {
+    return undefined
+  }
+}
+
+function resultOf(
+  sources: Map<string, SearchSource>,
+  options: LocalDirectParseOptions,
+): LocalDirectParseResult {
+  const rawSources = [...sources.values()]
+  return { sources: rawSources.filter(source => allowed(source.url, options)), rawSources, truncated: false }
+}
+
+/** Accept only an absolute result target; never follow a search-engine redirector. */
+function absoluteRedirectTarget(raw: string | undefined, base: string): string | undefined {
+  if (raw === undefined || raw.length === 0) return undefined
+  try {
+    const url = new URL(raw, base)
+    if (url.origin === new URL(base).origin) return undefined
     return url.toString()
   } catch {
     return undefined

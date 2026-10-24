@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.1.9 — 2026-10-24
+
+### Added
+
+- Local Direct opt-in engine: **360 Search** (Chinese market), on a fixed
+  origin.
+- A single engine descriptor registry for origin/path/URL/parser/no-results, and
+  per-engine worker execution so one slow engine cannot discard another's
+  result.
+- Explicit probe metadata: `partial`, `failedEngines`, and `engineResults`.
+- Manifest `sourceCount` and `engineProbe` metadata.
+
+### Fixed
+
+- Local Direct normal no-results pages are successful empty results; deadline
+  checks use the adapter clock; gate/retry listeners are removed on every path;
+  probe partial state no longer depends on message text.
+- SearXNG caches only complete, note-free, non-empty results; cache hits honor
+  abort; credential lookup is bounded by the deadline; omitted categories use
+  `general`; CR/LF and oversized language values are rejected.
+- `web_research` falls back to extracted text, releases failed-page budget, and
+  handles non-finite numeric arguments.
+- Readability marker validation is structural; diagnostics redact URLs, bearer
+  tokens, and secret assignments.
+- wire-http falls back across validated DNS addresses; PDF pagesRead is actual;
+  Jina rejects empty 2xx content and accepts numeric-string `httpStatus`.
+- Dispatcher runtimes rebuild on adapter re-registration; research-tool
+  registration is serialized; status credential describe is bounded.
+- Settings merge defaults for display without persisting them; read-only
+  pickers are disabled; probes are cancellable and cannot overwrite newer drafts.
+
+### Changed
+
+- Default engines remain DuckDuckGo + Bing. 360 is opt-in.
+- Version metadata and default User-Agents report `0.1.9`.
+- Added `docs/release-v0.1.9.md` and regression tests for all fixed paths.
+
 ## 0.1.8 — 2026-10-24
 
 ### Fixed

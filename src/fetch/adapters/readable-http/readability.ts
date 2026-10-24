@@ -51,7 +51,6 @@ export async function extractReadable(
   options: ReadableOptions,
 ): Promise<ReadableExtraction | undefined> {
   if (html.length > options.maxBodyChars) return undefined
-  if (html.includes('data-dsh-readable="1"')) return undefined
 
   const { Readability } = await loadReadability()
   let document: Document
@@ -61,6 +60,10 @@ export async function extractReadable(
   } catch {
     return undefined
   }
+  // Only a plugin-produced root wrapper is already extracted. A page that
+  // merely mentions the marker string (or embeds it inside an article) is
+  // ordinary content and must still go through Readability.
+  if (isReadableWrapper(document)) return undefined
   try {
     const article = new Readability(document, {
       charThreshold: options.minArticleChars,
@@ -105,6 +108,15 @@ export async function extractReadable(
   } catch {
     return undefined
   }
+}
+
+function isReadableWrapper(document: Document): boolean {
+  const nodes = document.querySelectorAll('[data-dsh-readable="1"]')
+  if (nodes.length !== 1) return false
+  const node = nodes[0]
+  return node !== undefined
+    && node.parentElement?.tagName === 'BODY'
+    && node.childNodes.length > 0
 }
 
 function wrapReadable(html: string): string {

@@ -20,7 +20,10 @@ export function SearchTab({ model }: { model: SettingsModel }): React.ReactEleme
     onSecretDraft, onSecretSave, onSecretClear, runSearchTest, probeSearch,
   } = model
   const manifest = findManifest(adapters.search, draft.search.adapter)
-  const supportsEngineProbe = manifest?.fields.some(field => field.kind === 'checkboxes') === true
+  // Manifest metadata wins; the field-kind check remains for third-party
+  // manifests that predate it.
+  const supportsEngineProbe = manifest?.engineProbe === true
+    || (manifest?.engineProbe === undefined && manifest?.fields.some(field => field.kind === 'checkboxes') === true)
   const groups = manifest === undefined ? [] : resolveAdapterGroups(manifest, text, t)
   const canSplit = groups.length > 1
   const [view, setView] = useState<SearchView>('connection')
@@ -65,7 +68,7 @@ export function SearchTab({ model }: { model: SettingsModel }): React.ReactEleme
               <strong>{text(manifest.label)}</strong>
               <Tag tone={backendState === 'ready' ? 'success' : backendState === 'attention' ? 'warning' : 'outline'}>{backendStatus}</Tag>
             </div>
-            <Button size="sm" variant="ghost" onClick={() => { setPickerOpen(true) }}>{t('changeBackend')}</Button>
+            <Button size="sm" variant="ghost" disabled={readOnly} onClick={() => { setPickerOpen(true) }}>{t('changeBackend')}</Button>
           </div>
         ) : (
           <AdapterPicker
@@ -73,6 +76,7 @@ export function SearchTab({ model }: { model: SettingsModel }): React.ReactEleme
             value={draft.search.adapter}
             configs={draft.search.adapters}
             refreshing={refreshingAdapters}
+            disabled={readOnly}
             text={text}
             t={t}
             onRefresh={() => { void onRefreshAdapters() }}
@@ -158,7 +162,7 @@ export function SearchTab({ model }: { model: SettingsModel }): React.ReactEleme
 
 function ProbeResultCard({ probe, t }: { probe: SearchProbeState; t: SettingsModel['t'] }): React.ReactElement {
   const { result } = probe
-  const partial = result.ok && result.message !== undefined && result.message.length > 0
+  const partial = result.partial === true
   return (
     <div className="dshst-probe-result" data-ok={result.ok} role="status" aria-live="polite">
       <div className="dshst-probe-head">
@@ -170,6 +174,11 @@ function ProbeResultCard({ probe, t }: { probe: SearchProbeState; t: SettingsMod
       {result.engines === undefined || result.engines.length === 0 ? null : (
         <div className="dshst-probe-engines">
           {result.engines.map(engine => <Tag key={engine} tone="outline">{engine}</Tag>)}
+        </div>
+      )}
+      {result.failedEngines === undefined || result.failedEngines.length === 0 ? null : (
+        <div className="dshst-probe-engines">
+          {result.failedEngines.map(engine => <Tag key={engine} tone="danger">{engine}</Tag>)}
         </div>
       )}
       {result.message === undefined ? null : (

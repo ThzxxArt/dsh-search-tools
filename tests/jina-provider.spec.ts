@@ -102,7 +102,7 @@ describe('Jina Reader runtime request mapping', () => {
       accept: 'application/json',
       authorization: 'Bearer jina-secret',
       'content-type': 'application/x-www-form-urlencoded',
-      'user-agent': 'dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)',
+      'user-agent': 'dsh-search-tools/0.1.9 (+https://github.com/ThzxxArt/dsh-search-tools)',
       'x-engine': 'browser',
       'x-respond-with': 'html',
       'x-timeout': '59',
@@ -219,6 +219,13 @@ describe('Jina Reader response and failure mapping', () => {
       .toBe('html')
   })
 
+  it('accepts a numeric-string httpStatus from compatible Readers', async () => {
+    const result = await runtime({}, async () => response({
+      data: { content: 'missing', httpStatus: '404' },
+    })).fetch({ url: 'https://target.example/' })
+    expect(result.statusCode).toBe(404)
+  })
+
   it('reads the official httpStatus fallback when warning is absent', async () => {
     const fake = capture(async () => response({
       data: {
@@ -309,11 +316,13 @@ describe('Jina Reader response and failure mapping', () => {
       .rejects.toMatchObject({ code: 'JINA_RESPONSE_TOO_LARGE' })
   })
 
-  it('rejects malformed JSON and missing content', async () => {
+  it('rejects malformed JSON, missing content, and an empty 2xx body', async () => {
     await expect(runtime({}, async () => response('not json')).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_BAD_RESPONSE' })
     await expect(runtime({}, async () => response({ data: { url: 'https://target.example/' } })).fetch({ url: 'https://target.example/' }))
       .rejects.toMatchObject({ code: 'JINA_BAD_RESPONSE' })
+    await expect(runtime({}, async () => response({ data: { content: '   ', url: 'https://target.example/' } }))
+      .fetch({ url: 'https://target.example/' })).rejects.toMatchObject({ code: 'JINA_EMPTY_BODY' })
     await expect(runtime({ responseMode: 'html' }, async () => response({ data: { content: 'wrong field', url: 'https://target.example/' } }))
       .fetch({ url: 'https://target.example/' })).rejects.toMatchObject({ code: 'JINA_BAD_RESPONSE' })
     await expect(runtime({ responseMode: 'text' }, async () => response({ data: { content: 'wrong field', url: 'https://target.example/' } }))

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { StatusResponse } from '../src/core/types.ts'
+import { Diagnostics } from '../src/core/diagnostics.ts'
 import { formatDiagnostics } from '../src/client/diagnostic-text.ts'
 
 const status: StatusResponse = {
-  version: '0.1.8',
+  version: '0.1.9',
   configPath: '/home/user/.dsh/profiles/demo/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0, sources: 0 },
   fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
@@ -28,6 +29,21 @@ describe('formatDiagnostics', () => {
     expect(text).toContain('SEARXNG_BASIC_AUTH=unset')
     expect(text).toContain('cache: size=3 hits=2 misses=1')
     expect(text).toContain('SEARCH_FAILED searx.example.com: upstream 502')
+  })
+
+  it('redacts URLs, bearer tokens, and secret assignments at record time', () => {
+    const diagnostics = new Diagnostics()
+    const entry = diagnostics.record(
+      new Error('fetch https://example.com/private?q=secret failed with Bearer abc.def token=xyz password=hunter2'),
+      'FETCH_FAILED',
+      'https://example.com/private?q=secret',
+    )
+    expect(entry.host).toBe('https://example.com/private')
+    expect(entry.message).not.toContain('q=secret')
+    expect(entry.message).not.toContain('abc.def')
+    expect(entry.message).not.toContain('xyz')
+    expect(entry.message).not.toContain('hunter2')
+    expect(entry.message).toContain('https://example.com/private')
   })
 
   it('falls back to instances when an older status payload omits sources', () => {

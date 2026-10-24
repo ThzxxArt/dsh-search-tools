@@ -10,9 +10,10 @@ import {
   type JinaReaderConfig, type JinaResponseMode,
 } from './schema.ts'
 import { resolveJinaTarget } from './target.ts'
+import { VERSION } from '../../../version.ts'
 
 const API_KEY_REF = 'JINA_API_KEY'
-const CLIENT_USER_AGENT = 'dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)'
+const CLIENT_USER_AGENT = `dsh-search-tools/${VERSION} (+https://github.com/ThzxxArt/dsh-search-tools)`
 const MAX_URL_LENGTH = 2_048
 /** Bound a hostile/accidental Retry-After value before exposing it as a hint. */
 const MAX_RETRY_AFTER_MS = 3_600_000
@@ -102,6 +103,12 @@ export class JinaReaderRuntime implements FetchAdapterRuntime {
           }
         }
         throw new SearchToolsError(`Jina Reader response has no data.${modeField}`, 'JINA_BAD_RESPONSE')
+      }
+      if (statusCode < 300 && content.trim().length === 0) {
+        throw new SearchToolsError(
+          `Jina Reader response has empty data.${modeField}`,
+          'JINA_EMPTY_BODY',
+        )
       }
       const clipped = clipCodePoints(content, config.maxBodyChars, config.responseMode === 'html')
       return {
@@ -335,15 +342,20 @@ function targetStatus(payload: Record<string, unknown>): number {
       if (code >= 100 && code <= 599) return code
     }
   }
-  if (typeof data.httpStatus === 'number' && Number.isInteger(data.httpStatus)
-    && data.httpStatus >= 100 && data.httpStatus <= 599) {
-    return data.httpStatus
-  }
-  if (typeof data.statusCode === 'number' && Number.isInteger(data.statusCode)
-    && data.statusCode >= 100 && data.statusCode <= 599) {
-    return data.statusCode
-  }
+  const httpStatus = httpStatusOf(data.httpStatus)
+  if (httpStatus !== undefined) return httpStatus
+  const statusCode = httpStatusOf(data.statusCode)
+  if (statusCode !== undefined) return statusCode
   return 200
+}
+
+function httpStatusOf(value: unknown): number | undefined {
+  const numeric = typeof value === 'string' && /^\d{3}$/u.test(value.trim())
+    ? Number(value)
+    : value
+  return typeof numeric === 'number' && Number.isInteger(numeric) && numeric >= 100 && numeric <= 599
+    ? numeric
+    : undefined
 }
 
 function retryAfterMs(response: Response): number | undefined {

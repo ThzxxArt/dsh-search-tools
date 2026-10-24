@@ -6,11 +6,12 @@ import type { AdapterManifest, JsonObject, LocalizedText } from '../../core/type
 import { adapterState } from '../settings-utils.ts'
 import type { Translate } from './Field.tsx'
 
-export function AdapterPicker({ manifests, value, configs, refreshing, text, t, onRefresh, onChange }: {
+export function AdapterPicker({ manifests, value, configs, refreshing, disabled = false, text, t, onRefresh, onChange }: {
   manifests: readonly AdapterManifest[]
   value: string
   configs: Record<string, JsonObject>
   refreshing: boolean
+  disabled?: boolean
   text: (value: LocalizedText) => string
   t: Translate
   onRefresh: () => void
@@ -28,14 +29,14 @@ export function AdapterPicker({ manifests, value, configs, refreshing, text, t, 
           <div className="dshst-picker-label" id={labelId}>{t('adapter')}</div>
           <p className="dshst-field-hint" id={hintId}>{t('adapterHint')}</p>
         </div>
-        <Button size="sm" variant="outline" icon={<IconRefreshOutlineRegular size={13} />} disabled={refreshing} onClick={onRefresh}>
+        <Button size="sm" variant="outline" icon={<IconRefreshOutlineRegular size={13} />} disabled={disabled || refreshing} onClick={onRefresh}>
           {refreshing ? t('refreshingAdapters') : t('refreshAdapters')}
         </Button>
       </div>
       <div className="dshst-picker-grid" role="radiogroup" aria-labelledby={labelId} aria-describedby={hintId}>
         {missing ? (
           <label className="dshst-adapter-card" data-selected="true">
-            <input type="radio" name={groupName} value={value} checked onChange={() => { onChange(value) }} />
+            <input type="radio" name={groupName} value={value} checked disabled={disabled} onChange={() => { onChange(value) }} />
             <span className="dshst-adapter-body">
               <span className="dshst-adapter-head">
                 <span className="dshst-adapter-name">{t('adapterNotInstalled', { id: value })}</span>
@@ -52,7 +53,7 @@ export function AdapterPicker({ manifests, value, configs, refreshing, text, t, 
             : state === 'attention' ? t('adapterNeedsAttention') : t('adapterNeedsSetup')
           return (
             <label key={manifest.id} className="dshst-adapter-card" data-selected={value === manifest.id}>
-              <input type="radio" name={groupName} value={manifest.id} checked={value === manifest.id} onChange={() => { onChange(manifest.id) }} />
+              <input type="radio" name={groupName} value={manifest.id} checked={value === manifest.id} disabled={disabled} onChange={() => { onChange(manifest.id) }} />
               <span className="dshst-adapter-body">
                 <span className="dshst-adapter-head">
                   <span className="dshst-adapter-name">{text(manifest.label)}</span>

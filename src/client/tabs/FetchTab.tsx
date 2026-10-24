@@ -27,6 +27,7 @@ export function FetchTab({ model }: { model: SettingsModel }): React.ReactElemen
           value={draft.fetch.adapter}
           configs={draft.fetch.adapters}
           refreshing={refreshingAdapters}
+          disabled={readOnly}
           text={text}
           t={t}
           onRefresh={() => { void onRefreshAdapters() }}

@@ -29,6 +29,9 @@ describe('local-direct schema', () => {
   it('normalises engine duplicates and unknown values out of the runtime config', () => {
     const config = normalizeLocalDirectConfig({ engines: ['bing', 'BING', 'bogus', 'duckduckgo'] })
     expect(config.engines).toEqual(['bing', 'duckduckgo'])
+    expect(normalizeLocalDirectConfig({ engines: ['SO360', 'bogus'] }).engines)
+      .toEqual(['so360'])
+    expect(validateLocalDirectConfig({ engines: ['so360'] }).ok).toBe(true)
   })
 
   it('rejects empty, duplicate, and unknown engines instead of silently accepting them', () => {
@@ -101,17 +104,25 @@ describe('local-direct fixed engine URLs', () => {
     expect(bing.searchParams.get('setlang')).toBe('zh-hans')
     expect(bing.searchParams.get('cc')).toBe('CN')
     expect(bing.searchParams.get('adlt')).toBe('strict')
+
+    const so360 = buildEngineUrl('so360', '深度求索 harness', config)
+    expect(so360.origin).toBe('https://www.so.com')
+    expect(so360.pathname).toBe('/s')
+    expect(so360.searchParams.get('q')).toBe('深度求索 harness')
+    expect(so360.searchParams.get('ie')).toBe('utf-8')
+
     expect(acceptLanguageFor(config)).toContain('zh-CN')
     expect(() => assertFixedOrigin('bing', ddg.toString())).toThrow(/fixed|must use/)
   })
 
-  it('allows every engine to be queried through a stable URL', () => {
+  it('allows every engine to be queried through a stable URL and rejects path swaps', () => {
     const config = normalizeLocalDirectConfig({})
-    for (const engine of ['duckduckgo', 'bing'] as const) {
+    for (const engine of ['duckduckgo', 'bing', 'so360'] as const) {
       const url = buildEngineUrl(engine, 'q', config)
       expect(() => assertFixedOrigin(engine, url.toString())).not.toThrow()
     }
     expect(() => assertFixedOrigin('bing', 'https://evil.example/search')).toThrow()
+    expect(() => assertFixedOrigin('bing', 'https://www.bing.com/evil')).toThrow(/path/)
   })
 })
 

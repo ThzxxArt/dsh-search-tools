@@ -11,6 +11,16 @@ describe('adapter config defaults', () => {
     expect(config.instances[0]?.url).toBe('https://searx.example.com/search')
     expect(config.maxResults).toBe(10)
     expect(config.auth.type).toBe('none')
+    expect(config.categories).toEqual(['general'])
+    expect(normalizeSearxngConfig({ categories: [] }).categories).toEqual([])
+  })
+
+  it('rejects CR/LF or oversized language values before they reach a header', () => {
+    expect(validateSearxngConfig({ language: 'en\r\nX-Injected: 1' }).issues.some(issue => issue.code === 'language.invalid'))
+      .toBe(true)
+    expect(validateSearxngConfig({ language: 'x'.repeat(65) }).issues.some(issue => issue.code === 'language.invalid'))
+      .toBe(true)
+    expect(normalizeSearxngConfig({ language: 'en\r\nX-Injected: 1' }).language).toBe('all')
   })
 
   it('rejects an enabled instance without a URL', () => {

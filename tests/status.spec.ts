@@ -89,7 +89,7 @@ describe('status truth', () => {
       fetchAvailable: true,
       researchRegistered: true,
     }))
-    expect(status.version).toBe('0.1.8')
+    expect(status.version).toBe('0.1.9')
     expect(status.search.available).toBe(true)
     expect(status.search.registered).toBe(true)
     expect(status.search.sources).toBe(0)
@@ -210,6 +210,24 @@ describe('status truth', () => {
     } as unknown as Config
     expect((await buildStatus(ctx, deps)).search.sources).toBe(0)
   })
+
+  it('bounds a hanging credential describe instead of hanging status', async () => {
+    const deps = depsOf()
+    deps.adapters = {
+      getSearchAdapter: (id: string) => id === 'searxng' ? { manifest: searxngManifest } : undefined,
+      getFetchAdapter: () => undefined,
+      listAdapters: () => ({ search: [searxngManifest], fetch: [] }),
+    } as unknown as SearchToolsService
+    const credentialCtx = {
+      get: (name: string) => name === 'credentials'
+        ? { describe: async () => await new Promise(() => {}) }
+        : undefined,
+    } as unknown as Context
+    const started = Date.now()
+    const status = await buildStatus(credentialCtx, deps)
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(status.credentials.SEARXNG_TOKEN).toMatchObject({ configured: false, writable: false })
+  }, 4_000)
 
   it('reports adapter enabled flags instead of hard-coding them', async () => {
     const status = await buildStatus(ctx, depsOf({

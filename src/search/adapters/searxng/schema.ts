@@ -5,6 +5,7 @@ import { normalizeInstanceUrl } from '../../../shared/url.ts'
 import {
   isRecord, issue, normalizeTags, readBoolean, readNumber, readString, result,
 } from '../../../shared/validation.ts'
+import { VERSION } from '../../../version.ts'
 
 export type SearxngAuthType = 'none' | 'bearer' | 'basic'
 export type SearxngTimeRange = '' | 'day' | 'week' | 'month' | 'year'
@@ -62,7 +63,7 @@ export const DEFAULT_SEARXNG_CONFIG: SearxngConfig = {
   retries: 1,
   cacheTtlMs: 300_000,
   cacheMaxEntries: 200,
-  userAgent: 'dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)',
+  userAgent: `dsh-search-tools/${VERSION} (+https://github.com/ThzxxArt/dsh-search-tools)`,
   proxy: '',
   includeDomains: [],
   excludeDomains: [],
@@ -110,13 +111,19 @@ export function normalizeSearxngConfig(raw: unknown): SearxngConfig {
     : []
   const auth = isRecord(value.auth) ? value.auth : {}
   const safesearch = readNumber(value.safesearch, DEFAULT_SEARXNG_CONFIG.safesearch)
+  const language = readString(value.language, DEFAULT_SEARXNG_CONFIG.language).trim()
   return {
     ...DEFAULT_SEARXNG_CONFIG,
     ...value,
     instances,
     engines: normalizeTags(readStringArray(value.engines)),
-    categories: normalizeTags(readStringArray(value.categories)),
-    language: readString(value.language, DEFAULT_SEARXNG_CONFIG.language).trim() || 'all',
+    categories: value.categories === undefined
+      ? [...DEFAULT_SEARXNG_CONFIG.categories]
+      : normalizeTags(readStringArray(value.categories)),
+    // This value becomes an HTTP header; never pass CR/LF or an unbounded value.
+    language: language.length === 0 || language.length > 64 || /[\r\n]/u.test(language)
+      ? DEFAULT_SEARXNG_CONFIG.language
+      : language,
     safesearch: safesearch === 0 || safesearch === 1 || safesearch === 2 ? safesearch : 1,
     timeRange: TIME_RANGES.has(readString(value.timeRange, '')) ? readString(value.timeRange, '') as SearxngTimeRange : '',
     pages: clampInt(readNumber(value.pages, 1), 1, 3),
@@ -192,6 +199,12 @@ export function validateSearxngConfig(raw: unknown): AdapterValidation {
   validateEnum(value, 'method', 'Request method', METHODS, issues)
   validateEnum(value, 'format', 'Response format', FORMATS, issues)
   validateText(value, 'language', 'Language', issues)
+  if (typeof value.language === 'string') {
+    const language = value.language.trim()
+    if (language.length > 64 || /[\r\n]/u.test(language)) {
+      issues.push(issue('language', 'Language 过长或包含换行', 'language.invalid'))
+    }
+  }
   validateText(value, 'userAgent', 'User-Agent', issues)
   validateText(value, 'proxy', 'Proxy', issues)
 

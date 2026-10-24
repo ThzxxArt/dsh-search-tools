@@ -51,14 +51,14 @@ describe('web_research timeout and budget', () => {
     expect(fetchCalls).toBeGreaterThan(0)
   })
 
-  it('reserves the total budget before fetching later pages', async () => {
+  it('applies the total budget in source order after fetching', async () => {
     let fetchCalls = 0
     const ctx = {
       web: {
         search: async () => ({ sources, truncated: false }),
         fetch: async ({ url }: { url: string }) => {
           fetchCalls++
-          return { url, statusCode: 200, body: { kind: 'text', content: 'x'.repeat(400) }, truncated: false }
+          return { url, statusCode: 200, body: { kind: 'text', content: 'x'.repeat(1_000) }, truncated: false }
         },
       },
       logger: { warn() {} },
@@ -71,8 +71,9 @@ describe('web_research timeout and budget', () => {
       new AbortController().signal,
     )
 
-    expect(fetchCalls).toBe(1)
+    expect(fetchCalls).toBe(2)
     expect(value.fetched).toHaveLength(2)
+    expect(value.fetched[0]?.content).toHaveLength(1_000)
     expect(value.fetched[1]?.content).toBe('')
     expect(value.fetched[1]?.truncated).toBe(true)
   })

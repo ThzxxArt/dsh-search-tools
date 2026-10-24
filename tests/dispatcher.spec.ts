@@ -240,4 +240,50 @@ describe('stable search provider', () => {
     const result = await dispatcher.search({ query: 'q' })
     expect(result.sources[0]?.url).toBe('https://example.com/fake')
   })
+
+  it('rebuilds the runtime when an adapter with the same id is re-registered', async () => {
+    let version = 1
+    let created = 0
+    let adapter: SearchAdapter
+    const makeAdapter = (): SearchAdapter => ({
+      manifest: {
+        kind: 'search',
+        id: 'fake',
+        label: 'Fake',
+        description: 'Test adapter',
+        fields: [],
+        defaults: {},
+      },
+      validate: () => ({ ok: true, issues: [] }),
+      create: () => {
+        created++
+        return {
+          available: () => true,
+          search: async () => ({
+            sources: [{ url: `https://example.com/v${version}` }],
+            truncated: false,
+          }),
+        }
+      },
+    })
+    adapter = makeAdapter()
+    const adapters = {
+      getSearchAdapter: (id: string) => id === 'fake' ? adapter : undefined,
+      listAdapters: () => ({ search: [adapter.manifest], fetch: [] }),
+    } as unknown as SearchToolsService
+    const config = {
+      search: { get: () => ({ adapter: 'fake', adapters: { fake: {} } }) },
+      fetch: { get: () => ({ adapter: 'readable-http', adapters: {} }) },
+      research: { get: () => DEFAULT_RESEARCH_CONFIG },
+      activation: { get: () => DEFAULT_ACTIVATION_CONFIG },
+    } as unknown as Config
+    const ctx = { logger, get: () => undefined } as unknown as Context
+    const dispatcher = new SearchDispatcher(ctx, config, adapters, new Diagnostics())
+
+    expect((await dispatcher.search({ query: 'q' })).sources[0]?.url).toBe('https://example.com/v1')
+    version = 2
+    adapter = makeAdapter()
+    expect((await dispatcher.search({ query: 'q' })).sources[0]?.url).toBe('https://example.com/v2')
+    expect(created).toBe(2)
+  })
 })

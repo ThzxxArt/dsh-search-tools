@@ -103,12 +103,16 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   const [instanceResults, setInstanceResults] = useState<Record<string, InstanceTestResult>>({})
   const [refreshingAdapters, setRefreshingAdapters] = useState(false)
   const probeGeneration = useRef(0)
+  const probeController = useRef<AbortController>()
 
   useEffect(() => {
     const controller = new AbortController()
     void fetchStatus(controller.signal).then(setStatus).catch(() => {})
     void fetchAdapters(controller.signal).then(setAdapters).catch(() => {})
-    return () => { controller.abort() }
+    return () => {
+      controller.abort()
+      probeController.current?.abort()
+    }
   }, [])
 
   useEffect(() => {
@@ -392,15 +396,18 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
       return
     }
     const generation = ++probeGeneration.current
+    probeController.current?.abort()
+    const controller = new AbortController()
+    probeController.current = controller
     const adapter = draft.search.adapter
     const config = adapterConfig(draft.search, adapter)
     setProbingSearch(true)
     setSearchProbe(undefined)
     try {
-      const result = await probeSearch(adapter, config)
+      const result = await probeSearch(adapter, config, controller.signal)
       if (generation === probeGeneration.current) setSearchProbe({ adapter, result })
     } catch (error) {
-      if (generation === probeGeneration.current) {
+      if (generation === probeGeneration.current && !controller.signal.aborted) {
         setSearchProbe({
           adapter,
           result: { ok: false, code: 'SEARCH_PROBE_FAILED', message: errorText(error), latencyMs: 0 },

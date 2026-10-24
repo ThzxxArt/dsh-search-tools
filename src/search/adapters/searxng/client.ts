@@ -91,6 +91,7 @@ export class SearxngRuntime implements SearchAdapterRuntime {
     const cache = this.cacheFor(config)
     const cached = cache?.get(key)
     if (cached !== undefined) {
+      if (isAbort(signal)) throw new SearchToolsError('search aborted', 'WEB_ABORTED')
       this.hits++
       return cloneResult(cached)
     }
@@ -112,7 +113,11 @@ export class SearxngRuntime implements SearchAdapterRuntime {
         if (deadline.signal.aborted || Date.now() >= deadlineAt) throw deadlineError()
         try {
           const result = await this.searchInstance(instance, request.query, limit, config, searchSignal, deadlineAt)
-          cache?.set(key, cloneResult(result))
+          // A partial page set or an instance with a failed page is not stable
+          // enough to cache; otherwise one transient failure is frozen for TTL.
+          if (result.notes === undefined && result.sources.length > 0) {
+            cache?.set(key, cloneResult(result))
+          }
           return result
         } catch (error) {
           if (isAbort(signal)) throw new SearchToolsError('search aborted', 'WEB_ABORTED')
@@ -165,7 +170,7 @@ export class SearxngRuntime implements SearchAdapterRuntime {
     outer: AbortSignal,
     deadlineAt: number,
   ): Promise<SearchResult> {
-    const auth = await authHeaders(this.ctx, config.auth.type)
+    const auth = await authHeaders(this.ctx, config.auth.type, outer, deadlineAt)
     let lastError: unknown
     for (let attempt = 0; attempt <= config.retries; attempt++) {
       const remaining = deadlineAt - Date.now()
@@ -320,9 +325,14 @@ export async function probeSearxng(
   const timeoutSignal = signal === undefined ? timeout : AbortSignal.any([signal, timeout])
   let auth: Record<string, string>
   try {
-    auth = await authHeaders(ctx, config.auth.type)
+    auth = await authHeaders(ctx, config.auth.type, timeoutSignal)
   } catch (error) {
-    return { ok: false, code: 'SEARXNG_AUTH', message: errorMessage(error), latencyMs: ctx.now() - started }
+    return {
+      ok: false,
+      code: isAbort(timeoutSignal) ? 'WEB_ABORTED' : 'SEARXNG_AUTH',
+      message: errorMessage(error),
+      latencyMs: ctx.now() - started,
+    }
   }
   const headers: Record<string, string> = {
     ...auth,
@@ -462,22 +472,37 @@ function enabledInstances(config: SearxngConfig): SearxngInstance[] {
   })
 }
 
-async function authHeaders(ctx: AdapterContext, type: SearxngAuthType): Promise<Record<string, string>> {
+async function authHeaders(
+  ctx: AdapterContext,
+  type: SearxngAuthType,
+  signal?: AbortSignal,
+  deadlineAt?: number,
+): Promise<Record<string, string>> {
   if (type === 'none') return {}
   if (type === 'bearer') {
-    const token = await resolveCredential(ctx, TOKEN_REF)
+    const token = await resolveCredential(ctx, TOKEN_REF, signal, deadlineAt)
     if (token === undefined) throw new SearchToolsError('SEARXNG_TOKEN is not configured', 'SEARXNG_AUTH')
     return { authorization: `Bearer ${token}` }
   }
-  const basic = await resolveCredential(ctx, BASIC_REF)
+  const basic = await resolveCredential(ctx, BASIC_REF, signal, deadlineAt)
   if (basic === undefined || !basic.includes(':')) {
     throw new SearchToolsError('SEARXNG_BASIC_AUTH must be username:password', 'SEARXNG_AUTH')
   }
   return { authorization: `Basic ${Buffer.from(basic).toString('base64')}` }
 }
 
-async function resolveCredential(ctx: AdapterContext, ref: string): Promise<string | undefined> {
-  const stored = await ctx.getCredentials()?.resolve(ref)
+async function resolveCredential(
+  ctx: AdapterContext,
+  ref: string,
+  signal?: AbortSignal,
+  deadlineAt?: number,
+): Promise<string | undefined> {
+  const credentials = ctx.getCredentials()
+  const stored = credentials === undefined
+    ? undefined
+    : signal === undefined
+      ? await credentials.resolve(ref)
+      : await abortable(credentials.resolve(ref), signal, deadlineAt)
   if (stored !== undefined && stored.value.length > 0) return stored.value
   const env = ctx.env[ref]
   return env !== undefined && env.length > 0 ? env : undefined
@@ -637,18 +662,63 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+async function abortable<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+  deadlineAt?: number,
+): Promise<T> {
+  if (signal.aborted) {
+    throw deadlineAt !== undefined && Date.now() >= deadlineAt
+      ? deadlineError()
+      : new SearchToolsError('search aborted', 'WEB_ABORTED')
+  }
+  return await new Promise<T>((resolve, reject) => {
+    let settled = false
+    const cleanup = (): void => { signal.removeEventListener('abort', onAbort) }
+    const onAbort = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(deadlineAt !== undefined && Date.now() >= deadlineAt
+        ? deadlineError()
+        : new SearchToolsError('search aborted', 'WEB_ABORTED'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then((value) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(value)
+    }, (error: unknown) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    })
+    if (signal.aborted) onAbort()
+  })
+}
+
 async function sleep(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) throw new SearchToolsError('search aborted', 'WEB_ABORTED')
   await new Promise<void>((resolve, reject) => {
+    let settled = false
+    const cleanup = (): void => { signal.removeEventListener('abort', onAbort) }
     const onAbort = (): void => {
+      if (settled) return
+      settled = true
       clearTimeout(timer)
+      cleanup()
       reject(new SearchToolsError('search aborted', 'WEB_ABORTED'))
     }
     const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort)
+      if (settled) return
+      settled = true
+      cleanup()
       resolve()
     }, ms)
     signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) onAbort()
   })
 }
 

@@ -124,6 +124,7 @@ export function AdapterForm({
           key={group.id}
           group={group}
           config={config}
+          defaults={manifest.defaults}
           errors={errors}
           disabled={disabled}
           text={text}
@@ -146,11 +147,12 @@ export function AdapterForm({
 }
 
 function GroupBlock({
-  group, config, errors, disabled, text, t, onTestInstance, testingInstanceUrl, instanceResults,
+  group, config, defaults, errors, disabled, text, t, onTestInstance, testingInstanceUrl, instanceResults,
   secretInfo, secretDrafts, secretBusy, secretErrors, onSecretDraft, onSecretSave, onSecretClear, onChange,
 }: {
   group: ResolvedAdapterGroup
   config: JsonObject
+  defaults: JsonObject
   errors: readonly AdapterIssue[]
   disabled: boolean
   text: (value: LocalizedText) => string
@@ -191,11 +193,13 @@ function GroupBlock({
             </div>
           )
         }
+        const stored = getPath(config, field.key)
+        const value = stored === undefined ? getPath(defaults, field.key) : stored
         return (
           <Field
             key={field.key}
             field={field}
-            value={getPath(config, field.key)}
+            value={value}
             disabled={disabled}
             error={error}
             secretConfigured={secretConfiguredFor(field, config, secretInfo)}

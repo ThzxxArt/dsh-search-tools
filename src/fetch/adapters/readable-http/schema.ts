@@ -2,6 +2,7 @@
 
 import type { AdapterIssue, AdapterValidation } from '../../../core/types.ts'
 import { isRecord, issue, readBoolean, readNumber, readString, result } from '../../../shared/validation.ts'
+import { VERSION } from '../../../version.ts'
 
 export interface ReadableHttpConfig {
   enabled: boolean
@@ -25,7 +26,7 @@ export const DEFAULT_READABLE_HTTP_CONFIG: ReadableHttpConfig = {
   maxBodyChars: 2_000_000,
   timeoutMs: 20_000,
   maxRedirects: 5,
-  userAgent: 'dsh-search-tools/0.1.8 (+https://github.com/ThzxxArt/dsh-search-tools)',
+  userAgent: `dsh-search-tools/${VERSION} (+https://github.com/ThzxxArt/dsh-search-tools)`,
   failOpen: true,
 }
 

@@ -27,7 +27,7 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.8',
+  version: '0.1.9',
   configPath: '/tmp/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0, sources: 0 },
   fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
@@ -499,6 +499,8 @@ describe('SettingsPage', () => {
 
     act(() => { form.setSnapshot({ status: 'ready', writable: false }) })
     expect(await screen.findByText(/Configuration is overridden by a higher layer/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Search' }))
+    expect(await screen.findByRole('button', { name: 'Change backend' })).toBeDisabled()
   })
 
   it('copies a credential-free diagnostics summary from Diagnostics', async () => {
@@ -507,7 +509,7 @@ describe('SettingsPage', () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.8')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.9')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
     expect(screen.getByTestId('runtime-state')).toHaveTextContent('Fetch: available · Research: registered')
   })
@@ -619,7 +621,7 @@ describe('Local Direct settings integration', () => {
     expect(await screen.findByText('Reachable engines')).toBeInTheDocument()
     expect(screen.getAllByText('DuckDuckGo').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Bing').length).toBeGreaterThan(0)
-    expect(probeSearch).toHaveBeenCalledWith('local-direct', expect.any(Object))
+    expect(probeSearch).toHaveBeenCalledWith('local-direct', expect.any(Object), expect.any(AbortSignal))
   })
 
   it('shows a probe failure instead of silently accepting an empty engine list', async () => {
@@ -640,7 +642,9 @@ describe('Local Direct settings integration', () => {
     vi.mocked(probeSearch).mockResolvedValue({
       ok: true,
       latencyMs: 9,
+      partial: true,
       engines: ['DuckDuckGo'],
+      failedEngines: ['Bing'],
       message: 'Bing: engine request timed out',
     })
     await openLocalDirect()
@@ -689,6 +693,8 @@ describe('Local Direct settings integration', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
     expect(await screen.findByLabelText('DuckDuckGo')).toBeChecked()
     expect(screen.getByLabelText('Bing')).toBeChecked()
+    fireEvent.click(screen.getByRole('tab', { name: 'Search behavior' }))
+    expect(await screen.findByLabelText('Results per search')).toHaveValue(10)
     expect(screen.queryByText('Needs setup')).not.toBeInTheDocument()
   })
 

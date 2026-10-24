@@ -31,6 +31,7 @@ export const searxngManifest: AdapterManifest = {
     },
   ],
   defaults: DEFAULT_SEARXNG_CONFIG as unknown as JsonObject,
+  sourceCount: { field: 'instances' },
   capabilities: ['json', 'html', 'probe', 'cache', 'pagination'],
   secretRefs: [
     {
