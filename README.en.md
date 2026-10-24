@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Repository version: 0.1.9 (2026-10-24).** This release adds **360 Search** as an opt-in Local Direct HTML engine and runs **one worker per engine**, so a slow engine cannot discard another engine's successful result. DuckDuckGo + Bing remain the defaults; parsing, deduplication, RRF fusion, diversity, and caching stay local. It needs no SearXNG, API key, Reader, browser, or aggregator. Queries leave the machine to the enabled engines, but never go through SearXNG/Reader; page JavaScript is not executed. The default search remains `searxng`, and the stable provider ids/tool schemas are unchanged. See [Local Direct search settings](#local-direct-search-settings) and the [v0.1.9 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.9.md).
+> **Repository version: 0.1.9 (2026-10-24).** This release adds **Brave Search** and **360 Search** as opt-in Local Direct HTML engines and runs **one worker per engine**, so a slow engine cannot discard another engine's successful result. DuckDuckGo + Bing remain the defaults; parsing, deduplication, RRF fusion, diversity, and caching stay local. It needs no SearXNG, API key, Reader, browser, or aggregator. Queries leave the machine to the enabled engines, but never go through SearXNG/Reader; page JavaScript is not executed. The default search remains `searxng`, and the stable provider ids/tool schemas are unchanged. See [Local Direct search settings](#local-direct-search-settings) and the [v0.1.9 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.9.md).
 
 ---
 
@@ -72,7 +72,7 @@ These screenshots use demo data (`https://searxng.example.com`, no real credenti
 |---|---|
 | Stable search/fetch providers | `dsh-search-tools` and `dsh-search-tools-fetch` never change with the backend |
 | Built-in search adapter | SearXNG: multiple instances, ordered/round-robin, failover, JSON/HTML, GET/POST, Bearer/Basic auth, proxy, cache, pagination, domain filters |
-| Optional zero-deployment search adapter | Local Direct: queries DuckDuckGo + Bing HTML first pages locally, optionally 360, with local parsing, dedupe, RRF fusion, domain diversity, and cache; no service, key, Reader, or browser, and no JS |
+| Optional zero-deployment search adapter | Local Direct: queries DuckDuckGo + Bing HTML first pages locally, optionally Brave Search / 360, with local parsing, dedupe, RRF fusion, domain diversity, and cache; no service, key, Reader, or browser, and no JS |
 | Built-in fetch adapter | Readability HTTP: reuses DSH safe HTTP, extracts article text with Readability, can fall back to raw content |
 | Optional local strong fetch adapter | Wire HTTP: local `impit` browser-grade TLS/HTTP2, per-hop public-egress pinning, Readability, PDF text; no Reader/key/browser/container and no page JS |
 | Optional rendering fetch adapter | Jina Reader: browser rendering, PDF/Office, CSS selectors, iframe/Shadow DOM, proxy option; targets must be public, and the Reader itself can be hosted or self-hosted |
@@ -196,14 +196,14 @@ dsh plugin --profile <profile> add dsh-search-tools
 
 There are two no-code paths:
 
-- **Local Direct (try this first)**: no service to prepare. It queries DuckDuckGo and Bing public HTML endpoints directly from the host by default, with an optional 360 engine, then parses and fuses results locally. Queries leave the machine to those engines; confirm your network can reach them.
+- **Local Direct (try this first)**: no service to prepare. It queries DuckDuckGo and Bing public HTML endpoints directly from the host by default, with optional Brave Search or 360, then parses and fuses results locally. Brave uses a Firefox HTTP profile internally; the `profile` setting applies to the other engines. Queries leave the machine to those engines; confirm your network can reach them.
 - **SearXNG**: needs a reachable instance. The address is an absolute `http(s)` URL such as `https://searx.example.com`; JSON API needs `search.formats` to include `json`; HTML-only works; with auth, prepare a Bearer token or `username:password`; with rate limits, prepare multiple instances or a proxy. The plugin trims a trailing `/search`, query, and hash; embedded usernames/passwords are rejected.
 
 ### 2. Configure search
 
 1. Open **Settings → Search Tools → Search**.
 2. Choose `Local Direct` or `SearXNG` under **Backend**.
-3. **Local Direct**: enable at least one of **DuckDuckGo** / **Bing**, then choose market, safe search, and result count. No instance or key is needed. **Test engines** checks reachability.
+3. **Local Direct**: enable at least one of **DuckDuckGo** / **Bing** / **Brave Search** / **360 Search**, then choose market, safe search, and result count. No instance or key is needed. **Test engines** checks reachability.
 4. **SearXNG**: click **Add instance** and enter the instance URL; the label is optional. Adjust engines, categories, language, safe search, pages, result count, and timeouts; choose `Bearer`/`Basic` and save the credential when needed.
 5. Click **Test** and confirm structured sources appear; Local Direct also lists the reachable engines.
 6. Click **Save and apply**.
@@ -487,9 +487,9 @@ Behavior:
 | Field | Default | Range/values | Notes |
 |---|---:|---|---|
 | `enabled` | `true` | boolean | Disables the adapter |
-| `engines` | `["duckduckgo","bing"]` | `duckduckgo` / `bing` / `so360`; at least one | Public HTML engines; results are fused locally. 360 targets the Chinese market |
+| `engines` | `["duckduckgo","bing"]` | `duckduckgo` / `bing` / `brave` / `so360`; at least one | Public HTML engines; results are fused locally. Brave uses a Firefox HTTP profile; 360 targets the Chinese market |
 | `market` | `auto` | `auto` / `us-en` / `cn-zh` / `gb-en` / `jp-ja` / `de-de` / `fr-fr` | DDG `kl` and Bing `setlang`/`cc` |
-| `safeSearch` | `moderate` | `off` / `moderate` / `strict` | DDG `kp` and Bing `adlt` |
+| `safeSearch` | `moderate` | `off` / `moderate` / `strict` | DDG `kp`, Bing `adlt`, and Brave `safeSearch` |
 | `maxResults` | `10` | 1–20 | Fused result cap |
 | `maxPerHost` | `2` | 1–5 | Limit per hostname so one site cannot fill the page |
 | `profile` | `chrome` | `chrome` / `firefox` | Impit TLS/HTTP2 profile; not a browser |
@@ -703,7 +703,7 @@ Behavior:
 - **The `wire-http` worker carries no persistent credentials.** It sends no Cookie, Authorization, or login state and does not sign in, bypass paywalls, or solve CAPTCHAs.
 - **The Reader is not an anonymous proxy.** A hosted Reader may cache pages; `noCache` only asks for a live fetch. Neither mode bypasses logins, paywalls, or CAPTCHAs.
 - **No redirects for searches.** SearXNG requests use `redirect: 'error'`, so auth headers cannot follow a cross-origin redirect. Local Direct uses `followRedirects:false` + `redirect:'manual'`; a 3xx fails that engine.
-- **Search egress is adapter-scoped.** `searxng` sends queries to the configured instance (possibly private/loopback); `local-direct` sends only to the enabled fixed public origins (DuckDuckGo/Bing by default; optional 360), with no user-controlled endpoint, no Cookie/Authorization, and no JS. `web_research`'s fetch phase still accepts public pages only; local/private result URLs are not fetched.
+- **Search egress is adapter-scoped.** `searxng` sends queries to the configured instance (possibly private/loopback); `local-direct` sends only to the enabled fixed public origins (DuckDuckGo/Bing by default; optional Brave/360), with no user-controlled endpoint, no Cookie/Authorization, and no JS. `web_research`'s fetch phase still accepts public pages only; local/private result URLs are not fetched.
 - **Credentials stay out of YAML.** Bearer/Basic/Jina API keys go to DSH credentials; YAML stores only non-secret settings. Diagnostics are redacted.
 - **Proxies carry no credentials.** `proxy` must be an `http(s)` URL without username/password.
 - **Limited error text.** Instance/target hostnames may appear in diagnostics, but query strings and credentials are stripped.
@@ -880,7 +880,7 @@ After publishing, smoke-test a fresh profile: install, enable, run search tests 
 | Search test 401/403 | Instance needs auth; credential not saved; Basic format is not `username:password` | Choose the right auth mode, save the secret, retry; confirm `Source: env` is expected |
 | Search test 429 | Instance/engine rate limit | Slow down, switch instance or engines, raise cache TTL, or use another backend |
 | Local Direct fails entirely | Engine unreachable; 202/403/429; empty parse | Use **Test engines** to check reachability; change network/proxy; retry later; switch to SearXNG if needed |
-| Local Direct returns few results | One engine enabled; per-host cap; first page only | Enable both engines; raise `maxPerHost`/`maxResults`; inspect `Search notes` |
+| Local Direct returns few results | One engine enabled; per-host cap; first page only | Enable another engine; raise `maxPerHost`/`maxResults`; inspect `Search notes` |
 | Test passes but returns 0 results | SearXNG default engines are rate-limited/CAPTCHA | Check **Search notes**; set engines (for example `bing`) or switch instance |
 | JSON parse failure | Instance does not serve JSON | Add `json` to SearXNG `search.formats`, or set format to `html` |
 | `web_research is disabled` | Research tool off | Settings → Research → enable `web_research`, save |
@@ -908,7 +908,7 @@ Suggested diagnosis order:
 
 ## Known limitations
 
-- **Two search adapters and three fetch adapters are built in.** Search still defaults to `searxng`; `local-direct` is the zero-deployment local backend that queries DuckDuckGo/Bing HTML by default and optionally 360, does not execute JS, and cannot guarantee engine markup or rate limits. Fetch defaults to `readable-http`; `wire-http` is the local browser-grade HTTP/PDF backend; `jina-reader` is optional. 0.1.x does not ship Google/Exa or other commercial search API backends; 360 uses a public HTML page and needs no API key.
+- **Two search adapters and three fetch adapters are built in.** Search still defaults to `searxng`; `local-direct` is the zero-deployment local backend that queries DuckDuckGo/Bing HTML by default and optionally Brave/360, does not execute JS, and cannot guarantee engine markup or rate limits. Fetch defaults to `readable-http`; `wire-http` is the local browser-grade HTTP/PDF backend; `jina-reader` is optional. 0.1.x does not ship Google/Exa or other commercial search API backends; Brave/360 use public HTML pages and need no API key.
 - **No auto-update.** Upgrade by removing and reinstalling.
 - **The external adapter contract is experimental.** It may change in 0.1.x; pin versions for production integrations.
 - **Browser rendering belongs to `jina-reader`.** `readable-http` and `wire-http` do not execute JS; `wire-http` strengthens TLS/HTTP2 identity, egress pinning, and PDF, not a browser engine. Jina needs a public Reader (hosted or self-hosted) and still does not handle login state, paywalls, or CAPTCHAs. Rendering a SPA is not the same as authenticating to it.

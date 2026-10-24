@@ -7,6 +7,7 @@ import type {
   CacheStats, ProbeResult, SearchAdapterRuntime, SearchRequest, SearchResult, SearchSource,
 } from '../../../core/types.ts'
 import { SearchToolsError } from '../../../shared/errors.ts'
+import { redactText } from '../../../shared/redact.ts'
 import { hostOf, normalizeInstanceUrl } from '../../../shared/url.ts'
 import { isRecord, stableKey } from '../../../shared/validation.ts'
 import { parseSearxngHtml } from './parse-html.ts'
@@ -133,7 +134,7 @@ export class SearxngRuntime implements SearchAdapterRuntime {
     if (deadline.signal.aborted || Date.now() >= deadlineAt) throw deadlineError()
     if (lastError instanceof SearchToolsError) throw lastError
     throw new SearchToolsError(
-      `all SearXNG instances failed: ${errorMessage(lastError)}`,
+      `all SearXNG instances failed: ${redactText(errorMessage(lastError))}`,
       'SEARXNG_ALL_FAILED',
       { cause: lastError },
     )
@@ -186,7 +187,7 @@ export class SearxngRuntime implements SearchAdapterRuntime {
         const notes: string[] = []
         outcomes.forEach((outcome, index) => {
           if (outcome.status === 'fulfilled') pages.push(outcome.value)
-          else notes.push(`page ${index + 1}: ${errorMessage(outcome.reason)}`)
+          else notes.push(`page ${index + 1}: ${redactText(errorMessage(outcome.reason))}`)
         })
         if (pages.length === 0) {
           const first = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
@@ -330,7 +331,7 @@ export async function probeSearxng(
     return {
       ok: false,
       code: isAbort(timeoutSignal) ? 'WEB_ABORTED' : 'SEARXNG_AUTH',
-      message: errorMessage(error),
+      message: redactText(errorMessage(error)),
       latencyMs: ctx.now() - started,
     }
   }
@@ -389,7 +390,7 @@ export async function probeSearxng(
     return {
       ok: false,
       code: isAbort(timeoutSignal) ? 'WEB_ABORTED' : 'SEARXNG_ALL_FAILED',
-      message: errorMessage(error),
+      message: redactText(errorMessage(error)),
       latencyMs: ctx.now() - started,
     }
   }
@@ -454,7 +455,7 @@ async function probeBySearch(
     return {
       ok: false,
       code: isAbort(signal) ? 'WEB_ABORTED' : 'SEARXNG_ALL_FAILED',
-      message: errorMessage(error),
+      message: redactText(errorMessage(error)),
       latencyMs: ctx.now() - started,
     }
   }

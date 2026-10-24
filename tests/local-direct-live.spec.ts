@@ -83,6 +83,28 @@ describe.skipIf(!live)('local-direct real engines', () => {
     expect(result.sources.length).toBeGreaterThan(0)
   }, 60_000)
 
+  it('queries Brave Search through its pinned Firefox transport profile', async () => {
+    const runtime = new LocalDirectRuntime(context(), () => ({
+      profile: 'chrome',
+      engines: ['brave'],
+      requestTimeoutMs: 15_000,
+      deadlineMs: 40_000,
+      retries: 1,
+      minIntervalMs: 0,
+      cacheTtlMs: 0,
+      maxResults: 5,
+    }), { workerFile })
+
+    const probe = await runtime.probe()
+    expect(probe.ok).toBe(true)
+    expect(probe.engineResults?.map(engine => engine.engine)).toEqual(['Brave Search'])
+    expect(probe.engineResults?.map(engine => engine.ok)).toEqual([true])
+    expect(probe.failedEngines).toBeUndefined()
+
+    const result = await runtime.search({ query: 'deepseek harness', maxResults: 5 })
+    expect(result.sources.length).toBeGreaterThan(0)
+  }, 60_000)
+
   it('feeds local search results into web_research for three pages', async () => {
     const runtime = new LocalDirectRuntime(context(), () => ({
       profile: 'chrome',

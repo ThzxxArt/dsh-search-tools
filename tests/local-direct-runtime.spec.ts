@@ -12,12 +12,14 @@ import { SearchToolsError } from '../src/shared/errors.ts'
 const fixtures: Record<LocalDirectEngine, string> = {
   duckduckgo: readFileSync(new URL('./fixtures/local-direct-ddg.html', import.meta.url), 'utf8'),
   bing: readFileSync(new URL('./fixtures/local-direct-bing.html', import.meta.url), 'utf8'),
+  brave: readFileSync(new URL('./fixtures/local-direct-brave.html', import.meta.url), 'utf8'),
   so360: readFileSync(new URL('./fixtures/local-direct-so360.html', import.meta.url), 'utf8'),
 }
 
 const origins: Record<LocalDirectEngine, string> = {
   duckduckgo: 'https://html.duckduckgo.com',
   bing: 'https://www.bing.com',
+  brave: 'https://search.brave.com',
   so360: 'https://www.so.com',
 }
 
@@ -104,6 +106,16 @@ describe('local-direct runtime', () => {
       'https://example.org/two',
     ])
     expect(result.notes).toBeUndefined()
+  })
+
+  it('uses Brave’s Firefox transport profile without changing the configured profile for other engines', async () => {
+    const profiles: Record<string, string> = {}
+    const runtime = runtimeWith(async (request) => {
+      profiles[request.targets[0]!.engine] = request.profile
+      return responseFor(request)
+    }, { engines: ['duckduckgo', 'brave'] })
+    await runtime.search({ query: 'profile' })
+    expect(profiles).toEqual({ duckduckgo: 'chrome', brave: 'firefox' })
   })
 
   it('keeps a successful engine when another engine never settles', async () => {

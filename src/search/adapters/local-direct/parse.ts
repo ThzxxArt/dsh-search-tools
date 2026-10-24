@@ -73,19 +73,54 @@ export function parseSo360(html: string, options: LocalDirectParseOptions = {}):
   return resultOf(sources, options)
 }
 
+/**
+ * Brave's result links are direct hrefs, not redirectors. Only server-rendered
+ * `data-type="web"` snippets are results; sponsored cards do not carry that
+ * marker and are deliberately ignored.
+ */
+export function parseBrave(html: string, options: LocalDirectParseOptions = {}): LocalDirectParseResult {
+  const $ = load(html)
+  const sources = new Map<string, SearchSource>()
+  $('div.snippet[data-type="web"]').each((_index, element) => {
+    const node = $(element)
+    const link = node.find('a[href]').first()
+    const rawHref = link.attr('href')
+    if (rawHref === undefined || rawHref.length === 0) return
+    const url = safeSourceUrl(resolveDirectTarget(rawHref, 'https://search.brave.com'))
+    if (url === undefined) return
+    const title = cleanText(node.find('.title, .search-snippet-title').first().text()) || cleanText(link.text())
+    const snippet = cleanText(
+      node.find('.description, .snippet-description, .generic-snippet').first().text(),
+    )
+    addSource(sources, url, title, snippet)
+  })
+  return resultOf(sources, options)
+}
+
 export function isLocalDirectNoResults(engine: LocalDirectEngine, html: string): boolean {
   const $ = load(html)
   switch (engine) {
     case 'duckduckgo':
       return $('.no-results, #links .no-results').length > 0
-        || /\bno results(?: found)?\b/iu.test($('body').text())
+        || /\bno results(?: found)?\b/iu.test(visibleText($))
     case 'bing':
       return $('#b_results .b_no, .no-results, .no-result').length > 0
-        || /there are no results for/iu.test($('body').text())
+        || /there are no results for/iu.test(visibleText($))
+    case 'brave':
+      if ($('div.snippet[data-type="web"]').length > 0) return false
+      return $('.no-results, .empty-results, .results-empty').length > 0
+        || /\bno results(?: found| for)?\b/iu.test(visibleText($))
     case 'so360':
       return $('.no-result, .no-results').length > 0
-        || /(?:没有找到|未找到相关结果)/u.test($('body').text())
+        || /(?:没有找到|未找到相关结果)/u.test(visibleText($))
   }
+}
+
+/** Text visible to a reader, excluding serialized scripts/styles that contain UI strings. */
+function visibleText($: ReturnType<typeof load>): string {
+  const body = $('body').clone()
+  body.find('script, style, noscript, template').remove()
+  return body.text()
 }
 
 /** Resolve a DDG `/l/?uddg=...` link without fetching the redirector. */
@@ -141,6 +176,14 @@ function absoluteRedirectTarget(raw: string | undefined, base: string): string |
     const url = new URL(raw, base)
     if (url.origin === new URL(base).origin) return undefined
     return url.toString()
+  } catch {
+    return undefined
+  }
+}
+
+function resolveDirectTarget(raw: string, base: string): string | undefined {
+  try {
+    return new URL(raw, base).toString()
   } catch {
     return undefined
   }

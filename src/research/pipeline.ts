@@ -8,6 +8,7 @@ import { snapshot } from '../config.ts'
 import type { SearchSource } from '../core/types.ts'
 import { extractReadable } from '../fetch/adapters/readable-http/readability.ts'
 import { errorMessage, SearchToolsError } from '../shared/errors.ts'
+import { redactText } from '../shared/redact.ts'
 import { clip, mapLimit } from '../shared/limit.ts'
 import { readNumber } from '../shared/validation.ts'
 
@@ -130,7 +131,7 @@ export async function runResearch(
           ...(source.title === undefined ? {} : { title: source.title }),
           content: '',
           truncated: false,
-          error: errorMessage(error),
+          error: redactText(errorMessage(error)),
         }
       }
     })

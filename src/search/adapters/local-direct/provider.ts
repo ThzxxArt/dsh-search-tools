@@ -124,7 +124,7 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
       return {
         ok: false,
         code: errorCode(error, 'LOCAL_DIRECT_PROBE_FAILED'),
-        message: errorMessage(error),
+        message: redactText(errorMessage(error)),
         latencyMs: this.ctx.now() - started,
       }
     }
@@ -267,7 +267,7 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
         const failure = [...states.values()].find(state => state.error !== undefined)?.error
         const detail = failure === undefined ? 'no engine returned a result' : errorMessage(failure)
         throw new SearchToolsError(
-          `all local-direct engines failed: ${detail}`,
+          `all local-direct engines failed: ${redactText(detail)}`,
           'LOCAL_DIRECT_ALL_FAILED',
           failure === undefined ? undefined : { cause: failure },
         )
@@ -303,9 +303,10 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
         await this.waitForEngineGate(engine, config.minIntervalMs, signal)
         if (signal.aborted) throw abortError(signal)
         const remaining = Math.max(1, deadlineAt - this.ctx.now())
+        const descriptor = LOCAL_DIRECT_ENGINE_DESCRIPTORS[engine]
         const worker = (this.options.runWorker ?? runLocalDirectWorker)({
           targets: [{ engine, url }],
-          profile: config.profile,
+          profile: descriptor.transportProfile ?? config.profile,
           timeoutMs: config.requestTimeoutMs,
           maxResponseBytes: config.maxResponseBytes,
           proxyUrl: config.proxy,
@@ -329,7 +330,7 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
             state.sources = evaluation.sources
             state.latencyMs = this.ctx.now() - state.startedAt
             if (evaluation.note === undefined) delete state.note
-            else state.note = `${LOCAL_DIRECT_ENGINE_LABELS[engine]}: ${evaluation.note}`
+            else state.note = `${LOCAL_DIRECT_ENGINE_LABELS[engine]}: ${redactText(evaluation.note)}`
             return
           }
           failure = evaluation
@@ -353,9 +354,9 @@ export class LocalDirectRuntime implements SearchAdapterRuntime {
     state.status = 'failed'
     state.error = failure
     state.latencyMs = this.ctx.now() - state.startedAt
-    state.note = `${LOCAL_DIRECT_ENGINE_LABELS[engine]}: ${
-      failure === undefined ? 'engine did not return a result' : errorMessage(failure)
-    }`
+    state.note = `${LOCAL_DIRECT_ENGINE_LABELS[engine]}: ${redactText(
+      failure === undefined ? 'engine did not return a result' : errorMessage(failure),
+    )}`
   }
 
   private evaluateTarget(

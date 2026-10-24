@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  isLocalDirectNoResults, parseBing, parseDuckDuckGo, parseSo360,
+  isLocalDirectNoResults, parseBing, parseBrave, parseDuckDuckGo, parseSo360,
   unwrapBing, unwrapDuckDuckGo,
 } from '../src/search/adapters/local-direct/parse.ts'
 
 const ddg = readFileSync(new URL('./fixtures/local-direct-ddg.html', import.meta.url), 'utf8')
 const bing = readFileSync(new URL('./fixtures/local-direct-bing.html', import.meta.url), 'utf8')
+const brave = readFileSync(new URL('./fixtures/local-direct-brave.html', import.meta.url), 'utf8')
 const so360 = readFileSync(new URL('./fixtures/local-direct-so360.html', import.meta.url), 'utf8')
 
 describe('local-direct HTML parsers', () => {
@@ -60,6 +61,21 @@ describe('local-direct HTML parsers', () => {
       .toEqual([])
   })
 
+  it('parses Brave web snippets, resolves relative links, and ignores sponsored cards', () => {
+    const result = parseBrave(brave)
+    expect(result.sources.map(source => source.url)).toEqual([
+      'https://example.com/brave-one',
+      'https://example.org/brave-two',
+      'https://search.brave.com/relative/brave-three',
+    ])
+    expect(result.sources[0]).toMatchObject({
+      title: 'Brave One',
+      snippet: 'First Brave snippet.',
+    })
+    expect(result.sources[1]?.snippet).toBe('Second Brave snippet.')
+    expect(result.sources.some(source => source.url.includes('ads.example'))).toBe(false)
+  })
+
   it('parses 360 through data-mdurl and ignores non-normal result types', () => {
     const result = parseSo360(so360)
     expect(result.sources.map(source => source.url)).toEqual([
@@ -74,6 +90,8 @@ describe('local-direct HTML parsers', () => {
   it('recognises explicit no-results pages without treating challenges as success', () => {
     expect(isLocalDirectNoResults('duckduckgo', '<div class="no-results">No results.</div>')).toBe(true)
     expect(isLocalDirectNoResults('bing', '<div id="b_results"><div class="b_no">There are no results for x</div></div>')).toBe(true)
+    expect(isLocalDirectNoResults('brave', '<main><h2>No results found</h2></main>')).toBe(true)
+    expect(isLocalDirectNoResults('brave', '<script>const label = "No results found"</script><main><div class="snippet" data-type="web">ok</div></main>')).toBe(false)
     expect(isLocalDirectNoResults('so360', '<div class="no-result">没有找到相关结果</div>')).toBe(true)
     expect(isLocalDirectNoResults('duckduckgo', '<html><h1>CAPTCHA</h1></html>')).toBe(false)
     expect(isLocalDirectNoResults('so360', '<html><h1>验证码</h1></html>')).toBe(false)

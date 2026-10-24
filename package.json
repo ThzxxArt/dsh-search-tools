@@ -1,7 +1,7 @@
 {
   "name": "dsh-search-tools",
   "version": "0.1.9",
-  "description": "Adapter-first web search and page fetching for DeepSeek Harness: SearXNG, local DuckDuckGo+Bing+360 direct search, Readability HTTP, local Wire HTTP with PDF, and optional Jina Reader, configured in the Web UI.",
+  "description": "Adapter-first web search and page fetching for DeepSeek Harness: SearXNG, local DuckDuckGo+Bing+Brave+360 direct search, Readability HTTP, local Wire HTTP with PDF, and optional Jina Reader, configured in the Web UI.",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -153,6 +153,6 @@
     "check:publint": "node scripts/publint.mjs",
     "check:package": "node scripts/check-package.mjs",
     "pack:check": "pnpm build && pnpm check:package && pnpm pack --dry-run && pnpm check:publint",
-    "release": "pnpm typecheck && pnpm test && pnpm pack:check"
+    "release": "pnpm typecheck && pnpm coverage && pnpm pack:check"
   }
 }

@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **仓库版本：0.1.9（2026-10-24）。** 本版为 Local Direct 增加 **360 Search** 一个可选 HTML 引擎，并把执行模型改为**每引擎独立 worker**：一个慢引擎不会吞掉另一个引擎的成功结果。默认引擎仍是 DuckDuckGo + Bing；解析、去重、RRF 融合、域名多样性和缓存都在本地完成，不需要 SearXNG、API key、Reader、浏览器或第三方聚合服务。查询会直接发往启用的公网搜索引擎，但不会经过 SearXNG/Reader；不执行页面 JavaScript。默认搜索仍是 `searxng`，稳定 provider id 和工具 schema 不变。详细边界见 [Local Direct 搜索配置](#local-direct-搜索配置) 与 [v0.1.9 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.9.md)。
+> **仓库版本：0.1.9（2026-10-24）。** 本版为 Local Direct 增加 **Brave Search 与 360 Search** 两个可选 HTML 引擎，并把执行模型改为**每引擎独立 worker**：一个慢引擎不会吞掉另一个引擎的成功结果。默认引擎仍是 DuckDuckGo + Bing；解析、去重、RRF 融合、域名多样性和缓存都在本地完成，不需要 SearXNG、API key、Reader、浏览器或第三方聚合服务。查询会直接发往启用的公网搜索引擎，但不会经过 SearXNG/Reader；不执行页面 JavaScript。默认搜索仍是 `searxng`，稳定 provider id 和工具 schema 不变。详细边界见 [Local Direct 搜索配置](#local-direct-搜索配置) 与 [v0.1.9 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.9.md)。
 
 ---
 
@@ -72,7 +72,7 @@ DSH 自带 `web_search` 和 `web_fetch`，但默认后端不一定适合每个�
 |---|---|
 | 稳定的搜索/抓取 provider | `dsh-search-tools`、`dsh-search-tools-fetch` 永不随后端变化 |
 | 内置搜索 adapter | SearXNG：多实例、顺序/轮询、故障转移、JSON/HTML、GET/POST、Bearer/Basic、代理、缓存、分页、域名过滤 |
-| 本地直连搜索 adapter（可选） | Local Direct：本机直接查询 DuckDuckGo + Bing HTML 首页，可选 360；本地解析/去重/RRF 融合/域名多样性/缓存；不需要服务、Key、Reader 或浏览器，不执行 JS |
+| 本地直连搜索 adapter（可选） | Local Direct：本机直接查询 DuckDuckGo + Bing HTML 首页，可选 Brave Search / 360；本地解析/去重/RRF 融合/域名多样性/缓存；不需要服务、Key、Reader 或浏览器，不执行 JS |
 | 内置抓取 adapter | Readability HTTP：复用 DSH 安全 HTTP，Readability 提取正文，失败可回退原文 |
 | 本地强抓取 adapter（可选） | Wire HTTP：`impit` 本地浏览器级 TLS/HTTP2 指纹、逐跳公网出口 pinning、Readability、PDF 文本；不需要 Reader/Key/浏览器/容器，不执行 JS |
 | 可选渲染抓取 adapter | Jina Reader：浏览器渲染、PDF/Office、CSS 选择器、iframe/Shadow DOM、代理选项；目标必须是公网地址，Reader 可托管或自托管 |
@@ -196,14 +196,14 @@ dsh plugin --profile <profile> add dsh-search-tools
 
 有两条零代码路径：
 
-- **Local Direct（推荐先试）**：不需要准备任何服务。它在本机直接请求 DuckDuckGo 和 Bing 的公开 HTML 结果页，解析和融合都在本机完成。查询会离开本机发往这两个引擎；首次使用请确认所在网络能访问它们。
+- **Local Direct（推荐先试）**：不需要准备任何服务。它在本机直接请求 DuckDuckGo 和 Bing 的公开 HTML 结果页，解析和融合都在本机完成。可额外启用 Brave Search 或 360；Brave 内部使用 Firefox HTTP 指纹，其他引擎遵循 `profile` 设置。查询会离开本机发往启用的引擎；首次使用请确认所在网络能访问它们。
 - **SearXNG**：需要一个可访问的 SearXNG 实例。实例地址是 `http(s)` 绝对 URL，例如 `https://searx.example.com`；JSON API 需要 `search.formats` 包含 `json`，HTML-only 也可以；有认证时准备 Bearer token 或 `username:password`；有限流时准备多个实例或代理。插件会自动去掉末尾 `/search`、query 和 hash，实例 URL 里不能带用户名/密码。
 
 ### 2. 在设置页配置
 
 1. 打开 **设置 → 搜索工具 → 搜索**。
 2. 在 **后端** 选择 `Local Direct` 或 `SearXNG`。
-3. **Local Direct**：勾选 **DuckDuckGo** / **Bing** 中至少一个，按需选市场、安全搜索、结果数；不需要实例或密钥。点 **测试搜索引擎** 可检查可达性。
+3. **Local Direct**：勾选 **DuckDuckGo** / **Bing** / **Brave Search** / **360 搜索** 中至少一个，按需选市场、安全搜索、结果数；不需要实例或密钥。点 **测试搜索引擎** 可检查可达性。
 4. **SearXNG**：点击 **添加实例**，填写实例地址；备注名可选；按需设置引擎、分类、语言、安全搜索、分页、结果数、超时；需要认证时选择 `Bearer` / `Basic` 并保存密钥。
 5. 点击 **测试**，确认返回结构化来源；Local Direct 还会显示**可达引擎**。
 6. 点击 **保存并应用**。
@@ -482,14 +482,14 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 
 ### Local Direct 搜索配置
 
-> **本地边界：** Select `Local Direct` 后，查询由 Host 进程直接发往启用的固定公开 HTML 端点（默认 `html.duckduckgo.com`、`www.bing.com`；可选 `www.so.com`）；解析、去重、RRF 融合、域名多样性和缓存都在本机完成。不需要 SearXNG、API key、Reader、浏览器、Docker 或第三方聚合服务。**查询会离开本机**；它不执行页面 JavaScript，不登录、不绕过付费墙或验证码。引擎 HTML 结构变化可能导致解析为空，此时会显式报错或写入 `notes`，不会静默 fallback 到 SearXNG。
+> **本地边界：** Select `Local Direct` 后，查询由 Host 进程直接发往启用的固定公开 HTML 端点（默认 `html.duckduckgo.com`、`www.bing.com`；可选 `search.brave.com`、`www.so.com`）；解析、去重、RRF 融合、域名多样性和缓存都在本机完成。不需要 SearXNG、API key、Reader、浏览器、Docker 或第三方聚合服务。**查询会离开本机**；它不执行页面 JavaScript，不登录、不绕过付费墙或验证码。引擎 HTML 结构变化可能导致解析为空，此时会显式报错或写入 `notes`，不会静默 fallback 到 SearXNG。
 
 | 字段 | 默认 | 范围/取值 | 说明 |
 |---|---:|---|---|
 | `enabled` | `true` | boolean | 关闭后该 adapter 不可用 |
-| `engines` | `["duckduckgo","bing"]` | `duckduckgo` / `bing` / `so360`，至少一个 | 启用的公开 HTML 引擎；结果在本地融合。360 面向中文市场 |
+| `engines` | `["duckduckgo","bing"]` | `duckduckgo` / `bing` / `brave` / `so360`，至少一个 | 启用的公开 HTML 引擎；结果在本地融合。Brave 由 Firefox HTTP 指纹请求；360 面向中文市场 |
 | `market` | `auto` | `auto` / `us-en` / `cn-zh` / `gb-en` / `jp-ja` / `de-de` / `fr-fr` | 传给 DDG `kl` 和 Bing `setlang`/`cc` 的市场 |
-| `safeSearch` | `moderate` | `off` / `moderate` / `strict` | 映射到 DDG `kp` 和 Bing `adlt` |
+| `safeSearch` | `moderate` | `off` / `moderate` / `strict` | 映射到 DDG `kp`、Bing `adlt` 和 Brave `safeSearch` |
 | `maxResults` | `10` | 1–20 | 融合后返回条数上限 |
 | `maxPerHost` | `2` | 1–5 | 同一 hostname 最多保留条数，避免单站刷满 |
 | `profile` | `chrome` | `chrome` / `firefox` | Impit TLS/HTTP2 指纹；不是浏览器 |
@@ -514,7 +514,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 - **缓存只写完整成功。** 只有所有启用引擎都成功、没有失败 note、且至少有结果时才写缓存；部分成功/空结果不缓存，下一次会重试失败引擎。
 - **探测。** Search 页的 **测试搜索引擎** 使用固定查询 `dsh-search-tools probe`，不写缓存；返回可达引擎列表。
 - **不解析广告。** DDG 的 `result--ad` 和 Bing 的 `li.b_ad`（即使同时带 `b_algo`）广告项会被丢弃；DDG `uddg` 和 Bing `ck/a?u=a1...` 的跳转链接在本地解包为真实结果 URL。
-- **引擎可用性不是 SLA。** 两家都可能限流、返回 202/403 或改版；这是公开 HTML 路径的固有风险。出现空结果时先看 `notes` 和 **测试搜索引擎**，必要时切回 SearXNG。
+- **引擎可用性不是 SLA。** 每个引擎都可能限流、返回 202/403 或改版；这是公开 HTML 路径的固有风险。出现空结果时先看 `notes` 和 **测试搜索引擎**，必要时切回 SearXNG。
 
 ### Readability HTTP 抓取配置
 
@@ -707,7 +707,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 - **Wire HTTP worker 没有持久凭据。** 不发送 Cookie、Authorization 或登录态；不登录、不绕过付费墙、不破解验证码。
 - **Reader 不是匿名代理。** 托管 Reader 可能缓存页面，`noCache` 只要求实时抓取；自托管也不能绕过登录、付费墙或验证码。
 - **搜索重定向不跟随。** SearXNG 请求使用 `redirect: 'error'`，认证头不会跟随跨源重定向。Local Direct 使用 `followRedirects:false` + `redirect:'manual'`，3xx 直接视为该引擎失败。
-- **搜索出口按 adapter 区分。** `searxng` 把查询发给用户配置的实例（可私有/loopback）；`local-direct` 只把查询发给启用的固定公网 origin（默认 DuckDuckGo/Bing，可选 360），没有用户可控 endpoint，不发送 Cookie/Authorization，也不执行 JS。`web_research` 的抓取阶段仍只接受公网页面；搜索结果中的本地/私有 URL 不会被 fetch adapter 读取。
+- **搜索出口按 adapter 区分。** `searxng` 把查询发给用户配置的实例（可私有/loopback）；`local-direct` 只把查询发给启用的固定公网 origin（默认 DuckDuckGo/Bing，可选 Brave/360），没有用户可控 endpoint，不发送 Cookie/Authorization，也不执行 JS。`web_research` 的抓取阶段仍只接受公网页面；搜索结果中的本地/私有 URL 不会被 fetch adapter 读取。
 - **凭据不落 YAML。** Bearer/Basic/Jina API key 写入 DSH credentials；YAML 只保存非敏感配置。诊断文本会脱敏，不包含 token。
 - **代理不带凭据。** `proxy` 必须是 `http(s)` URL，且不能包含用户名/密码，避免把代理凭据写进配置。
 - **错误信息有限。** 实例/目标主机名可能出现在诊断中，但查询字符串和凭据会被去掉。
@@ -810,11 +810,12 @@ lib/types/**        TypeScript 声明
 |---|---|
 | `pnpm typecheck` | TypeScript 类型检查 |
 | `pnpm test` | Vitest：Host 单测、设置页/研究卡片组件测试、pipeline、publint 策略 |
+| `pnpm coverage` | 同上 + V8 覆盖率门禁；statements / branches / functions / lines 均不得低于 85% |
 | `pnpm build` | Host、浏览器、类型声明 |
 | `pnpm pack:check` | build + `pnpm pack --dry-run` + publint |
-| `pnpm release` | typecheck + test + pack:check |
+| `pnpm release` | typecheck + coverage + pack:check |
 
-CI 在 Ubuntu/Windows × Node 22/24 上跑 typecheck、test、build、pack dry-run、publint。publint 只忽略 `lib/client.js` 的 `FILE_INVALID_FORMAT`：DSH 把它当浏览器 CJS 工厂加载，不是 Node ESM 入口；其他诊断仍然失败。
+CI 在 Ubuntu/Windows × Node 22/24 上跑 typecheck、coverage、build、pack dry-run、publint。publint 只忽略 `lib/client.js` 的 `FILE_INVALID_FORMAT`：DSH 把它当浏览器 CJS 工厂加载，不是 Node ESM 入口；其他诊断仍然失败。
 
 ### 项目结构
 
@@ -884,7 +885,7 @@ npm publish --access public
 | 搜索测试 401/403 | 实例需要认证；凭据未保存；Basic 格式不是 `username:password` | 在认证字段选择正确类型，保存密钥后重试；确认 `Source: env` 是否符合预期 |
 | 搜索测试 429 | 实例/引擎限流 | 降低频率、换实例或引擎、增加缓存 TTL，或改用其他后端 |
 | Local Direct 全部失败 | 网络无法访问引擎；引擎返回 202/403/429；解析为空 | 点 **测试搜索引擎** 看可达性；换网络/代理；稍后重试；必要时切回 SearXNG |
-| Local Direct 结果偏少 | 只启用了单引擎；每站上限；引擎只返回首页 | 勾选两个引擎；提高 `maxPerHost`/`maxResults`；看 `Search notes` |
+| Local Direct 结果偏少 | 只启用了单引擎；每站上限；引擎只返回首页 | 多启用一个引擎；提高 `maxPerHost`/`maxResults`；看 `Search notes` |
 | 返回 0 条但测试“成功” | SearXNG 默认引擎被限流/CAPTCHA | 看 **Search notes**；指定 `engines`（例如 `bing`）或换实例 |
 | JSON 解析失败 | 实例未启用 JSON 格式 | 在 SearXNG 的 `search.formats` 加 `json`；或把格式设为 `html` |
 | `web_research is disabled` | 研究工具关闭 | 设置 → 研究 → 启用 `web_research` 并保存 |
@@ -912,7 +913,7 @@ npm publish --access public
 
 ## 已知限制
 
-- **内置两个搜索 adapter 和三个抓取 adapter。** 搜索默认仍是 `searxng`；`local-direct` 是零部署的本地直连后端，默认查询 DuckDuckGo/Bing，并可选用 360 公开 HTML，不执行 JS，也不保证引擎永不改版/限流。抓取默认 `readable-http`；`wire-http` 是本地浏览器级 HTTP + PDF 后端；`jina-reader` 是可选 Reader 后端。0.1.x 不附带 Google/Exa 等需要 API key 的商业搜索后端；360 走公开 HTML 页面，不需要 API key。
+- **内置两个搜索 adapter 和三个抓取 adapter。** 搜索默认仍是 `searxng`；`local-direct` 是零部署的本地直连后端，默认查询 DuckDuckGo/Bing，并可选用 Brave Search / 360 公开 HTML，不执行 JS，也不保证引擎永不改版/限流。抓取默认 `readable-http`；`wire-http` 是本地浏览器级 HTTP + PDF 后端；`jina-reader` 是可选 Reader 后端。0.1.x 不附带 Google/Exa 等需要 API key 的商业搜索后端；Brave/360 走公开 HTML 页面，不需要 API key。
 - **没有自动更新。** 升级需要卸载再安装。
 - **外部 adapter contract 是实验性的。** 0.1.x 可能调整；生产集成请锁版本。
 - **浏览器渲染只属于 `jina-reader`。** `readable-http` 和 `wire-http` 都不执行 JS；`wire-http` 强化的是 TLS/HTTP2 指纹、出口 pinning 和 PDF，不是浏览器引擎。Jina 需要公网 Reader（托管或自托管），且不处理登录态、付费墙或验证码。SPA 能渲染不等于能登录。

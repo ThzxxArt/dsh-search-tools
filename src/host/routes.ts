@@ -13,6 +13,7 @@ import type { SearchToolsService } from '../core/service.ts'
 import type { Diagnostics } from '../core/diagnostics.ts'
 import type { CacheStats, JsonObject, StatusResponse } from '../core/types.ts'
 import { SearchToolsError, errorCode, errorMessage } from '../shared/errors.ts'
+import { redactText } from '../shared/redact.ts'
 import { getPath } from '../shared/path.ts'
 import { isRecord, readBoolean } from '../shared/validation.ts'
 import { VERSION } from '../version.ts'
@@ -439,7 +440,7 @@ function sendError(res: ServerResponse, error: unknown, started: number): void {
   sendJson(res, 200, {
     ok: false,
     code: errorCode(error, 'INTERNAL'),
-    message: errorMessage(error),
+    message: redactText(errorMessage(error)),
     elapsedMs: Date.now() - started,
   })
 }
@@ -450,7 +451,7 @@ function sendProbeError(res: ServerResponse, error: unknown, started: number): v
   sendJson(res, 200, {
     ok: false,
     code: errorCode(error, 'INTERNAL'),
-    message: errorMessage(error),
+    message: redactText(errorMessage(error)),
     latencyMs: elapsed,
     elapsedMs: elapsed,
   })

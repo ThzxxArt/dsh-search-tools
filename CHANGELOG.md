@@ -4,8 +4,10 @@
 
 ### Added
 
-- Local Direct opt-in engine: **360 Search** (Chinese market), on a fixed
-  origin.
+- Local Direct opt-in engines: **Brave Search** and **360 Search** (Chinese
+  market), each on a fixed origin. Brave uses a Firefox transport profile to
+  avoid the Chrome-profile 429 seen in the live gate; `profile` still applies
+  to the other engines.
 - A single engine descriptor registry for origin/path/URL/parser/no-results, and
   per-engine worker execution so one slow engine cannot discard another's
   result.
@@ -33,9 +35,16 @@
 
 ### Changed
 
-- Default engines remain DuckDuckGo + Bing. 360 is opt-in.
+- Default engines remain DuckDuckGo + Bing. Brave Search and 360 are opt-in.
 - Version metadata and default User-Agents report `0.1.9`.
 - Added `docs/release-v0.1.9.md` and regression tests for all fixed paths.
+
+### Tests
+
+- Added branch-focused regression coverage for adapter wiring, config schemas,
+  dispatchers, host routes, Local Direct/SearXNG/readability/wire/Jina edge
+  paths, worker handlers, and the research renderer/tool.
+- `pnpm coverage` now enforces 85% statements, branches, functions, and lines.
 
 ## 0.1.8 — 2026-10-24
 

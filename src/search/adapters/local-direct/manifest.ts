@@ -10,6 +10,7 @@ import {
 const engineLabels: Record<(typeof LOCAL_DIRECT_ENGINES)[number], ReturnType<typeof lt>> = {
   duckduckgo: lt('DuckDuckGo', 'DuckDuckGo'),
   bing: lt('Bing', 'Bing'),
+  brave: lt('Brave Search · Recommended', 'Brave Search · 推荐'),
   so360: lt('360 Search · Chinese market', '360 搜索 · 中文市场'),
 }
 
@@ -202,12 +203,12 @@ export const localDirectManifest: AdapterManifest = {
   id: 'local-direct',
   label: lt('Local Direct', '本地直连'),
   description: lt(
-    'Query public HTML engines directly and fuse their results on this machine. DuckDuckGo and Bing are enabled by default; 360 is optional.',
-    '直接查询公开 HTML 搜索引擎，并在本机融合结果。默认启用 DuckDuckGo 与 Bing；360 可选。',
+    'Query public HTML engines directly and fuse their results on this machine. DuckDuckGo and Bing are enabled by default; Brave Search and 360 are optional.',
+    '直接查询公开 HTML 搜索引擎，并在本机融合结果。默认启用 DuckDuckGo 与 Bing；Brave Search 与 360 可选。',
   ),
   notice: lt(
-    'Runs locally: queries leave this machine to the enabled engines, but parsing, fusion, ranking, and caching stay here. No SearXNG, Reader, API key, browser, or third-party aggregator. JavaScript is not executed.',
-    '在本机运行：查询会直接发往启用的搜索引擎，但解析、融合、排序和缓存都在本机完成。不需要 SearXNG、Reader、API Key、浏览器或第三方聚合服务，也不执行页面 JavaScript。',
+    'Runs locally: queries leave this machine to the enabled engines, but parsing, fusion, ranking, and caching stay here. No SearXNG, Reader, API key, browser, or third-party aggregator. JavaScript is not executed. Brave Search uses a Firefox HTTP profile internally; the TLS profile setting applies to the other engines.',
+    '在本机运行：查询会直接发往启用的搜索引擎，但解析、融合、排序和缓存都在本机完成。不需要 SearXNG、Reader、API Key、浏览器或第三方聚合服务，也不执行页面 JavaScript。Brave Search 内部使用 Firefox HTTP 指纹；TLS 指纹设置对其余引擎生效。',
   ),
   groups: [
     {

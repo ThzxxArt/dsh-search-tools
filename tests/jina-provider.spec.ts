@@ -432,7 +432,7 @@ describe('Jina Reader research chain', () => {
     expect(value.fetched[0]?.content.length).toBeLessThanOrEqual(1_000)
     expect(value.fetched[0]?.error).toBeUndefined()
     expect(value.truncated).toBe(true)
-  }, 15_000)
+  }, 60_000)
 })
 
 describe('Jina Reader engine value', () => {

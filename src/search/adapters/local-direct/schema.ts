@@ -5,7 +5,7 @@ import {
   isRecord, issue, normalizeTags, readBoolean, readNumber, readString, result,
 } from '../../../shared/validation.ts'
 
-export type LocalDirectEngine = 'duckduckgo' | 'bing' | 'so360'
+export type LocalDirectEngine = 'duckduckgo' | 'bing' | 'brave' | 'so360'
 export type LocalDirectMarket = 'auto' | 'us-en' | 'cn-zh' | 'gb-en' | 'jp-ja' | 'de-de' | 'fr-fr'
 export type LocalDirectSafeSearch = 'off' | 'moderate' | 'strict'
 export type LocalDirectProfile = 'chrome' | 'firefox'
@@ -31,7 +31,7 @@ export interface LocalDirectConfig {
 }
 
 export const LOCAL_DIRECT_ENGINES: readonly LocalDirectEngine[] = [
-  'duckduckgo', 'bing', 'so360',
+  'duckduckgo', 'bing', 'brave', 'so360',
 ]
 export const LOCAL_DIRECT_MARKETS: readonly LocalDirectMarket[] = [
   'auto', 'us-en', 'cn-zh', 'gb-en', 'jp-ja', 'de-de', 'fr-fr',

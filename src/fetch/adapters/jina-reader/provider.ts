@@ -5,6 +5,7 @@ import type {
   FetchAdapterRuntime, FetchRequest, FetchResult, ProbeResult,
 } from '../../../core/types.ts'
 import { SearchToolsError, errorCode, errorMessage } from '../../../shared/errors.ts'
+import { redactText } from '../../../shared/redact.ts'
 import {
   normalizeJinaEndpoint, normalizeJinaReaderConfig,
   type JinaReaderConfig, type JinaResponseMode,
@@ -150,7 +151,7 @@ export class JinaReaderRuntime implements FetchAdapterRuntime {
       return {
         ok: false,
         code: 'JINA_PROBE_FAILED',
-        message: `${errorCode(error, 'JINA_PROBE_FAILED')}: ${errorMessage(error)}`,
+        message: `${errorCode(error, 'JINA_PROBE_FAILED')}: ${redactText(errorMessage(error))}`,
         latencyMs: this.ctx.now() - started,
       }
     }

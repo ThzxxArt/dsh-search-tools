@@ -1,5 +1,5 @@
 import { createServer as createHttpServer, request as httpRequest } from 'node:http'
-import { connect as netConnect, createServer as createNetServer, type AddressInfo, type Socket } from 'node:net'
+import { connect as netConnect, createServer as createNetServer, Socket, type AddressInfo } from 'node:net'
 import type { Duplex } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { EgressGuard } from '../src/fetch/adapters/wire-http/egress-proxy.ts'
@@ -115,10 +115,6 @@ describe('wire-http loopback egress guard', () => {
     servers.push(upstream)
     const upstreamPort = await listen(upstream)
 
-    const dead = createNetServer()
-    const deadPort = await listen(dead)
-    await new Promise<void>((resolve) => { dead.close(() => { resolve() }) })
-
     let attempts = 0
     const guard = new EgressGuard({
       resolver: async () => [
@@ -127,9 +123,15 @@ describe('wire-http loopback egress guard', () => {
       ],
       connector: () => {
         attempts++
-        return attempts === 1
-          ? netConnect({ host: '127.0.0.1', port: deadPort })
-          : netConnect({ host: '127.0.0.1', port: upstreamPort })
+        if (attempts === 1) {
+          // A closed loopback port can be reused by the OS between tests.
+          // Emit a deterministic refusal without depending on port reuse.
+          const refused = new Socket()
+          Object.defineProperty(refused, 'connecting', { value: true, configurable: true })
+          process.nextTick(() => { refused.emit('error', new Error('ECONNREFUSED')) })
+          return refused
+        }
+        return netConnect({ host: '127.0.0.1', port: upstreamPort })
       },
     })
     guards.push(guard)

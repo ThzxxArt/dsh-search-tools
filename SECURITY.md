@@ -3,7 +3,7 @@
 ## Supported versions
 
 v0.1.x is the current preview line. DSH itself is preview software; treat this
-plugin as preview too. 0.1.9 adds 360 Search as an opt-in Local Direct HTML engine and runs one worker per engine; DuckDuckGo/Bing remain the defaults.
+plugin as preview too. 0.1.9 adds Brave Search and 360 Search as opt-in Local Direct HTML engines and runs one worker per engine; DuckDuckGo/Bing remain the defaults.
 The default `searxng` search and `readable-http` fetch boundaries are unchanged.
 The `wire-http` fetch path introduced in 0.1.6 remains opt-in.
 

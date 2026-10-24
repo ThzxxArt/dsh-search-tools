@@ -40,7 +40,7 @@ switching back does not lose it.
         searxng:
           instances: [...]
         local-direct:
-          # Optional: so360. Defaults remain duckduckgo, bing.
+          # Optional: brave, so360. Defaults remain duckduckgo, bing.
           engines: [duckduckgo, bing]
           maxPerHost: 2
     fetch:

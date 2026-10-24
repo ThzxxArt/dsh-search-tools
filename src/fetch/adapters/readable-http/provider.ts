@@ -6,6 +6,7 @@ import type {
   FetchAdapterRuntime, FetchRequest, FetchResult, ProbeResult,
 } from '../../../core/types.ts'
 import { SearchToolsError } from '../../../shared/errors.ts'
+import { redactText } from '../../../shared/redact.ts'
 import { extractReadable } from './readability.ts'
 import { normalizeReadableHttpConfig, type ReadableHttpConfig } from './schema.ts'
 
@@ -80,7 +81,7 @@ export class ReadableHttpRuntime implements FetchAdapterRuntime {
       return {
         ok: false,
         code: 'FETCH_PREVIEW_FAILED',
-        message: error instanceof Error ? error.message : String(error),
+        message: redactText(error instanceof Error ? error.message : String(error)),
         latencyMs: this.ctx.now() - started,
       }
     }
