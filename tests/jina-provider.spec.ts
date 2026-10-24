@@ -102,7 +102,7 @@ describe('Jina Reader runtime request mapping', () => {
       accept: 'application/json',
       authorization: 'Bearer jina-secret',
       'content-type': 'application/x-www-form-urlencoded',
-      'user-agent': 'dsh-search-tools/0.1.6 (+https://github.com/ThzxxArt/dsh-search-tools)',
+      'user-agent': 'dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)',
       'x-engine': 'browser',
       'x-respond-with': 'html',
       'x-timeout': '59',

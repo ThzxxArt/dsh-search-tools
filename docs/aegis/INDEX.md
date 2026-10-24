@@ -24,3 +24,9 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-10-23 | artifact | docs/aegis/work/2026-10-23-wire-http-0.1.6/gate-input-pack.json | 2026-10-23-wire-http-0.1.6 gate input pack |
 | 2026-10-23 | work | docs/aegis/work/2026-10-23-wire-http-0.1.6/proof-bundle.md | 2026-10-23-wire-http-0.1.6 proof bundle |
 | 2026-10-23 | plan | docs/aegis/plans/2026-10-23-wire-http-0.1.6.md | 0.1.6 wire-http implementation plan |
+| 2026-10-24 | plan | docs/plan-v0.1.7.md | 0.1.7 Local Direct search implementation plan |
+| 2026-10-24 | work | docs/aegis/work/2026-10-24-local-direct-0.1.7/10-intent.md | 0.1.7 Local Direct search intent |
+| 2026-10-24 | work | docs/aegis/work/2026-10-24-local-direct-0.1.7/20-checkpoint.md | 0.1.7 Local Direct search checkpoint |
+| 2026-10-24 | work | docs/aegis/work/2026-10-24-local-direct-0.1.7/90-evidence.md | 0.1.7 Local Direct search evidence |
+| 2026-10-24 | work | docs/aegis/work/2026-10-24-local-direct-0.1.7/99-reflection.md | 0.1.7 Local Direct search reflection |
+| 2026-10-24 | release | docs/release-v0.1.7.md | 0.1.7 release checklist |

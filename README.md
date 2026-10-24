@@ -8,7 +8,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **仓库版本：0.1.6（2026-10-24）。** 新增可选的 **本地 Wire HTTP** 抓取 adapter：本地浏览器级 TLS/HTTP2 指纹、逐跳公网出口 pinning、PDF 文本提取，不需要 Reader、API key、浏览器或容器，也不执行页面 JavaScript。默认仍是 `readable-http`，稳定 provider id 不变；`jina-reader` 继续作为需要浏览器渲染/PDF 转换时的可选后端。详细实现边界见 [Wire HTTP 抓取配置](#wire-http-抓取配置) 与 [v0.1.6 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.6.md)。
+> **仓库版本：0.1.7（2026-10-24）。** 新增 **Local Direct** 搜索 adapter：本机直接查询 DuckDuckGo 和 Bing 的公开 HTML 结果页，解析、去重、RRF 融合、域名多样性和缓存都在本地完成；不需要 SearXNG、API key、Reader、浏览器或第三方聚合服务。查询会直接发往启用的公网搜索引擎，但不会经过 SearXNG/Reader；不执行页面 JavaScript。默认搜索仍是 `searxng`，稳定 provider id 和工具 schema 不变。详细边界见 [Local Direct 搜索配置](#local-direct-搜索配置) 与 [v0.1.7 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.7.md)。
 
 ---
 
@@ -24,6 +24,7 @@
 - [配置参考](#配置参考)
   - [配置存放位置](#配置存放位置)
   - [SearXNG 搜索配置](#searxng-搜索配置)
+  - [Local Direct 搜索配置](#local-direct-搜索配置)
   - [Readability HTTP 抓取配置](#readability-http-抓取配置)
   - [Wire HTTP 抓取配置](#wire-http-抓取配置)
   - [Jina Reader 抓取配置](#jina-reader-抓取配置)
@@ -71,6 +72,7 @@ DSH 自带 `web_search` 和 `web_fetch`，但默认后端不一定适合每个�
 |---|---|
 | 稳定的搜索/抓取 provider | `dsh-search-tools`、`dsh-search-tools-fetch` 永不随后端变化 |
 | 内置搜索 adapter | SearXNG：多实例、顺序/轮询、故障转移、JSON/HTML、GET/POST、Bearer/Basic、代理、缓存、分页、域名过滤 |
+| 本地直连搜索 adapter（可选） | Local Direct：本机直接查询 DuckDuckGo + Bing HTML 首页，本地解析/去重/RRF 融合/域名多样性/缓存；不需要服务、Key、Reader 或浏览器，不执行 JS |
 | 内置抓取 adapter | Readability HTTP：复用 DSH 安全 HTTP，Readability 提取正文，失败可回退原文 |
 | 本地强抓取 adapter（可选） | Wire HTTP：`impit` 本地浏览器级 TLS/HTTP2 指纹、逐跳公网出口 pinning、Readability、PDF 文本；不需要 Reader/Key/浏览器/容器，不执行 JS |
 | 可选渲染抓取 adapter | Jina Reader：浏览器渲染、PDF/Office、CSS 选择器、iframe/Shadow DOM、代理选项；目标必须是公网地址，Reader 可托管或自托管 |
@@ -92,7 +94,8 @@ DSH ctx.web
         │ 读取 config.search.adapter / config.fetch.adapter
         ▼
   ctx.searchTools（adapter 注册表）
-    ├── searxng         内置搜索 adapter
+    ├── searxng         内置搜索 adapter（默认）
+    ├── local-direct    内置搜索 adapter（本机直连 DDG + Bing）
     ├── readable-http   内置抓取 adapter（默认，DSH 安全 HTTP）
     ├── wire-http       内置抓取 adapter（可选，本地浏览器级 HTTP + PDF）
     ├── jina-reader     内置抓取 adapter（可选，Reader 渲染）
@@ -114,7 +117,7 @@ DSH ctx.web
 |---|---|
 | DSH | `>=0.2.1-rc.2 <0.3.0`（当前按 `0.2.1-rc.2` 验证） |
 | Node.js | `^22.19.0 || >=24.0.0` |
-| 搜索后端 | 一个可访问的 SearXNG 实例；也可暂时保持 DSH 默认搜索 |
+| 搜索后端 | `Local Direct`（不需要部署，直接查 DDG/Bing）或一个可访问的 SearXNG 实例；也可暂时保持 DSH 默认搜索 |
 | 抓取后端 | 公网 `http(s)` 页面；`readable-http` 由 DSH SSRF 防护拦截内网，`wire-http` 在本地逐跳 pin 公网地址，`jina-reader` 在发出前做公网目标守卫 |
 | Reader（可选） | `r.jina.ai` 的 API key，或一个可访问的自托管 Jina Reader 端点；不配置时继续用 `readable-http` 或 `wire-http` |
 | 浏览器 | DSH Web GUI（设置页只在 Web 端注册） |
@@ -189,27 +192,21 @@ dsh plugin --profile <profile> add dsh-search-tools
 
 ## 快速开始
 
-### 1. 准备 SearXNG
+### 1. 准备搜索来源
 
-需要一个可访问的 SearXNG 实例。建议确认：
+有两条零代码路径：
 
-- 实例地址是 `http(s)` 绝对 URL，例如 `https://searx.example.com`；
-- 如果使用 JSON API，实例的 `search.formats` 包含 `json`；
-- 如果实例只返回 HTML，也可以工作，把 **响应格式** 设为 `html` 或保持 `auto`；
-- 如果实例有认证，准备好 Bearer token 或 `username:password`；
-- 如果实例对你的网络有限流，准备多个实例或代理。
-
-插件会自动去掉末尾 `/search`、query 和 hash；实例 URL 里不能带用户名/密码。
+- **Local Direct（推荐先试）**：不需要准备任何服务。它在本机直接请求 DuckDuckGo 和 Bing 的公开 HTML 结果页，解析和融合都在本机完成。查询会离开本机发往这两个引擎；首次使用请确认所在网络能访问它们。
+- **SearXNG**：需要一个可访问的 SearXNG 实例。实例地址是 `http(s)` 绝对 URL，例如 `https://searx.example.com`；JSON API 需要 `search.formats` 包含 `json`，HTML-only 也可以；有认证时准备 Bearer token 或 `username:password`；有限流时准备多个实例或代理。插件会自动去掉末尾 `/search`、query 和 hash，实例 URL 里不能带用户名/密码。
 
 ### 2. 在设置页配置
 
 1. 打开 **设置 → 搜索工具 → 搜索**。
-2. 在 **后端** 选择 `SearXNG`。
-3. 点击 **添加实例**，填写实例地址；备注名可选。
-4. 按需设置引擎、分类、语言、安全搜索、分页、结果数、超时。
-5. 如果实例需要认证，在 **认证** 选择 `Bearer` 或 `Basic`，保存对应密钥。
-6. 点击 **测试**，确认返回结构化来源。
-7. 点击 **保存并应用**。
+2. 在 **后端** 选择 `Local Direct` 或 `SearXNG`。
+3. **Local Direct**：勾选 **DuckDuckGo** / **Bing** 中至少一个，按需选市场、安全搜索、结果数；不需要实例或密钥。点 **测试搜索引擎** 可检查可达性。
+4. **SearXNG**：点击 **添加实例**，填写实例地址；备注名可选；按需设置引擎、分类、语言、安全搜索、分页、结果数、超时；需要认证时选择 `Bearer` / `Basic` 并保存密钥。
+5. 点击 **测试**，确认返回结构化来源；Local Direct 还会显示**可达引擎**。
+6. 点击 **保存并应用**。
 
 ### 3. 配置抓取（可选）
 
@@ -260,16 +257,18 @@ dsh plugin --profile <profile> add dsh-search-tools
 
 - 当前搜索 provider / 抓取 provider；
 - 接管状态与快捷开关；
-- 搜索后端是否可用、实例数量、缓存条数；
+- 搜索后端是否可用、**搜索来源数**（SearXNG 实例或 Local Direct 引擎）、缓存条数；
 - 快速搜索测试与抓取预览；
-- 没有任何实例时的引导卡片。
+- 没有来源时的引导卡片。
 
 ### 搜索（Search）
 
 - 卡片式 adapter picker：显示 adapter 描述、capabilities、配置状态；
-- 实例编辑器：添加、删除、上移、下移、启用/停用、单实例测试；
+- SearXNG 实例编辑器：添加、删除、上移、下移、启用/停用、单实例测试；
+- Local Direct 引擎多选、市场、安全搜索、每站结果数；不需要实例；
+- **测试搜索引擎**：使用固定探测词，不写缓存，直接列出可达引擎，无实例也能用；
 - 由 manifest 自动渲染的字段；
-- 内联测试：显示耗时、来源标题/链接/摘要、`Search notes`（例如 SearXNG 引擎被限流）；
+- 内联测试：显示耗时、来源标题/链接/摘要、`Search notes`（例如单个引擎被限流或解析为空）；
 - 校验错误会定位到具体字段，搜索草稿的错误不会阻塞抓取测试。
 
 ### 抓取（Fetch）
@@ -346,7 +345,25 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.6 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)
+          proxy: ""
+          includeDomains: []
+          excludeDomains: []
+        local-direct:
+          enabled: true
+          engines: [duckduckgo, bing]
+          market: auto
+          safeSearch: moderate
+          maxResults: 10
+          maxPerHost: 2
+          profile: chrome
+          requestTimeoutMs: 8000
+          deadlineMs: 15000
+          retries: 1
+          minIntervalMs: 1000
+          cacheTtlMs: 300000
+          cacheMaxEntries: 200
+          maxResponseBytes: 2000000
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -362,7 +379,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.6 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
         wire-http:
           enabled: true
@@ -462,6 +479,42 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 - **缓存键**：包含查询、实例列表、引擎、分类、语言、安全搜索、时间范围、分页、策略、方法、格式、认证类型、代理、UA 和域名过滤；修改这些会自然失效。凭据轮换不会自动改键，建议清空缓存。
 - **域名过滤**：在结果进入 `sources` 前过滤，支持 `example.com` 匹配 `www.example.com`。
 - **分页部分成功**：一页失败不会丢弃其他成功页；失败页写入 `notes`，全部失败才报错。
+
+### Local Direct 搜索配置
+
+> **本地边界：** Select `Local Direct` 后，查询由 Host 进程直接发往 `html.duckduckgo.com` 和 `www.bing.com` 的公开 HTML 端点；解析、去重、RRF 融合、域名多样性和缓存都在本机完成。不需要 SearXNG、API key、Reader、浏览器、Docker 或第三方聚合服务。**查询会离开本机**；它不执行页面 JavaScript，不登录、不绕过付费墙或验证码。引擎 HTML 结构变化可能导致解析为空，此时会显式报错或写入 `notes`，不会静默 fallback 到 SearXNG。
+
+| 字段 | 默认 | 范围/取值 | 说明 |
+|---|---:|---|---|
+| `enabled` | `true` | boolean | 关闭后该 adapter 不可用 |
+| `engines` | `["duckduckgo","bing"]` | `duckduckgo` / `bing`，至少一个 | 启用的公开 HTML 引擎；结果在本地融合 |
+| `market` | `auto` | `auto` / `us-en` / `cn-zh` / `gb-en` / `jp-ja` / `de-de` / `fr-fr` | 传给 DDG `kl` 和 Bing `setlang`/`cc` 的市场 |
+| `safeSearch` | `moderate` | `off` / `moderate` / `strict` | 映射到 DDG `kp` 和 Bing `adlt` |
+| `maxResults` | `10` | 1–20 | 融合后返回条数上限 |
+| `maxPerHost` | `2` | 1–5 | 同一 hostname 最多保留条数，避免单站刷满 |
+| `profile` | `chrome` | `chrome` / `firefox` | Impit TLS/HTTP2 指纹；不是浏览器 |
+| `requestTimeoutMs` | `8000` | 1000–30000 | 单个引擎请求超时 |
+| `deadlineMs` | `15000` | 1000–60000 | 整次搜索总预算，不能小于单次超时 |
+| `retries` | `1` | 0–2 | 失败引擎的重试轮数 |
+| `minIntervalMs` | `1000` | 0–10000 | 每个引擎的最小请求间隔，避免并发搜索打爆引擎 |
+| `cacheTtlMs` | `300000` | 0–86400000 | 完整成功结果的缓存 TTL；0 关闭 |
+| `cacheMaxEntries` | `200` | 0–1000 | 缓存条数 |
+| `maxResponseBytes` | `2000000` | 65536–10485760 | 单引擎 HTML 上限；超限该引擎失败 |
+| `proxy` | 空 | `http(s)` URL | 可选代理；不能包含用户名/密码 |
+| `includeDomains` | `[]` | 域名列表 | 只保留匹配域名，支持子域名 |
+| `excludeDomains` | `[]` | 域名列表 | 排除匹配域名，支持子域名 |
+
+行为与失败语义：
+
+- **固定 origin，无用户可控 URL。** 引擎 URL 由代码构造，只有查询、市场、安全搜索等参数变化；配置里没有自定义 endpoint。测试固定 origin，防止把 adapter 变成开放代理。
+- **不跟随重定向。** Impit 使用 `followRedirects:false` + `redirect:'manual'`；3xx 视为该引擎失败，不会跟随到未知 host。
+- **无 Cookie / Authorization / JS。** 每次搜索新建一个 Impit worker；不发送登录态，不执行页面脚本；worker 在成功、失败、abort、deadline 后都会终止。
+- **本地 RRF。** 每个引擎按排名贡献 `1/(60+rank+1)`；同 URL 合并更长标题/摘要；再按 hostname 多样性截断。查询词不参与第二阶段 LLM 重排。
+- **部分成功。** 一个引擎失败时返回另一个引擎的结果，并在 `notes` 写明失败引擎与原因；全部失败抛 `LOCAL_DIRECT_ALL_FAILED`，**不会**自动 fallback 到 SearXNG/Jina。
+- **缓存只写完整成功。** 只有所有启用引擎都成功且解析出结果才写缓存；部分成功不缓存，下一次会重试失败引擎。
+- **探测。** Search 页的 **测试搜索引擎** 使用固定查询 `dsh-search-tools probe`，不写缓存；返回可达引擎列表。
+- **不解析广告。** DDG 的 `result--ad` 和 Bing 的 `b.ad`/`b_algo` 广告项会被丢弃；DDG `uddg` 和 Bing `ck/a?u=a1...` 的跳转链接在本地解包为真实结果 URL。
+- **引擎可用性不是 SLA。** 两家都可能限流、返回 202/403 或改版；这是公开 HTML 路径的固有风险。出现空结果时先看 `notes` 和 **测试搜索引擎**，必要时切回 SearXNG。
 
 ### Readability HTTP 抓取配置
 
@@ -653,11 +706,12 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
 - **Wire HTTP 不执行页面 JavaScript。** 它模仿浏览器 TLS/HTTP2 协议指纹，不是浏览器；SPA 请用 `jina-reader`。PDF 只在本地用 PDF.js 提取文本，`isEvalSupported: false`，不执行 PDF 内嵌脚本。
 - **Wire HTTP worker 没有持久凭据。** 不发送 Cookie、Authorization 或登录态；不登录、不绕过付费墙、不破解验证码。
 - **Reader 不是匿名代理。** 托管 Reader 可能缓存页面，`noCache` 只要求实时抓取；自托管也不能绕过登录、付费墙或验证码。
-- **搜索重定向不跟随。** SearXNG 请求使用 `redirect: 'error'`，认证头不会跟随跨源重定向。
+- **搜索重定向不跟随。** SearXNG 请求使用 `redirect: 'error'`，认证头不会跟随跨源重定向。Local Direct 使用 `followRedirects:false` + `redirect:'manual'`，3xx 直接视为该引擎失败。
+- **搜索出口按 adapter 区分。** `searxng` 把查询发给用户配置的实例（可私有/loopback）；`local-direct` 只把查询发给两个固定公网 origin（DuckDuckGo/Bing），没有用户可控 endpoint，不发送 Cookie/Authorization，也不执行 JS。`web_research` 的抓取阶段仍只接受公网页面；搜索结果中的本地/私有 URL 不会被 fetch adapter 读取。
 - **凭据不落 YAML。** Bearer/Basic/Jina API key 写入 DSH credentials；YAML 只保存非敏感配置。诊断文本会脱敏，不包含 token。
 - **代理不带凭据。** `proxy` 必须是 `http(s)` URL，且不能包含用户名/密码，避免把代理凭据写进配置。
 - **错误信息有限。** 实例/目标主机名可能出现在诊断中，但查询字符串和凭据会被去掉。
-- **无遥测。** 插件不向作者发送使用数据；搜索请求只发往你配置的实例，`jina-reader` 请求只发往你配置的 Reader endpoint（托管 Jina 时该 endpoint 是第三方）。
+- **无遥测。** 插件不向作者发送使用数据；SearXNG 搜索请求只发往你配置的实例，Local Direct 请求只发往 DuckDuckGo/Bing，`jina-reader` 请求只发往你配置的 Reader endpoint（托管 Jina 时该 endpoint 是第三方）。Local Direct 的查询文本会到这两个公网引擎，不会发给本站或其他聚合服务。
 
 > 安全边界仍然取决于 DSH 本身和你的部署。不要把设置页暴露在不可信网络；不要在共享 profile 中把密钥当公共配置。
 
@@ -722,7 +776,7 @@ const myAdapter = {
 
 - 搜索 adapter 的 `id` 必须唯一；`kind` 必须是 `search` 或 `fetch`。
 - 配置存在 `config.search.adapters.<id>`（或 `fetch.adapters.<id>`），adapter 自己 normalize/validate。
-- `fields` 支持 `text`、`url`、`password`、`number`、`boolean`、`select`、`tags`、`instances`；可选 `group`、`advanced`、`unit` 只影响展示，不改变配置结构。
+- `fields` 支持 `text`、`url`、`password`、`number`、`boolean`、`select`、`tags`、`checkboxes`、`instances`；可选 `group`、`advanced`、`unit` 只影响展示，不改变配置结构。`checkboxes` 声明固定 `options`，用 `default` 给出多选默认值。
 - `groups` 可选；不声明时页面渲染单个 Configuration 分组。字段的 `group` 不存在时回退到第一个分组，`advanced: true` 的字段自动进入折叠区。
 - 需要密钥时用 `secretRefs` 声明引用，值走 DSH credentials，不要写进 manifest defaults；secret 也可声明 `group` / `advanced`。
 - 新增 adapter 不需要改设置页代码；页面按 manifest 渲染，声明 groups 后自动获得分组与折叠。
@@ -766,7 +820,7 @@ CI 在 Ubuntu/Windows × Node 22/24 上跑 typecheck、test、build、pack dry-r
 
 ```text
 src/core/                 adapter 类型、注册表、稳定 dispatcher、诊断
-src/search/adapters/      SearXNG adapter（manifest/schema/client/parser）
+src/search/adapters/      SearXNG + Local Direct adapter（manifest/schema/parser/fusion/worker）
 src/fetch/adapters/       Readability HTTP / Wire HTTP / Jina Reader adapters
 src/research/             web_research pipeline、prompt、render、tool
 src/host/                 认证的设置路由
@@ -784,7 +838,7 @@ Readability 运行在 Host 内。`jsdom` 的 `tr46` 依赖会调用 `createRequi
 
 发布前确认：
 
-- `package.json` 版本是 `0.1.6`；
+- `package.json` 版本是 `0.1.7`；
 - `CHANGELOG.md` 有对应条目；
 - `pnpm release` 全绿；
 - 工作区干净；
@@ -801,7 +855,7 @@ pnpm pack --pack-destination dist
 打 tag 并推送：
 
 ```sh
-git tag -a v0.1.6 -m "dsh-search-tools v0.1.6"
+git tag -a v0.1.7 -m "dsh-search-tools v0.1.7"
 git push origin main --follow-tags
 ```
 
@@ -818,7 +872,7 @@ git push origin main --follow-tags
 npm publish --access public
 ```
 
-发布后做一次全新 profile 冒烟：安装、启用、配置 SearXNG、分别用 `readable-http`、`wire-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.6 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.6.md)。
+发布后做一次全新 profile 冒烟：安装、启用、分别用 `local-direct` 和 `searxng` 做搜索测试、分别用 `readable-http`、`wire-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.7 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.7.md)。
 
 ## 故障排查
 
@@ -826,7 +880,9 @@ npm publish --access public
 |---|---|---|
 | 设置页没有“搜索工具” | bundle 未启用；DSH 版本不匹配；客户端加载失败 | 在插件页启用；确认 DSH 在 `>=0.2.1-rc.2 <0.3.0`；看浏览器控制台/插件日志 |
 | 搜索测试 401/403 | 实例需要认证；凭据未保存；Basic 格式不是 `username:password` | 在认证字段选择正确类型，保存密钥后重试；确认 `Source: env` 是否符合预期 |
-| 搜索测试 429 | 实例限流 | 降低频率、换实例、增加缓存 TTL，或改用其他后端 |
+| 搜索测试 429 | 实例/引擎限流 | 降低频率、换实例或引擎、增加缓存 TTL，或改用其他后端 |
+| Local Direct 全部失败 | 网络无法访问引擎；引擎返回 202/403/429；解析为空 | 点 **测试搜索引擎** 看可达性；换网络/代理；稍后重试；必要时切回 SearXNG |
+| Local Direct 结果偏少 | 只启用了单引擎；每站上限；引擎只返回首页 | 勾选两个引擎；提高 `maxPerHost`/`maxResults`；看 `Search notes` |
 | 返回 0 条但测试“成功” | SearXNG 默认引擎被限流/CAPTCHA | 看 **Search notes**；指定 `engines`（例如 `bing`）或换实例 |
 | JSON 解析失败 | 实例未启用 JSON 格式 | 在 SearXNG 的 `search.formats` 加 `json`；或把格式设为 `html` |
 | `web_research is disabled` | 研究工具关闭 | 设置 → 研究 → 启用 `web_research` 并保存 |
@@ -854,7 +910,7 @@ npm publish --access public
 
 ## 已知限制
 
-- **内置一个搜索 adapter 和三个抓取 adapter。** `readable-http` 是默认；`wire-http` 是本地浏览器级 HTTP + PDF 后端；`jina-reader` 是可选 Reader 后端。0.1.x 不附带 Google/Bing/Exa 等商业搜索后端。
+- **内置两个搜索 adapter 和三个抓取 adapter。** 搜索默认仍是 `searxng`；`local-direct` 是零部署的本地直连后端，直接查询 DuckDuckGo/Bing 公开 HTML，不执行 JS，也不保证引擎永不改版/限流。抓取默认 `readable-http`；`wire-http` 是本地浏览器级 HTTP + PDF 后端；`jina-reader` 是可选 Reader 后端。0.1.x 不附带 Google/Brave/Exa 等商业搜索 API 后端。
 - **没有自动更新。** 升级需要卸载再安装。
 - **外部 adapter contract 是实验性的。** 0.1.x 可能调整；生产集成请锁版本。
 - **浏览器渲染只属于 `jina-reader`。** `readable-http` 和 `wire-http` 都不执行 JS；`wire-http` 强化的是 TLS/HTTP2 指纹、出口 pinning 和 PDF，不是浏览器引擎。Jina 需要公网 Reader（托管或自托管），且不处理登录态、付费墙或验证码。SPA 能渲染不等于能登录。

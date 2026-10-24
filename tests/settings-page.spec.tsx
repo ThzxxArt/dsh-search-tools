@@ -7,6 +7,7 @@ import type { AdapterListResponse, AdapterManifest, StatusResponse } from '../sr
 import { DEFAULT_STORED_CONFIG, type StoredConfig } from '../src/shared/defaults.ts'
 import { en } from '../src/client/locales.ts'
 import { SettingsPage, type WebSelection } from '../src/client/SettingsPage.tsx'
+import { localDirectManifest } from '../src/search/adapters/local-direct/manifest.ts'
 import { searxngManifest } from '../src/search/adapters/searxng/manifest.ts'
 import { jinaReaderManifest } from '../src/fetch/adapters/jina-reader/manifest.ts'
 import { readableHttpManifest } from '../src/fetch/adapters/readable-http/manifest.ts'
@@ -26,9 +27,9 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.6',
+  version: '0.1.7',
   configPath: '/tmp/cordis.patch.yml',
-  search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0 },
+  search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0, sources: 0 },
   fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
   research: { enabled: true, registered: true },
   credentials: {},
@@ -37,7 +38,7 @@ const STATUS: StatusResponse = {
 }
 
 const ADAPTERS: AdapterListResponse = {
-  search: [searxngManifest],
+  search: [searxngManifest, localDirectManifest],
   fetch: [readableHttpManifest, jinaReaderManifest, wireHttpManifest],
 }
 
@@ -506,7 +507,7 @@ describe('SettingsPage', () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.6')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.7')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
     expect(screen.getByTestId('runtime-state')).toHaveTextContent('Fetch: available · Research: registered')
   })
@@ -581,6 +582,68 @@ describe('SettingsPage', () => {
     const diagnostics = screen.getByRole('tab', { name: 'Diagnostics' })
     fireEvent.keyDown(diagnostics, { key: 'Home' })
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
+describe('Local Direct settings integration', () => {
+  async function openLocalDirect(): Promise<void> {
+    renderPage()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Change backend' }))
+    fireEvent.click(await screen.findByRole('radio', { name: /Local Direct/ }))
+    await screen.findByText(/Runs locally/)
+  }
+
+  it('renders engine checkboxes, no instances, and the fixed public-engine boundary', async () => {
+    await openLocalDirect()
+    expect(screen.queryByText('Instances')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('DuckDuckGo')).toBeChecked()
+    expect(screen.getByLabelText('Bing')).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Test engines' })).toBeInTheDocument()
+    expect(screen.getByText(/No SearXNG, Reader, API key, browser/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Search behavior' }))
+    expect(screen.getByRole('spinbutton', { name: 'Results per host' })).toHaveValue(2)
+    expect(screen.getByRole('combobox', { name: 'Safe search' })).toHaveValue('moderate')
+  })
+
+  it('probes engines without an instance and shows the reachable engines', async () => {
+    vi.mocked(probeSearch).mockResolvedValue({
+      ok: true,
+      latencyMs: 7,
+      engines: ['DuckDuckGo', 'Bing'],
+    })
+    await openLocalDirect()
+    fireEvent.click(screen.getByRole('button', { name: 'Test engines' }))
+
+    expect(await screen.findByText('Reachable engines')).toBeInTheDocument()
+    expect(screen.getAllByText('DuckDuckGo').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Bing').length).toBeGreaterThan(0)
+    expect(probeSearch).toHaveBeenCalledWith('local-direct', expect.any(Object))
+  })
+
+  it('shows a probe failure instead of silently accepting an empty engine list', async () => {
+    vi.mocked(probeSearch).mockResolvedValue({
+      ok: false,
+      latencyMs: 12,
+      code: 'LOCAL_DIRECT_ALL_FAILED',
+      message: 'all local-direct engines failed',
+    })
+    await openLocalDirect()
+    fireEvent.click(screen.getByRole('button', { name: 'Test engines' }))
+
+    expect(await screen.findByText('No engine is available')).toBeInTheDocument()
+    expect(screen.getByText('all local-direct engines failed')).toBeInTheDocument()
+  })
+
+  it('uses sources rather than instance count for an engine-only backend', async () => {
+    vi.mocked(fetchStatus).mockResolvedValue({
+      ...STATUS,
+      search: { ...STATUS.search, adapter: 'local-direct', sources: 2, available: true },
+    })
+    renderPage()
+    expect(await screen.findByText('2 sources')).toBeInTheDocument()
+    expect(screen.getByText('Search sources')).toBeInTheDocument()
   })
 })
 

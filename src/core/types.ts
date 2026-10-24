@@ -82,7 +82,7 @@ export interface DiagnosticEntry {
 }
 
 /** One form field declared by an adapter. The settings page renders it generically. */
-export type AdapterField = TextField | NumberField | BooleanField | SelectField | TagsField | InstancesField
+export type AdapterField = TextField | NumberField | BooleanField | SelectField | TagsField | CheckboxesField | InstancesField
 
 export interface FieldBase {
   key: string
@@ -128,6 +128,13 @@ export interface TagsField extends FieldBase {
   kind: 'tags'
   default?: string[]
   placeholder?: string
+}
+
+/** A fixed-choice multi-select, rendered as native checkboxes. */
+export interface CheckboxesField extends FieldBase {
+  kind: 'checkboxes'
+  default?: string[]
+  options: readonly { value: string; label: LocalizedText }[]
 }
 
 /** A list of `{ url, label, enabled }` instances, rendered by the instance editor. */
@@ -216,7 +223,10 @@ export interface StatusResponse {
     registered: boolean
     available: boolean
     adapter: string
+    /** Enabled instances/sources for the current search adapter. */
     instances: number
+    /** Adapter-neutral source count: engines for local-direct, instances for SearXNG. */
+    sources: number
   }
   fetch: {
     enabled: boolean

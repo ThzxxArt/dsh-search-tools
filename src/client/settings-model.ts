@@ -1,6 +1,6 @@
 /** Shared view model passed from SettingsPage to the five tab components. */
 
-import type { AdapterIssue, AdapterListResponse, JsonObject, LocalizedText, StatusResponse } from '../core/types.ts'
+import type { AdapterIssue, AdapterListResponse, JsonObject, LocalizedText, ProbeResult, StatusResponse } from '../core/types.ts'
 import type { StoredConfig } from '../shared/defaults.ts'
 import type { CredentialInfo } from './credential-types.ts'
 import type { InstanceTestResult, InstanceValue } from './components/InstanceCard.tsx'
@@ -9,6 +9,11 @@ import type { PreviewState } from './preview-types.ts'
 
 export type Tab = 'overview' | 'search' | 'fetch' | 'research' | 'diagnostics'
 export type Testing = 'search' | 'fetch' | undefined
+
+export interface SearchProbeState {
+  adapter: string
+  result: ProbeResult
+}
 
 export interface SettingsModel {
   t: Translate
@@ -22,6 +27,8 @@ export interface SettingsModel {
   query: string
   fetchUrl: string
   testing: Testing
+  probingSearch: boolean
+  searchProbe: SearchProbeState | undefined
   readOnly: boolean
   refreshingAdapters: boolean
   searchIssues: readonly AdapterIssue[]
@@ -46,6 +53,7 @@ export interface SettingsModel {
   onSecretClear: (ref: string) => Promise<void>
   runSearchTest: () => Promise<boolean>
   runFetchTest: () => Promise<boolean>
+  probeSearch: () => Promise<void>
   setProvider: (kind: 'search' | 'fetch', enabled: boolean) => Promise<void>
   copyDiagnostics: () => Promise<void>
   copyPath: () => Promise<void>

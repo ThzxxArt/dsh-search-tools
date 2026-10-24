@@ -11,13 +11,14 @@ export function OverviewTab({ model }: { model: SettingsModel }): React.ReactEle
   const { t, status, currentSearch, currentFetch, query, setQuery, fetchUrl, setFetchUrl, testing, preview, runSearchTest, runFetchTest, setProvider, readOnly, onOpenTab } = model
   const searchActive = currentSearch === SEARCH_PROVIDER
   const fetchActive = currentFetch === FETCH_PROVIDER
+  const searchSources = status?.search.sources ?? status?.search.instances ?? 0
   return (
     <>
       <div className="dshst-stat-grid">
         <div className="dshst-stat">
-          <span className="dshst-stat-label">{t('search')}</span>
-          <span className="dshst-stat-value">{status?.search.instances ?? 0}</span>
-          <span className="dshst-stat-meta">{status?.search.instances === 1 ? t('oneInstance') : t('instancesCount', { n: status?.search.instances ?? 0 })}</span>
+          <span className="dshst-stat-label">{t('searchSources')}</span>
+          <span className="dshst-stat-value">{searchSources}</span>
+          <span className="dshst-stat-meta">{searchSources === 1 ? t('oneSource') : t('sourcesCount', { n: searchSources })}</span>
         </div>
         <div className="dshst-stat">
           <span className="dshst-stat-label">{t('cache')}</span>
@@ -31,7 +32,7 @@ export function OverviewTab({ model }: { model: SettingsModel }): React.ReactEle
         </div>
       </div>
 
-      {status !== undefined && status.search.instances === 0 ? (
+      {status !== undefined && searchSources === 0 ? (
         <div className="dshst-empty">
           <span className="dshst-empty-icon" aria-hidden="true"><IconSearchOutlineRegular size={18} /></span>
           <div className="dshst-empty-copy">

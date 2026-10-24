@@ -17,7 +17,7 @@ import { isRecord, readBoolean } from '../shared/validation.ts'
 
 const BASE = '/api/dsh-search-tools'
 const MAX_BODY_BYTES = 64 * 1024
-const VERSION = '0.1.6'
+const VERSION = '0.1.7'
 const FETCH_PREVIEW_BASE_TIMEOUT_MS = 30_000
 const FETCH_PROBE_BASE_TIMEOUT_MS = 30_000
 const FETCH_ROUTE_MAX_TIMEOUT_MS = 190_000
@@ -225,8 +225,11 @@ export async function buildStatus(ctx: Context, deps: RouteDeps): Promise<Status
   const cache: CacheStats = deps.search.cacheStats()
   const credentials = await describeCredentials(ctx, deps.adapters)
   const configPath = await configPathOf(ctx)
-  const searchInstances = countInstances(state.search.adapters[state.search.adapter])
-  const searchEnabled = adapterEnabled(state.search.adapters[state.search.adapter])
+  const searchConfig = state.search.adapters[state.search.adapter]
+  const searchManifest = deps.adapters.getSearchAdapter(state.search.adapter)?.manifest
+  const searchInstances = countInstances(searchConfig)
+  const searchSources = countSearchSources(searchManifest, searchConfig)
+  const searchEnabled = adapterEnabled(searchConfig)
   const fetchEnabled = adapterEnabled(state.fetch.adapters[state.fetch.adapter])
   return {
     version: VERSION,
@@ -237,6 +240,7 @@ export async function buildStatus(ctx: Context, deps: RouteDeps): Promise<Status
       available: deps.search.available(),
       adapter: state.search.adapter,
       instances: searchInstances,
+      sources: searchSources,
     },
     fetch: {
       enabled: fetchEnabled,
@@ -298,6 +302,25 @@ function adapterEnabled(raw: unknown): boolean {
 function countInstances(raw: unknown): number {
   if (!isRecord(raw) || !Array.isArray(raw.instances)) return 0
   return raw.instances.filter(entry => isRecord(entry) && entry.enabled !== false && typeof entry.url === 'string' && entry.url.length > 0).length
+}
+
+function countSearchSources(manifest: {
+  fields: readonly { kind: string; key: string; options?: readonly { value: string }[] }[]
+  defaults?: unknown
+} | undefined, raw: unknown): number {
+  if (manifest === undefined) return 0
+  const config = isRecord(raw) ? raw : {}
+  const defaults = isRecord(manifest.defaults) ? manifest.defaults : {}
+  const instances = manifest.fields.find(field => field.kind === 'instances')
+  if (instances !== undefined) return countInstances(config)
+  const checkboxes = manifest.fields.find(field => field.kind === 'checkboxes')
+  if (checkboxes !== undefined) {
+    const value = config[checkboxes.key] ?? defaults[checkboxes.key]
+    if (!Array.isArray(value)) return 0
+    const allowed = new Set((checkboxes.options ?? []).map(option => option.value))
+    return new Set(value.filter((entry): entry is string => typeof entry === 'string' && allowed.has(entry))).size
+  }
+  return 1
 }
 
 async function readJson(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | undefined> {

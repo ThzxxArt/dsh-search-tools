@@ -72,6 +72,10 @@ function validateField(field: AdapterField, value: unknown, issues: AdapterIssue
     if (field.required) issues.push(issue(field.key, `${label}不能为空`, 'field.required', { label }))
     return
   }
+  if (field.kind === 'checkboxes' && field.required === true && Array.isArray(value) && value.length === 0) {
+    issues.push(issue(field.key, `${label}不能为空`, 'field.required', { label }))
+    return
+  }
   switch (field.kind) {
     case 'text':
     case 'url':
@@ -98,6 +102,18 @@ function validateField(field: AdapterField, value: unknown, issues: AdapterIssue
     case 'tags':
       if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
         issues.push(issue(field.key, `${label}必须是字符串数组`, 'field.stringArray', { label }))
+      }
+      break
+    case 'checkboxes':
+      if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
+        issues.push(issue(field.key, `${label}必须是字符串数组`, 'field.stringArray', { label }))
+        break
+      }
+      for (const entry of value) {
+        if (!field.options.some(option => option.value === entry)) {
+          issues.push(issue(field.key, `${label}包含未知选项 ${entry}`, 'field.option', { label }))
+          break
+        }
       }
       break
     case 'instances':

@@ -16,7 +16,8 @@ DSH ctx.web
         │ reads search.adapter / fetch.adapter from Config
         ▼
   ctx.searchTools (adapter registry)
-    ├── searxng        built-in search adapter
+    ├── searxng        built-in search adapter (default)
+    ├── local-direct   built-in search adapter (fixed DDG + Bing origins)
     ├── readable-http  built-in fetch adapter (default, DSH safe HTTP)
     ├── wire-http      built-in fetch adapter (optional, local browser-grade HTTP + PDF)
     ├── jina-reader    built-in fetch adapter (optional, Reader rendering)
@@ -38,6 +39,9 @@ switching back does not lose it.
       adapters:
         searxng:
           instances: [...]
+        local-direct:
+          engines: [duckduckgo, bing]
+          maxPerHost: 2
     fetch:
       adapter: readable-http
       adapters:
@@ -65,7 +69,7 @@ Each adapter declares `AdapterManifest`:
 - `groups` (optional: `id`, localized `label`, optional `description`, and
   `advanced`)
 - `fields` (`text`, `url`, `password`, `number`, `boolean`, `select`, `tags`,
-  `instances`) with optional `group`, `advanced`, and `unit`
+  `checkboxes`, `instances`) with optional `group`, `advanced`, and `unit`
 - `defaults`
 - `notice` (optional localized data-boundary/service warning, rendered above the form)
 - `secretRefs` with optional `group` / `advanced`
@@ -82,12 +86,14 @@ does not change validation or the stored config shape.
 External adapters can ship their own Client UI later; the host contract does not
 require it. Whether takeover requires a non-empty instance list is decided from
 the selected manifest's `instances` field, not a hard-coded SearXNG check.
+Instance-less adapters use `checkboxes` values for the source count and can
+probe through the same `/probe` route.
 
 ## Host surface
 
 | Route | Purpose |
 |---|---|
-| `GET /api/dsh-search-tools/status` | provider availability, YAML path, cache, credentials declared by every adapter manifest, recent errors |
+| `GET /api/dsh-search-tools/status` | provider availability, YAML path, cache, `search.sources` (instances or enabled engines), credentials declared by every adapter manifest, recent errors |
 | `GET /api/dsh-search-tools/adapters` | manifests for the settings page |
 | `POST /api/dsh-search-tools/probe` | test one unsaved adapter config |
 | `POST /api/dsh-search-tools/search-preview` | run one search with draft config |
@@ -106,6 +112,25 @@ outer bound outside this plugin.
 The browser half registers `settings.section` with id `search-tools`, so the
 page appears as **Settings → Search Tools** next to General, Models, Plugins.
 It registers only while DSH serves the `dsh-search-tools` settings namespace.
+
+## Search security boundaries
+
+`searxng` sends the query to the instance(s) configured by the user; those may be
+private or loopback by design. It uses `redirect: 'error'`.
+
+`local-direct` has no configurable endpoint. It constructs URLs only for
+`https://html.duckduckgo.com` and `https://www.bing.com`, pins those origins in
+tests, and sends `followRedirects:false` + `redirect:'manual'`. It sends no
+Cookie/Authorization, executes no page JavaScript, and raises
+`LOCAL_DIRECT_ALL_FAILED` rather than falling back to another backend.
+
+Parsing, ad removal, redirect unwrapping, RRF fusion, per-host diversity, and
+caching are local. A one-shot worker owns the native Impit client; it is
+terminated on reply, error, abort, and deadline. Per-engine failures are data
+(partial result + `notes`), not a reason to fail the other engine.
+
+`web_research`'s search phase follows the selected search adapter; its fetch
+phase still requires public pages, so local/private result URLs are not read.
 
 ## Fetch security boundaries
 

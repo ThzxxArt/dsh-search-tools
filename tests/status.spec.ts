@@ -7,6 +7,9 @@ import { Diagnostics } from '../src/core/diagnostics.ts'
 import { buildStatus, type RouteDeps } from '../src/host/routes.ts'
 import { jinaReaderManifest } from '../src/fetch/adapters/jina-reader/manifest.ts'
 import { DEFAULT_READABLE_HTTP_CONFIG } from '../src/fetch/adapters/readable-http/schema.ts'
+import { DEFAULT_ACTIVATION_CONFIG, DEFAULT_RESEARCH_CONFIG } from '../src/shared/defaults.ts'
+import { localDirectManifest } from '../src/search/adapters/local-direct/manifest.ts'
+import { DEFAULT_LOCAL_DIRECT_CONFIG } from '../src/search/adapters/local-direct/schema.ts'
 import { DEFAULT_SEARXNG_CONFIG } from '../src/search/adapters/searxng/schema.ts'
 
 function configOf(
@@ -85,9 +88,10 @@ describe('status truth', () => {
       fetchAvailable: true,
       researchRegistered: true,
     }))
-    expect(status.version).toBe('0.1.6')
+    expect(status.version).toBe('0.1.7')
     expect(status.search.available).toBe(true)
     expect(status.search.registered).toBe(true)
+    expect(status.search.sources).toBe(0)
     expect(status.fetch.available).toBe(true)
     expect(status.fetch.registered).toBe(true)
     expect(status.research.enabled).toBe(true)
@@ -105,6 +109,44 @@ describe('status truth', () => {
     expect(status.fetch.available).toBe(false)
     expect(status.research.enabled).toBe(false)
     expect(status.research.registered).toBe(false)
+  })
+
+  it('reports the enabled engine count as sources for an instance-less adapter', async () => {
+    const deps = depsOf()
+    deps.adapters = {
+      getSearchAdapter: (id: string) => id === 'local-direct' ? { manifest: localDirectManifest } : undefined,
+      getFetchAdapter: () => undefined,
+      listAdapters: () => ({ search: [localDirectManifest], fetch: [] }),
+    } as unknown as SearchToolsService
+    deps.config = {
+      search: {
+        get: () => ({
+          adapter: 'local-direct',
+          adapters: {
+            'local-direct': {
+              ...DEFAULT_LOCAL_DIRECT_CONFIG,
+              engines: ['duckduckgo', 'bing'],
+            },
+          },
+        }),
+      },
+      fetch: { get: () => ({ adapter: 'readable-http', adapters: {} }) },
+      research: { get: () => DEFAULT_RESEARCH_CONFIG },
+      activation: { get: () => DEFAULT_ACTIVATION_CONFIG },
+    } as unknown as Config
+
+    const status = await buildStatus(ctx, deps)
+    expect(status.search.adapter).toBe('local-direct')
+    expect(status.search.instances).toBe(0)
+    expect(status.search.sources).toBe(2)
+
+    // A profile that selected the adapter without persisting a field uses the
+    // manifest defaults; the source count must not collapse to zero.
+    deps.config = {
+      ...deps.config,
+      search: { get: () => ({ adapter: 'local-direct', adapters: { 'local-direct': {} } }) },
+    } as unknown as Config
+    expect((await buildStatus(ctx, deps)).search.sources).toBe(2)
   })
 
   it('reports adapter enabled flags instead of hard-coding them', async () => {

@@ -1,7 +1,7 @@
 /** Generic field renderer for adapter manifests. */
 
 import { useId, useState } from 'react'
-import { Button, IconCloseOutlineRegular, Input, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, IconCloseOutlineRegular, Input, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { AdapterField, JsonValue, LocalizedText } from '../../core/types.ts'
 
 export type Translate = (key: string, params?: Record<string, unknown>) => string
@@ -48,6 +48,36 @@ export function Field({
           <span className="dshst-switch-state" aria-hidden="true">{t(value === true ? 'on' : 'off')}</span>
           <Switch checked={value === true} label={label} disabled={disabled} onChange={onChange} />
         </div>
+      </div>
+    )
+  }
+
+  if (field.kind === 'checkboxes') {
+    const selected = Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
+    const toggle = (option: string, checked: boolean): void => {
+      const next = checked
+        ? [...new Set([...selected, option])]
+        : selected.filter(entry => entry !== option)
+      onChange(next)
+    }
+    return (
+      <div className="dshst-field" data-kind="checkboxes" data-invalid={error === undefined ? undefined : 'true'}>
+        <fieldset className="dshst-checkbox-fieldset" aria-describedby={describedBy} aria-invalid={error !== undefined}>
+          <legend className="dshst-field-label">{label}</legend>
+          <div className="dshst-checkbox-list">
+            {field.options.map(option => (
+              <Checkbox
+                key={option.value}
+                checked={selected.includes(option.value)}
+                label={text(option.label)}
+                disabled={disabled}
+                onChange={checked => { toggle(option.value, checked) }}
+              />
+            ))}
+          </div>
+        </fieldset>
+        {hint}
+        {errorLine}
       </div>
     )
   }

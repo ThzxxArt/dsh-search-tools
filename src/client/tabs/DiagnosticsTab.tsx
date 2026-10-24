@@ -24,9 +24,9 @@ export function DiagnosticsTab({ model }: { model: SettingsModel }): React.React
             <span className="dshst-stat-meta">dsh-search-tools</span>
           </div>
           <div className="dshst-stat">
-            <span className="dshst-stat-label">{t('search')}</span>
-            <span className="dshst-stat-value">{status?.search.instances ?? 0}</span>
-            <span className="dshst-stat-meta">{status?.search.instances === 1 ? t('oneInstance') : t('instancesCount', { n: status?.search.instances ?? 0 })}</span>
+            <span className="dshst-stat-label">{t('searchSources')}</span>
+            <span className="dshst-stat-value">{status?.search.sources ?? status?.search.instances ?? 0}</span>
+            <span className="dshst-stat-meta">{(status?.search.sources ?? status?.search.instances ?? 0) === 1 ? t('oneSource') : t('sourcesCount', { n: status?.search.sources ?? status?.search.instances ?? 0 })}</span>
           </div>
           <div className="dshst-stat">
             <span className="dshst-stat-label">{t('cache')}</span>

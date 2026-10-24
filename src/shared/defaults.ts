@@ -4,6 +4,7 @@ import type { JsonObject } from '../core/types.ts'
 import { DEFAULT_JINA_READER_CONFIG, type JinaReaderConfig } from '../fetch/adapters/jina-reader/schema.ts'
 import { DEFAULT_READABLE_HTTP_CONFIG, type ReadableHttpConfig } from '../fetch/adapters/readable-http/schema.ts'
 import { DEFAULT_WIRE_HTTP_CONFIG, type WireHttpConfig } from '../fetch/adapters/wire-http/schema.ts'
+import { DEFAULT_LOCAL_DIRECT_CONFIG, type LocalDirectConfig } from '../search/adapters/local-direct/schema.ts'
 import { DEFAULT_SEARXNG_CONFIG, type SearxngConfig } from '../search/adapters/searxng/schema.ts'
 
 export interface SearchSection {
@@ -59,6 +60,7 @@ export const DEFAULT_SEARCH_SECTION: SearchSection = {
   adapter: 'searxng',
   adapters: {
     searxng: DEFAULT_SEARXNG_CONFIG as unknown as JsonObject,
+    'local-direct': DEFAULT_LOCAL_DIRECT_CONFIG as unknown as JsonObject,
   },
 }
 
@@ -79,4 +81,4 @@ export const DEFAULT_STORED_CONFIG: StoredConfig = {
 }
 
 /** Built-in adapter config types, re-exported for adapter implementations. */
-export type { JinaReaderConfig, ReadableHttpConfig, SearxngConfig, WireHttpConfig }
+export type { JinaReaderConfig, LocalDirectConfig, ReadableHttpConfig, SearxngConfig, WireHttpConfig }

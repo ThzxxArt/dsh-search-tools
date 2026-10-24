@@ -11,6 +11,7 @@ import { readableHttpAdapter } from './fetch/adapters/readable-http/adapter.ts'
 import { wireHttpAdapter } from './fetch/adapters/wire-http/adapter.ts'
 import { registerRoutes } from './host/routes.ts'
 import { applyResearchTool } from './research/tool.ts'
+import { localDirectAdapter } from './search/adapters/local-direct/adapter.ts'
 import { searxngAdapter } from './search/adapters/searxng/adapter.ts'
 
 export { Config }
@@ -28,6 +29,7 @@ export function apply(ctx: Context, config: ConfigShape): void {
   const diagnostics = new Diagnostics()
 
   ctx.effect(() => adapters.registerSearchAdapter(searxngAdapter), 'dsh-search-tools: searxng adapter')
+  ctx.effect(() => adapters.registerSearchAdapter(localDirectAdapter), 'dsh-search-tools: local-direct adapter')
   ctx.effect(() => adapters.registerFetchAdapter(readableHttpAdapter), 'dsh-search-tools: readable-http adapter')
   ctx.effect(() => adapters.registerFetchAdapter(jinaReaderAdapter), 'dsh-search-tools: jina-reader adapter')
   ctx.effect(() => adapters.registerFetchAdapter(wireHttpAdapter), 'dsh-search-tools: wire-http adapter')

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Search Tools",
-    "description": "Adapter-first web search and page fetching for DeepSeek Harness, with SearXNG, Readability HTTP, local Wire HTTP with PDF, and Jina Reader, configured in Settings."
+    "description": "Adapter-first web search and page fetching for DeepSeek Harness, with Local Direct (DuckDuckGo + Bing), SearXNG, Readability HTTP, local Wire HTTP with PDF, and Jina Reader, configured in Settings."
   }
 }

@@ -24,6 +24,26 @@ export function StateDot({ state }: { state?: string; size?: number }): React.Re
   return <span data-state={state} />
 }
 
+export function Checkbox({ checked, label, disabled, onChange }: {
+  checked: boolean
+  label: string
+  disabled?: boolean
+  onChange: (checked: boolean) => void
+}): React.ReactElement {
+  return (
+    <label>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        aria-label={label}
+        onChange={event => { onChange(event.target.checked) }}
+      />
+      {label}
+    </label>
+  )
+}
+
 export function Switch({ checked, label, disabled, onChange }: {
   checked: boolean
   label: string

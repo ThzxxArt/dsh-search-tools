@@ -7,9 +7,11 @@ import { validateSearxngConfig } from '../search/adapters/searxng/schema.ts'
 import { validateJinaReaderConfig } from '../fetch/adapters/jina-reader/schema.ts'
 import { validateReadableHttpConfig } from '../fetch/adapters/readable-http/schema.ts'
 import { validateWireHttpConfig } from '../fetch/adapters/wire-http/schema.ts'
+import { validateLocalDirectConfig } from '../search/adapters/local-direct/schema.ts'
 
 const BUILTIN_VALIDATORS: Readonly<Record<string, (config: unknown) => { issues: readonly AdapterIssue[] }>> = {
   'search:searxng': validateSearxngConfig,
+  'search:local-direct': validateLocalDirectConfig,
   'fetch:readable-http': validateReadableHttpConfig,
   'fetch:jina-reader': validateJinaReaderConfig,
   'fetch:wire-http': validateWireHttpConfig,

@@ -23,7 +23,7 @@ import { issueText } from './issue-text.ts'
 import { type Translate } from './components/Field.tsx'
 import { FETCH_PROVIDER, SEARCH_PROVIDER } from './provider-ids.ts'
 import type { PreviewState } from './preview-types.ts'
-import type { SettingsModel, Tab, Testing } from './settings-model.ts'
+import type { SearchProbeState, SettingsModel, Tab, Testing } from './settings-model.ts'
 import { adapterConfig, findManifest, hasEnabledInstances, isHttpUrl, validateAdapterConfig } from './settings-utils.ts'
 import { DiagnosticsTab } from './tabs/DiagnosticsTab.tsx'
 import { FetchTab } from './tabs/FetchTab.tsx'
@@ -94,6 +94,8 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
   const [fetchUrl, setFetchUrl] = useState('https://example.com')
   const [preview, setPreview] = useState<PreviewState | undefined>()
   const [testing, setTesting] = useState<Testing>()
+  const [probingSearch, setProbingSearch] = useState(false)
+  const [searchProbe, setSearchProbe] = useState<SearchProbeState>()
   const [credentialInfo, setCredentialInfo] = useState<Record<string, CredentialInfo>>({})
   const [secretDrafts, setSecretDrafts] = useState<Record<string, string>>({})
   const [secretBusy, setSecretBusy] = useState<string>()
@@ -157,6 +159,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
     setDirty(true)
     setMessage(undefined)
     setConflict(false)
+    setSearchProbe(undefined)
   }
 
   const refreshStatus = async (): Promise<void> => {
@@ -377,6 +380,27 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
     }
   }
 
+  const probeSearchNow = async (): Promise<void> => {
+    if (searchIssues.length > 0) {
+      setMessage(t('fixErrorsFirst'))
+      return
+    }
+    setProbingSearch(true)
+    try {
+      const adapter = draft.search.adapter
+      const config = adapterConfig(draft.search, adapter)
+      const result = await probeSearch(adapter, config)
+      setSearchProbe({ adapter, result })
+    } catch (error) {
+      setSearchProbe({
+        adapter: draft.search.adapter,
+        result: { ok: false, code: 'SEARCH_PROBE_FAILED', message: errorText(error), latencyMs: 0 },
+      })
+    } finally {
+      setProbingSearch(false)
+    }
+  }
+
   const runFetchTest = async (): Promise<boolean> => {
     if (fetchIssues.length > 0) {
       setPreview({ kind: 'fetch', ok: false, message: t('fixErrorsFirst') })
@@ -513,6 +537,8 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
     query,
     fetchUrl,
     testing,
+    probingSearch,
+    searchProbe,
     readOnly,
     refreshingAdapters,
     searchIssues,
@@ -537,6 +563,7 @@ export function SettingsPage({ form, web, credentials, t, locale }: SettingsPage
     onSecretClear: clearSecret,
     runSearchTest,
     runFetchTest,
+    probeSearch: probeSearchNow,
     setProvider,
     copyDiagnostics,
     copyPath,

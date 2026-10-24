@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.1.7 — 2026-10-24
+
+### Added
+
+- New `local-direct` search adapter: queries DuckDuckGo and Bing public HTML
+  first pages directly from the host, unwraps ad/redirect links, deduplicates
+  URLs, RRF-fuses rankings, applies per-host diversity, and caches only complete
+  successes. No SearXNG, API key, Reader, browser, or aggregator is required.
+- Fixed-origin engine URL construction (`html.duckduckgo.com`, `www.bing.com`),
+  market/safe-search mapping, per-engine rate gates, retries, partial-result
+  notes, and explicit `LOCAL_DIRECT_ALL_FAILED` failure without fallback.
+- One-shot local-direct worker with `impit` TLS/HTTP2 profiles, no cookies,
+  Authorization, page JavaScript, or redirect following; the worker terminates
+  on every settlement path.
+- `checkboxes` manifest field, `StatusResponse.search.sources`, and an
+  instance-less **Test engines** probe in the Search tab.
+- Fixture/runtime/live tests for schema, fixed origins, parsers, RRF, cache,
+  partial failure, worker cleanup, UI, status, and `web_research`.
+
+### Changed
+
+- Version metadata and default User-Agents report `0.1.7`.
+- Search defaults still use `searxng`; `local-direct` is explicitly opt-in and
+  remains in the built-in defaults for a zero-migration settings page.
+- Worker lifecycle is shared by `wire-http` and `local-direct` through
+  `src/shared/one-shot-worker.ts`.
+- `tsdown` emits `lib/local-direct-worker.js` alongside `lib/wire-worker.js`.
+
+### Security
+
+- Local Direct has no configurable endpoint: queries only go to the two fixed
+  public origins. It sends no Cookie/Authorization, follows no redirects, and
+  does not execute JS. The query text leaves the machine to the enabled engines;
+  this is documented in the manifest, README, and security model.
+- Search adapters have adapter-scoped egress: SearXNG uses the configured
+  instance; Local Direct uses fixed public engines; `web_research`'s fetch phase
+  remains public-only.
+- No change to stable provider ids, tool schemas, default adapters, or DSH
+  permission/approval behavior.
+
 ## 0.1.6 — 2026-10-24
 
 ### Added

@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Repository version: 0.1.6 (2026-10-24).** Adds an optional **local Wire HTTP** fetch adapter: local browser-grade TLS/HTTP2 fingerprinting, per-hop public-egress pinning, and PDF text extraction, with no Reader, API key, browser, or container and no page JavaScript. The default remains `readable-http` and the stable provider ids are unchanged; `jina-reader` remains the optional browser-rendering/PDF-conversion backend. See [Wire HTTP fetch settings](#wire-http-fetch-settings) and the [v0.1.6 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.6.md).
+> **Repository version: 0.1.7 (2026-10-24).** Adds **Local Direct**, a zero-deployment search adapter that queries DuckDuckGo and Bing HTML endpoints directly from the host, then parses, deduplicates, RRF-fuses, diversifies, and caches results locally. It needs no SearXNG, API key, Reader, browser, or aggregator. Queries leave the machine to the enabled engines, but never go through SearXNG/Reader; page JavaScript is not executed. The default search remains `searxng`, and the stable provider ids/tool schemas are unchanged. See [Local Direct search settings](#local-direct-search-settings) and the [v0.1.7 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.7.md).
 
 ---
 
@@ -24,6 +24,7 @@ Adapter-first web search and readable page fetching for [DeepSeek Harness](https
 - [Configuration reference](#configuration-reference)
   - [Where configuration lives](#where-configuration-lives)
   - [SearXNG search settings](#searxng-search-settings)
+  - [Local Direct search settings](#local-direct-search-settings)
   - [Readability HTTP fetch settings](#readability-http-fetch-settings)
   - [Wire HTTP fetch settings](#wire-http-fetch-settings)
   - [Jina Reader fetch settings](#jina-reader-fetch-settings)
@@ -71,6 +72,7 @@ These screenshots use demo data (`https://searxng.example.com`, no real credenti
 |---|---|
 | Stable search/fetch providers | `dsh-search-tools` and `dsh-search-tools-fetch` never change with the backend |
 | Built-in search adapter | SearXNG: multiple instances, ordered/round-robin, failover, JSON/HTML, GET/POST, Bearer/Basic auth, proxy, cache, pagination, domain filters |
+| Optional zero-deployment search adapter | Local Direct: queries DuckDuckGo + Bing HTML first pages locally, with local parsing, dedupe, RRF fusion, domain diversity, and cache; no service, key, Reader, or browser, and no JS |
 | Built-in fetch adapter | Readability HTTP: reuses DSH safe HTTP, extracts article text with Readability, can fall back to raw content |
 | Optional local strong fetch adapter | Wire HTTP: local `impit` browser-grade TLS/HTTP2, per-hop public-egress pinning, Readability, PDF text; no Reader/key/browser/container and no page JS |
 | Optional rendering fetch adapter | Jina Reader: browser rendering, PDF/Office, CSS selectors, iframe/Shadow DOM, proxy option; targets must be public, and the Reader itself can be hosted or self-hosted |
@@ -92,7 +94,8 @@ DSH ctx.web
         │ reads config.search.adapter / config.fetch.adapter
         ▼
   ctx.searchTools (adapter registry)
-    ├── searxng         built-in search adapter
+    ├── searxng         built-in search adapter (default)
+    ├── local-direct    built-in search adapter (local DDG + Bing)
     ├── readable-http   built-in fetch adapter (default, DSH safe HTTP)
     ├── wire-http       built-in fetch adapter (optional, local browser-grade HTTP + PDF)
     ├── jina-reader     built-in fetch adapter (optional, Reader rendering)
@@ -114,7 +117,7 @@ See [docs/architecture.md](https://github.com/ThzxxArt/dsh-search-tools/blob/mai
 |---|---|
 | DSH | `>=0.2.1-rc.2 <0.3.0` (verified against `0.2.1-rc.2`) |
 | Node.js | `^22.19.0 || >=24.0.0` |
-| Search backend | A reachable SearXNG instance; or keep DSH's default search |
+| Search backend | `Local Direct` (no deployment; queries DDG/Bing) or a reachable SearXNG instance; or keep DSH's default search |
 | Fetch backend | Public `http(s)` pages; `readable-http` uses DSH SSRF protection, `wire-http` pins public addresses per hop locally, and `jina-reader` performs a pre-flight public-target guard |
 | Reader (optional) | A `r.jina.ai` API key or a reachable self-hosted Jina Reader endpoint; without it, keep `readable-http` or `wire-http` |
 | Browser | DSH Web GUI (the settings section is Web-only) |
@@ -189,27 +192,21 @@ dsh plugin --profile <profile> add dsh-search-tools
 
 ## Quick start
 
-### 1. Prepare SearXNG
+### 1. Prepare a search source
 
-You need a reachable SearXNG instance. Confirm:
+There are two no-code paths:
 
-- the address is an absolute `http(s)` URL, for example `https://searx.example.com`;
-- for JSON API use, `search.formats` includes `json`;
-- HTML-only instances work too: set **Response format** to `html`, or leave `auto`;
-- if the instance requires auth, prepare a Bearer token or `username:password`;
-- if it rate-limits your network, prepare multiple instances or a proxy.
-
-The plugin trims a trailing `/search`, query, and hash from the instance URL. Embedded usernames/passwords are rejected.
+- **Local Direct (try this first)**: no service to prepare. It queries DuckDuckGo and Bing public HTML endpoints directly from the host, then parses and fuses results locally. Queries leave the machine to those engines; confirm your network can reach them.
+- **SearXNG**: needs a reachable instance. The address is an absolute `http(s)` URL such as `https://searx.example.com`; JSON API needs `search.formats` to include `json`; HTML-only works; with auth, prepare a Bearer token or `username:password`; with rate limits, prepare multiple instances or a proxy. The plugin trims a trailing `/search`, query, and hash; embedded usernames/passwords are rejected.
 
 ### 2. Configure search
 
 1. Open **Settings → Search Tools → Search**.
-2. Choose `SearXNG` under **Backend**.
-3. Click **Add instance** and enter the instance URL; the label is optional.
-4. Adjust engines, categories, language, safe search, pages, result count, and timeouts as needed.
-5. If the instance requires auth, choose `Bearer` or `Basic` and save the credential.
-6. Click **Test** and confirm structured sources appear.
-7. Click **Save and apply**.
+2. Choose `Local Direct` or `SearXNG` under **Backend**.
+3. **Local Direct**: enable at least one of **DuckDuckGo** / **Bing**, then choose market, safe search, and result count. No instance or key is needed. **Test engines** checks reachability.
+4. **SearXNG**: click **Add instance** and enter the instance URL; the label is optional. Adjust engines, categories, language, safe search, pages, result count, and timeouts; choose `Bearer`/`Basic` and save the credential when needed.
+5. Click **Test** and confirm structured sources appear; Local Direct also lists the reachable engines.
+6. Click **Save and apply**.
 
 ### 3. Configure fetch (optional)
 
@@ -261,16 +258,18 @@ The result contains `sources`, `fetched`, and `truncated`; the conversation card
 
 - Current search/fetch providers.
 - Takeover state and quick toggles.
-- Backend availability, instance count, cache size.
+- Backend availability, **search source count** (SearXNG instances or Local Direct engines), cache size.
 - Quick search test and fetch preview.
-- Empty-state guide when no instance exists.
+- Empty-state guide when no source exists.
 
 ### Search
 
 - Card-based adapter picker with description, capabilities, and configuration state.
-- Instance editor: add, remove, move up/down, enable/disable, per-instance test.
+- SearXNG instance editor: add, remove, move up/down, enable/disable, per-instance test.
+- Local Direct engine checkboxes, market, safe search, and per-host cap; no instance needed.
+- **Test engines**: fixed probe query, no cache write, lists reachable engines; works without an instance.
 - Manifest-rendered fields.
-- Inline test with elapsed time, source title/link/snippet, and **Search notes** (for example, suspended SearXNG engines).
+- Inline test with elapsed time, source title/link/snippet, and **Search notes** (for example, one rate-limited engine).
 - Validation errors are field-scoped; a broken search draft does not block a fetch test.
 
 ### Fetch
@@ -346,7 +345,25 @@ The shape is roughly:
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.6 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)
+          proxy: ""
+          includeDomains: []
+          excludeDomains: []
+        local-direct:
+          enabled: true
+          engines: [duckduckgo, bing]
+          market: auto
+          safeSearch: moderate
+          maxResults: 10
+          maxPerHost: 2
+          profile: chrome
+          requestTimeoutMs: 8000
+          deadlineMs: 15000
+          retries: 1
+          minIntervalMs: 1000
+          cacheTtlMs: 300000
+          cacheMaxEntries: 200
+          maxResponseBytes: 2000000
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -362,7 +379,7 @@ The shape is roughly:
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.6 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.7 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
         wire-http:
           enabled: true
@@ -462,6 +479,42 @@ Behavior:
 - **Cache key**: query, instance list, engines, categories, language, safe search, time range, pages, strategy, method, format, auth type, proxy, UA, and domain filters. Changing those naturally invalidates entries; clear the cache after credential rotation.
 - **Domain filters**: applied before results become `sources`; `example.com` also matches `www.example.com`.
 - **Partial pagination**: one failed page no longer discards successful pages; failed pages become `notes`, and only an all-pages failure raises an error.
+
+### Local Direct search settings
+
+> **Local boundary:** The host queries `html.duckduckgo.com` and `www.bing.com` public HTML endpoints directly; parsing, dedupe, RRF fusion, domain diversity, and caching stay local. No SearXNG, API key, Reader, browser, Docker, or third-party aggregator. **Queries leave the machine**; page JavaScript is not executed, and there is no login, paywall bypass, or CAPTCHA solving. Engine markup changes can produce empty results; those are explicit errors/notes, never a silent fallback to SearXNG.
+
+| Field | Default | Range/values | Notes |
+|---|---:|---|---|
+| `enabled` | `true` | boolean | Disables the adapter |
+| `engines` | `["duckduckgo","bing"]` | `duckduckgo` / `bing`; at least one | Public HTML engines; results are fused locally |
+| `market` | `auto` | `auto` / `us-en` / `cn-zh` / `gb-en` / `jp-ja` / `de-de` / `fr-fr` | DDG `kl` and Bing `setlang`/`cc` |
+| `safeSearch` | `moderate` | `off` / `moderate` / `strict` | DDG `kp` and Bing `adlt` |
+| `maxResults` | `10` | 1–20 | Fused result cap |
+| `maxPerHost` | `2` | 1–5 | Limit per hostname so one site cannot fill the page |
+| `profile` | `chrome` | `chrome` / `firefox` | Impit TLS/HTTP2 profile; not a browser |
+| `requestTimeoutMs` | `8000` | 1000–30000 | Per-engine request timeout |
+| `deadlineMs` | `15000` | 1000–60000 | Whole-search budget; must be at least the request timeout |
+| `retries` | `1` | 0–2 | Retry rounds for failed engines |
+| `minIntervalMs` | `1000` | 0–10000 | Per-engine minimum interval for concurrent searches |
+| `cacheTtlMs` | `300000` | 0–86400000 | Complete-success cache TTL; `0` disables |
+| `cacheMaxEntries` | `200` | 0–1000 | Cache capacity |
+| `maxResponseBytes` | `2000000` | 65536–10485760 | Per-engine HTML cap; oversize fails that engine |
+| `proxy` | empty | `http(s)` URL | Optional; no embedded credentials |
+| `includeDomains` | `[]` | domain list | Keep matching domains; subdomain-aware |
+| `excludeDomains` | `[]` | domain list | Drop matching domains; subdomain-aware |
+
+Behavior:
+
+- **Fixed origins; no user-controlled URL.** URLs are constructed from code and vary only by query/market/safe-search parameters. There is no custom endpoint field; tests pin the origins so the adapter cannot become an open proxy.
+- **No redirect following.** Impit uses `followRedirects:false` + `redirect:'manual'`; a 3xx fails that engine.
+- **No cookies, Authorization, or JS.** Each search uses a fresh Impit worker; no login state and no page scripts. The worker terminates on success, failure, abort, and deadline.
+- **Local RRF.** Each engine contributes `1/(60+rank+1)`; duplicate URLs merge longer titles/snippets; hostname diversity trims the tail. No second-stage LLM reranking.
+- **Partial success.** One failed engine returns the other engine's results plus `notes`; only all-engine failure raises `LOCAL_DIRECT_ALL_FAILED`. There is no automatic fallback to SearXNG/Jina.
+- **Complete-only cache.** A partial response is not cached; the next call retries the failed engine.
+- **Probe.** **Test engines** uses the fixed query `dsh-search-tools probe`, does not write the cache, and lists reachable engines.
+- **Ads and redirects.** DDG `result--ad` and Bing `b_ad` items are dropped; DDG `uddg` and Bing `ck/a?u=a1...` links are unwrapped locally.
+- **No engine SLA.** Either engine can rate-limit, return 202/403, or change markup. Check `notes` and **Test engines**, then switch to SearXNG if needed.
 
 ### Readability HTTP fetch settings
 
@@ -649,11 +702,12 @@ Behavior:
 - **`wire-http` does not execute page JavaScript.** It mimics browser TLS/HTTP2 fingerprints; it is not a browser. PDF text is extracted locally with PDF.js (`isEvalSupported: false`), and embedded PDF scripts are not executed.
 - **The `wire-http` worker carries no persistent credentials.** It sends no Cookie, Authorization, or login state and does not sign in, bypass paywalls, or solve CAPTCHAs.
 - **The Reader is not an anonymous proxy.** A hosted Reader may cache pages; `noCache` only asks for a live fetch. Neither mode bypasses logins, paywalls, or CAPTCHAs.
-- **No redirects for searches.** SearXNG requests use `redirect: 'error'`, so auth headers cannot follow a cross-origin redirect.
+- **No redirects for searches.** SearXNG requests use `redirect: 'error'`, so auth headers cannot follow a cross-origin redirect. Local Direct uses `followRedirects:false` + `redirect:'manual'`; a 3xx fails that engine.
+- **Search egress is adapter-scoped.** `searxng` sends queries to the configured instance (possibly private/loopback); `local-direct` sends only to the two fixed public origins (DuckDuckGo/Bing), with no user-controlled endpoint, no Cookie/Authorization, and no JS. `web_research`'s fetch phase still accepts public pages only; local/private result URLs are not fetched.
 - **Credentials stay out of YAML.** Bearer/Basic/Jina API keys go to DSH credentials; YAML stores only non-secret settings. Diagnostics are redacted.
 - **Proxies carry no credentials.** `proxy` must be an `http(s)` URL without username/password.
 - **Limited error text.** Instance/target hostnames may appear in diagnostics, but query strings and credentials are stripped.
-- **No telemetry.** The plugin sends no usage data to the author; search requests go only to your instances, and `jina-reader` requests go only to your configured Reader endpoint (hosted Jina is third-party).
+- **No telemetry.** The plugin sends no usage data to the author; SearXNG requests go only to your instances, Local Direct requests go only to DuckDuckGo/Bing, and `jina-reader` requests go only to your configured Reader endpoint (hosted Jina is third-party). The Local Direct query text goes to those two public engines, not to the author or an aggregator.
 
 Security still depends on DSH and your deployment. Do not expose the settings page to an untrusted network, and do not treat secrets in a shared profile as public configuration.
 
@@ -718,7 +772,7 @@ Conventions:
 
 - Search adapter `id` values must be unique; `kind` is `search` or `fetch`.
 - Config lives under `config.search.adapters.<id>` (or `fetch.adapters.<id>`); the adapter normalizes and validates it.
-- `fields` supports `text`, `url`, `password`, `number`, `boolean`, `select`, `tags`, and `instances`; optional `group`, `advanced`, and `unit` affect presentation only, not the stored config shape.
+- `fields` supports `text`, `url`, `password`, `number`, `boolean`, `select`, `tags`, `checkboxes`, and `instances`; optional `group`, `advanced`, and `unit` affect presentation only, not the stored config shape. `checkboxes` declares fixed `options` and a multi-select `default`.
 - `groups` is optional; without it the page renders one Configuration block. An unknown field `group` falls back to the first group, and `advanced: true` fields go into a disclosure.
 - Declare secrets with `secretRefs`; values go through DSH credentials and must not be in manifest defaults. Secrets may also declare `group` / `advanced`.
 - New adapters do not require settings-page code; the page renders manifest fields and automatically groups/collapses declared groups.
@@ -762,7 +816,7 @@ CI runs typecheck, test, build, pack dry-run, and publint on Ubuntu/Windows × N
 
 ```text
 src/core/                 adapter types, registry, stable dispatchers, diagnostics
-src/search/adapters/      SearXNG adapter (manifest/schema/client/parser)
+src/search/adapters/      SearXNG + Local Direct adapters (manifest/schema/parser/fusion/worker)
 src/fetch/adapters/       Readability HTTP / Wire HTTP / Jina Reader adapters
 src/research/             web_research pipeline, prompt, render, tool
 src/host/                 authenticated settings routes
@@ -780,7 +834,7 @@ Readability runs inside the Host. `jsdom`'s `tr46` dependency calls `createRequi
 
 Before releasing:
 
-- `package.json` version is `0.1.6`;
+- `package.json` version is `0.1.7`;
 - `CHANGELOG.md` has the matching entry;
 - `pnpm release` passes;
 - the worktree is clean;
@@ -797,7 +851,7 @@ pnpm pack --pack-destination dist
 Tag and push:
 
 ```sh
-git tag -a v0.1.6 -m "dsh-search-tools v0.1.6"
+git tag -a v0.1.7 -m "dsh-search-tools v0.1.7"
 git push origin main --follow-tags
 ```
 
@@ -814,7 +868,7 @@ Manual publish (does not attach provenance; prefer the tag workflow):
 npm publish --access public
 ```
 
-After publishing, smoke-test a fresh profile: install, enable, configure SearXNG, run fetch tests through `readable-http`, `wire-http`, and `jina-reader`, and make one `web_research` call. See the [v0.1.6 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.6.md).
+After publishing, smoke-test a fresh profile: install, enable, run search tests through `local-direct` and `searxng`, run fetch tests through `readable-http`, `wire-http`, and `jina-reader`, and make one `web_research` call. See the [v0.1.7 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.7.md).
 
 ## Troubleshooting
 
@@ -822,7 +876,9 @@ After publishing, smoke-test a fresh profile: install, enable, configure SearXNG
 |---|---|---|
 | No "Search Tools" settings section | Bundle disabled; DSH version mismatch; client load failure | Enable it on the Plugins page; confirm DSH is `>=0.2.1-rc.2 <0.3.0`; check browser console/plugin logs |
 | Search test 401/403 | Instance needs auth; credential not saved; Basic format is not `username:password` | Choose the right auth mode, save the secret, retry; confirm `Source: env` is expected |
-| Search test 429 | Instance rate limit | Slow down, switch instance, raise cache TTL, or use another backend |
+| Search test 429 | Instance/engine rate limit | Slow down, switch instance or engines, raise cache TTL, or use another backend |
+| Local Direct fails entirely | Engine unreachable; 202/403/429; empty parse | Use **Test engines** to check reachability; change network/proxy; retry later; switch to SearXNG if needed |
+| Local Direct returns few results | One engine enabled; per-host cap; first page only | Enable both engines; raise `maxPerHost`/`maxResults`; inspect `Search notes` |
 | Test passes but returns 0 results | SearXNG default engines are rate-limited/CAPTCHA | Check **Search notes**; set engines (for example `bing`) or switch instance |
 | JSON parse failure | Instance does not serve JSON | Add `json` to SearXNG `search.formats`, or set format to `html` |
 | `web_research is disabled` | Research tool off | Settings → Research → enable `web_research`, save |
@@ -850,7 +906,7 @@ Suggested diagnosis order:
 
 ## Known limitations
 
-- **One search adapter and three fetch adapters are built in.** `readable-http` is the default; `wire-http` is the local browser-grade HTTP/PDF backend; `jina-reader` is optional. 0.1.x does not ship Google/Bing/Exa or other commercial search backends.
+- **Two search adapters and three fetch adapters are built in.** Search still defaults to `searxng`; `local-direct` is the zero-deployment local backend that queries DuckDuckGo/Bing HTML, does not execute JS, and cannot guarantee engine markup or rate limits. Fetch defaults to `readable-http`; `wire-http` is the local browser-grade HTTP/PDF backend; `jina-reader` is optional. 0.1.x does not ship Google/Brave/Exa or other commercial search API backends.
 - **No auto-update.** Upgrade by removing and reinstalling.
 - **The external adapter contract is experimental.** It may change in 0.1.x; pin versions for production integrations.
 - **Browser rendering belongs to `jina-reader`.** `readable-http` and `wire-http` do not execute JS; `wire-http` strengthens TLS/HTTP2 identity, egress pinning, and PDF, not a browser engine. Jina needs a public Reader (hosted or self-hosted) and still does not handle login state, paywalls, or CAPTCHAs. Rendering a SPA is not the same as authenticating to it.

@@ -14,10 +14,10 @@ type SearchView = 'connection' | 'behavior'
 
 export function SearchTab({ model }: { model: SettingsModel }): React.ReactElement {
   const {
-    t, text, draft, adapters, searchIssues, readOnly, preview, testing, query, setQuery,
-    refreshingAdapters, instanceTesting, instanceResults, credentialInfo, secretDrafts, secretBusy, secretErrors,
-    edit, onRefreshAdapters, onSelectAdapter, onTestInstance,
-    onSecretDraft, onSecretSave, onSecretClear, runSearchTest,
+    t, text, draft, adapters, searchIssues, readOnly, preview, testing, probingSearch, searchProbe,
+    query, setQuery, refreshingAdapters, instanceTesting, instanceResults, credentialInfo, secretDrafts,
+    secretBusy, secretErrors, edit, onRefreshAdapters, onSelectAdapter, onTestInstance,
+    onSecretDraft, onSecretSave, onSecretClear, runSearchTest, probeSearch,
   } = model
   const manifest = findManifest(adapters.search, draft.search.adapter)
   const groups = manifest === undefined ? [] : resolveAdapterGroups(manifest, text, t)
@@ -117,6 +117,35 @@ export function SearchTab({ model }: { model: SettingsModel }): React.ReactEleme
         title={t('testConsole')}
         description={t('testSearchHint')}
       >
+        <div className="dshst-probe-bar">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={readOnly || probingSearch || testing !== undefined}
+            onClick={() => { void probeSearch() }}
+          >
+            {probingSearch ? t('testingEngines') : t('testEngines')}
+          </Button>
+          <span className="dshst-field-hint">{t('engineProbeHint')}</span>
+        </div>
+        {searchProbe?.adapter === draft.search.adapter ? (
+          <div className="dshst-probe-result" data-ok={searchProbe.result.ok}>
+            <div className="dshst-probe-head">
+              <Tag tone={searchProbe.result.ok ? 'success' : 'danger'}>
+                {searchProbe.result.ok ? t('enginesReachable') : t('enginesFailed')}
+              </Tag>
+              <span className="dshst-field-hint">{t('elapsedMs', { ms: searchProbe.result.latencyMs })}</span>
+            </div>
+            {searchProbe.result.engines === undefined || searchProbe.result.engines.length === 0 ? null : (
+              <div className="dshst-probe-engines">
+                {searchProbe.result.engines.map(engine => <Tag key={engine} tone="outline">{engine}</Tag>)}
+              </div>
+            )}
+            {searchProbe.result.ok || searchProbe.result.message === undefined ? null : (
+              <p className="dshst-field-error">{searchProbe.result.message}</p>
+            )}
+          </div>
+        ) : null}
         <TestConsole
           t={t}
           kind="search"

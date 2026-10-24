@@ -1,11 +1,12 @@
 {
   "name": "dsh-search-tools",
-  "version": "0.1.6",
-  "description": "Adapter-first web search and page fetching for DeepSeek Harness: SearXNG, Readability HTTP, local Wire HTTP with PDF, and optional Jina Reader, configured in the Web UI.",
+  "version": "0.1.7",
+  "description": "Adapter-first web search and page fetching for DeepSeek Harness: SearXNG, local DuckDuckGo+Bing direct search, Readability HTTP, local Wire HTTP with PDF, and optional Jina Reader, configured in the Web UI.",
   "keywords": [
     "deepseek-harness",
     "dsh",
     "searxng",
+    "local-search",
     "web-search",
     "web-fetch",
     "readability",

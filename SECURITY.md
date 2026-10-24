@@ -3,8 +3,9 @@
 ## Supported versions
 
 v0.1.x is the current preview line. DSH itself is preview software; treat this
-plugin as preview too. 0.1.6 adds the opt-in local `wire-http` path; the default
-`readable-http` path and its DSH SSRF boundary are unchanged.
+plugin as preview too. 0.1.7 adds the opt-in local `local-direct` search path;
+the default `searxng` search and `readable-http` fetch boundaries are unchanged.
+0.1.6's `wire-http` fetch path remains opt-in.
 
 ## Reporting
 
@@ -18,6 +19,19 @@ Please open a private security advisory on GitHub rather than a public issue.
   `JINA_API_KEY`; they are resolved per request from DSH credentials or the
   process environment and never rendered back into the page.
 - The settings routes require DSH's browser authentication and Host/Origin fence.
+- Search egress is adapter-scoped. `searxng` sends queries to the instance(s)
+  configured by the user, which may be private or loopback by design.
+  `local-direct` has no configurable endpoint: it sends queries only to the
+  fixed public origins `https://html.duckduckgo.com` and
+  `https://www.bing.com`, with no Cookie, Authorization, page JavaScript, or
+  redirect following. Query text does leave the machine to those enabled
+  engines; it does not go through SearXNG, Reader, the author, or an aggregator.
+  `web_research`'s fetch phase remains public-only, so local/private result URLs
+  cannot be read through it.
+- `local-direct` uses a one-shot `impit` worker per retry round. The worker is
+  terminated on reply, error, abort, and deadline. Per-engine timeouts, HTTP
+  errors, empty parses, and oversized bodies are isolated to that engine; all
+  engines failing raises `LOCAL_DIRECT_ALL_FAILED` without fallback.
 - `readable-http` reuses `@deepseek-ai/dsh-web-fetch-http`, including its
   address-pinned SSRF policy.
 - `wire-http` is a local browser-grade HTTP path, not a browser. It starts a
