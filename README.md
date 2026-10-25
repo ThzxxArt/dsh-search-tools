@@ -2,6 +2,7 @@
 
 [简体中文](README.md) · [English](https://github.com/ThzxxArt/dsh-search-tools/blob/main/README.en.md)
 
+[![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/thzxxart/dsh-search-tools)
 [![npm](https://img.shields.io/npm/v/dsh-search-tools?label=npm)](https://www.npmjs.com/package/dsh-search-tools)
 [![CI](https://github.com/ThzxxArt/dsh-search-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/ThzxxArt/dsh-search-tools/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/ThzxxArt/dsh-search-tools/blob/main/LICENSE)
