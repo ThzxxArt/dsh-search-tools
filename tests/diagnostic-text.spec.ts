@@ -4,7 +4,7 @@ import { Diagnostics } from '../src/core/diagnostics.ts'
 import { formatDiagnostics } from '../src/client/diagnostic-text.ts'
 
 const status: StatusResponse = {
-  version: '0.1.9',
+  version: '0.1.10',
   configPath: '/home/user/.dsh/profiles/demo/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0, sources: 0 },
   fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },

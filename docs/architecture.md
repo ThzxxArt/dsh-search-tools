@@ -102,7 +102,10 @@ probe through the same `/probe` route.
 | `POST /api/dsh-search-tools/cache/clear` | clear the selected adapter cache |
 | `POST /api/dsh-search-tools/diagnostics/clear` | clear the in-memory error ring |
 
-Every route uses `connection.requestRejection`; bodies are JSON, bounded to
+Current DSH hosts admit every route through WebServer's `auth: 'required'`
+policy. The plugin also calls `connection.requestRejection` when that legacy
+method exists, so the same build works on older hosts; a host without either
+authentication seam does not register the routes. Bodies are JSON, bounded to
 64 KiB, and secrets are never logged or returned. `fetch-preview` and the fetch
 branch of `probe` derive their signals from the draft `timeoutMs`
 (30s/30s base, +5s, 190s cap); the search preview/probe branches do the same

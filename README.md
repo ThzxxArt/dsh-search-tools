@@ -9,7 +9,7 @@
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）提供 **adapter-first 的网页搜索与正文抓取**。所有配置都在 DSH Web GUI 的 **设置 → 搜索工具** 完成，不要求用户手改 YAML。
 
-> **仓库版本：0.1.9（2026-10-24）。** 本版为 Local Direct 增加 **Brave Search 与 360 Search** 两个可选 HTML 引擎，并把执行模型改为**每引擎独立 worker**：一个慢引擎不会吞掉另一个引擎的成功结果。默认引擎仍是 DuckDuckGo + Bing；解析、去重、RRF 融合、域名多样性和缓存都在本地完成，不需要 SearXNG、API key、Reader、浏览器或第三方聚合服务。查询会直接发往启用的公网搜索引擎，但不会经过 SearXNG/Reader；不执行页面 JavaScript。默认搜索仍是 `searxng`，稳定 provider id 和工具 schema 不变。详细边界见 [Local Direct 搜索配置](#local-direct-搜索配置) 与 [v0.1.9 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.9.md)。
+> **仓库版本：0.1.10（2026-11-19）。** 本版对齐 DSH `0.2.2-rc.5`：设置页路由同时声明 WebServer 的 `auth: 'required'` 和旧版 Connection 栅栏，修复新版 DSH 移除 `requestRejection` 后状态、测试、预览、缓存和诊断路由抛 `TypeError` 的问题。最低运行时提升到 Node.js 24.9，Cordis 4.1、Schemastery 3.19；搜索/抓取 adapter、provider id、工具 schema 和默认引擎均不变。详细边界见 [v0.1.10 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.10.md)。
 
 ---
 
@@ -116,14 +116,14 @@ DSH ctx.web
 
 | 项目 | 要求 |
 |---|---|
-| DSH | `>=0.2.1-rc.2 <0.3.0`（当前按 `0.2.1-rc.2` 验证） |
-| Node.js | `^22.19.0 || >=24.0.0` |
+| DSH | `^0.2.2-rc.5`（当前按 `0.2.2-rc.5` 验证） |
+| Node.js | `>=24.9.0` |
 | 搜索后端 | `Local Direct`（不需要部署，直接查 DDG/Bing）或一个可访问的 SearXNG 实例；也可暂时保持 DSH 默认搜索 |
 | 抓取后端 | 公网 `http(s)` 页面；`readable-http` 由 DSH SSRF 防护拦截内网，`wire-http` 在本地逐跳 pin 公网地址，`jina-reader` 在发出前做公网目标守卫 |
 | Reader（可选） | `r.jina.ai` 的 API key，或一个可访问的自托管 Jina Reader 端点；不配置时继续用 `readable-http` 或 `wire-http` |
 | 浏览器 | DSH Web GUI（设置页只在 Web 端注册） |
 
-DSH 本身仍是 preview 软件，接口可能变化。插件把 peer 范围锁在已验证的 `0.2.1-rc.2` 线，升级 DSH 前请先看 [CHANGELOG](https://github.com/ThzxxArt/dsh-search-tools/blob/main/CHANGELOG.md)。
+DSH 本身仍是 preview 软件，接口可能变化。插件把 peer 范围锁在已验证的 `0.2.2-rc.5` 线，升级 DSH 前请先看 [CHANGELOG](https://github.com/ThzxxArt/dsh-search-tools/blob/main/CHANGELOG.md)。
 
 ## 安装与升级
 
@@ -346,7 +346,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.9 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.10 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -380,7 +380,7 @@ $DSH_HOME/profiles/<profile>/cordis.patch.yml
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.9 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.10 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
         wire-http:
           enabled: true
@@ -816,7 +816,7 @@ lib/types/**        TypeScript 声明
 | `pnpm pack:check` | build + `pnpm pack --dry-run` + publint |
 | `pnpm release` | typecheck + coverage + pack:check |
 
-CI 在 Ubuntu/Windows × Node 22/24 上跑 typecheck、coverage、build、pack dry-run、publint。publint 只忽略 `lib/client.js` 的 `FILE_INVALID_FORMAT`：DSH 把它当浏览器 CJS 工厂加载，不是 Node ESM 入口；其他诊断仍然失败。
+CI 在 Ubuntu/Windows × Node 24.9/24 上跑 typecheck、coverage、build、pack dry-run、publint。publint 只忽略 `lib/client.js` 的 `FILE_INVALID_FORMAT`：DSH 把它当浏览器 CJS 工厂加载，不是 Node ESM 入口；其他诊断仍然失败。
 
 ### 项目结构
 
@@ -840,7 +840,7 @@ Readability 运行在 Host 内。`jsdom` 的 `tr46` 依赖会调用 `createRequi
 
 发布前确认：
 
-- `package.json` 版本是 `0.1.9`；
+- `package.json` 版本是 `0.1.10`；
 - `CHANGELOG.md` 有对应条目；
 - `pnpm release` 全绿；
 - 工作区干净；
@@ -857,13 +857,13 @@ pnpm pack --pack-destination dist
 打 tag 并推送：
 
 ```sh
-git tag -a v0.1.9 -m "dsh-search-tools v0.1.9"
+git tag -a v0.1.10 -m "dsh-search-tools v0.1.10"
 git push origin main --follow-tags
 ```
 
 推送 `v*` tag 会触发 `.github/workflows/release.yml`：
 
-1. 在 Ubuntu/Windows × Node 22/24 上先跑完整验证矩阵（含 `check:package`）；
+1. 在 Ubuntu/Windows × Node 24.9/24 上先跑完整验证矩阵（含 `check:package`）；
 2. 校验 tag 名与 `package.json` 版本一致，且 tag commit 在 `main` 上；
 3. 重复 `pnpm release`；
 4. 检查该版本是否已发布，已存在则跳过；
@@ -876,13 +876,13 @@ git push origin main --follow-tags
 npm publish --access public
 ```
 
-发布后做一次全新 profile 冒烟：安装、启用、分别用 `local-direct` 和 `searxng` 做搜索测试、分别用 `readable-http`、`wire-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.9 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.9.md)。
+发布后做一次全新 profile 冒烟：安装、启用、分别用 `local-direct` 和 `searxng` 做搜索测试、分别用 `readable-http`、`wire-http` 和 `jina-reader` 做抓取测试、一次 `web_research` 调用。详细清单见 [v0.1.10 发布清单](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.10.md)。
 
 ## 故障排查
 
 | 现象 | 可能原因 | 处理 |
 |---|---|---|
-| 设置页没有“搜索工具” | bundle 未启用；DSH 版本不匹配；客户端加载失败 | 在插件页启用；确认 DSH 在 `>=0.2.1-rc.2 <0.3.0`；看浏览器控制台/插件日志 |
+| 设置页没有“搜索工具” | bundle 未启用；DSH 版本不匹配；客户端加载失败 | 在插件页启用；确认 DSH 在 `^0.2.2-rc.5`；看浏览器控制台/插件日志 |
 | 搜索测试 401/403 | 实例需要认证；凭据未保存；Basic 格式不是 `username:password` | 在认证字段选择正确类型，保存密钥后重试；确认 `Source: env` 是否符合预期 |
 | 搜索测试 429 | 实例/引擎限流 | 降低频率、换实例或引擎、增加缓存 TTL，或改用其他后端 |
 | Local Direct 全部失败 | 网络无法访问引擎；引擎返回 202/403/429；解析为空 | 点 **测试搜索引擎** 看可达性；换网络/代理；稍后重试；必要时切回 SearXNG |
@@ -923,7 +923,7 @@ npm publish --access public
 - **研究提示词预览可复制。** 工具描述保持英文，与模型实际看到的内容一致；预览数值跟随当前草稿。
 - **接管是全局 provider 切换。** 它会影响该 DSH profile 中所有使用 `ctx.web` 的调用，不只本插件。
 - **缓存是进程内内存。** 重启后丢失；多进程不共享。
-- **DSH preview 兼容范围窄。** 当前锁在 `0.2.1-rc.2` 线，升级 DSH 前先跑回归。
+- **DSH preview 兼容范围窄。** 当前锁在 `0.2.2-rc.5` 线，升级 DSH 前先跑回归。
 
 ## 许可证与第三方组件
 

@@ -3,9 +3,11 @@
 ## Supported versions
 
 v0.1.x is the current preview line. DSH itself is preview software; treat this
-plugin as preview too. 0.1.9 adds Brave Search and 360 Search as opt-in Local Direct HTML engines and runs one worker per engine; DuckDuckGo/Bing remain the defaults.
-The default `searxng` search and `readable-http` fetch boundaries are unchanged.
-The `wire-http` fetch path introduced in 0.1.6 remains opt-in.
+plugin as preview too. 0.1.10 aligns the settings routes with DSH 0.2.2-rc.5:
+each route declares `auth: 'required'` on WebServer, while the legacy
+`Connection.requestRejection` fence is still used when an older host exposes
+it. The default `searxng` search and `readable-http` fetch boundaries are
+unchanged. The `wire-http` fetch path introduced in 0.1.6 remains opt-in.
 
 ## Reporting
 
@@ -18,7 +20,8 @@ Please open a private security advisory on GitHub rather than a public issue.
 - Secrets are referenced as `SEARXNG_TOKEN`, `SEARXNG_BASIC_AUTH`, and
   `JINA_API_KEY`; they are resolved per request from DSH credentials or the
   process environment and never rendered back into the page.
-- The settings routes require DSH's browser authentication and Host/Origin fence.
+- The settings routes declare WebServer `auth: 'required'` and retain the
+  legacy Connection request fence when an older host exposes it.
 - Search egress is adapter-scoped. `searxng` sends queries to the instance(s)
   configured by the user, which may be private or loopback by design.
   `local-direct` has no configurable endpoint: it sends queries only to the

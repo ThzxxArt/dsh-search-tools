@@ -69,6 +69,7 @@ function depsOf(overrides: Partial<RouteDeps> = {}): RouteDeps {
 
 function contextOf(options: {
   connection?: boolean
+  legacyFence?: boolean
   rejection?: 401 | 403
   settings?: { prepareDocument?: () => Promise<string> }
   configEditor?: { documentPath?: string }
@@ -77,14 +78,26 @@ function contextOf(options: {
 } = {}): {
   ctx: Context
   handlers: Map<string, (req: IncomingMessage, res: ServerResponse) => Promise<void> | void>
+  routes: Array<{
+    path: string
+    auth?: 'anonymous' | 'required' | 'deny'
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void
+  }>
 } {
   const handlers = new Map<string, (req: IncomingMessage, res: ServerResponse) => Promise<void> | void>()
+  const routes: Array<{
+    path: string
+    auth?: 'anonymous' | 'required' | 'deny'
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void
+  }> = []
   const services: Record<string, unknown> = {
     ...(options.settings === undefined ? {} : { settings: options.settings }),
     ...(options.configEditor === undefined ? {} : { configEditor: options.configEditor }),
     ...(options.profile === undefined ? {} : { profileContext: options.profile }),
     ...(options.credentials === undefined ? {} : { credentials: options.credentials }),
-    ...(options.connection === false ? {} : { connection: { requestRejection: () => options.rejection } }),
+    ...(options.connection === false
+      ? {}
+      : { connection: options.legacyFence === false ? {} : { requestRejection: () => options.rejection } }),
   }
   const ctx = {
     get: (name: string) => services[name],
@@ -93,13 +106,18 @@ function contextOf(options: {
       return () => {}
     },
     webServer: {
-      register: (route: { path: string; handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void }) => {
+      register: (route: {
+        path: string
+        auth?: 'anonymous' | 'required' | 'deny'
+        handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void
+      }) => {
         handlers.set(route.path, route.handler)
+        routes.push(route)
         return () => {}
       },
     },
   } as unknown as Context
-  return { ctx, handlers }
+  return { ctx, handlers, routes }
 }
 
 interface TestResponse extends ServerResponse {
@@ -156,6 +174,23 @@ describe('route registration and rejection', () => {
     expect(handlers.size).toBe(0)
   })
 
+  it('registers required-auth routes on a host without the legacy fence', async () => {
+    const { ctx, handlers, routes } = contextOf({ legacyFence: false })
+    registerRoutes(ctx, depsOf())
+    expect(handlers.size).toBe(7)
+    expect(routes).toHaveLength(7)
+    expect(routes.every(route => route.auth === 'required')).toBe(true)
+    const response = await call(handlers, 'status', requestOf({}, 'GET'), responseOf())
+    expect(response.statusCode).toBe(200)
+  })
+
+  it('declares required auth on every route while keeping the legacy fence', async () => {
+    const { ctx, routes } = contextOf()
+    registerRoutes(ctx, depsOf())
+    expect(routes).toHaveLength(7)
+    expect(routes.every(route => route.auth === 'required')).toBe(true)
+  })
+
   it('rejects a request through the connection fence', async () => {
     const { ctx, handlers } = contextOf({ rejection: 403 })
     registerRoutes(ctx, depsOf())
@@ -195,7 +230,7 @@ describe('route registration and rejection', () => {
     } as unknown as SearchToolsService
     registerRoutes(ctx, depsOf({ adapters }))
     const status = await call(handlers, 'status', requestOf({}, 'GET'), responseOf())
-    expect(JSON.parse(status.body)).toMatchObject({ version: '0.1.9', search: { adapter: 'searxng' } })
+    expect(JSON.parse(status.body)).toMatchObject({ version: '0.1.10', search: { adapter: 'searxng' } })
     const list = await call(handlers, 'adapters', requestOf({}, 'GET'), responseOf())
     expect(JSON.parse(list.body).search[0].id).toBe('search')
   })

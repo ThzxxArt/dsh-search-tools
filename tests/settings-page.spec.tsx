@@ -27,7 +27,7 @@ vi.mock('../src/client/api.ts', () => ({
 }))
 
 const STATUS: StatusResponse = {
-  version: '0.1.9',
+  version: '0.1.10',
   configPath: '/tmp/cordis.patch.yml',
   search: { enabled: true, registered: true, available: false, adapter: 'searxng', instances: 0, sources: 0 },
   fetch: { enabled: true, registered: true, available: true, adapter: 'readable-http' },
@@ -509,7 +509,7 @@ describe('SettingsPage', () => {
     renderPage()
     fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Copy diagnostics' }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.9')))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('dsh-search-tools 0.1.10')))
     expect(String(writeText.mock.calls[0]?.[0])).not.toContain('token-123')
     expect(screen.getByTestId('runtime-state')).toHaveTextContent('Fetch: available · Research: registered')
   })

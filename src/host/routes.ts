@@ -1,11 +1,12 @@
 /**
- * Authenticated settings routes. Every handler crosses the same
- * Host/Origin + browser-auth fence as the rest of `/api`.
+ * Authenticated settings routes. Current DSH hosts admit them through
+ * WebServer's `auth: 'required'` policy; older hosts still use Connection's
+ * legacy request fence, which remains as a compatibility check.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-host-webserver'
+import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import type { Config } from '../config.ts'
 import { snapshot } from '../config.ts'
 import type { FetchDispatcher, SearchDispatcher } from '../core/dispatchers.ts'
@@ -30,8 +31,14 @@ const SEARCH_ROUTE_MAX_TIMEOUT_MS = 190_000
 const SEARCH_ROUTE_TIMEOUT_OVERHEAD_MS = 5_000
 const STATUS_LOOKUP_TIMEOUT_MS = 1_000
 
+/**
+ * DSH 0.2.2-rc.2 moved browser admission into WebServer's `auth` policy and
+ * removed `Connection.requestRejection`. Older hosts still expose the method;
+ * keep it as an optional compatibility fence while every route also declares
+ * `auth: 'required'` for current hosts.
+ */
 interface ConnectionFence {
-  requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
+  requestRejection?(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined
 }
 
 interface SettingsPathService {
@@ -65,16 +72,23 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
   if (connection === undefined) return
 
   const rejected = (req: IncomingMessage, res: ServerResponse): boolean => {
-    const rejection = connection.requestRejection(req)
+    const rejection = connection.requestRejection?.(req)
     if (rejection === undefined) return false
     res.statusCode = rejection
     res.end()
     return true
   }
 
-  ctx.effect(() => ctx.webServer.register({
+  const auth = 'required' as const
+  // Published 0.2.2-rc.5 typings predate `auth`; the checkout already requires
+  // it. The intersection keeps this file compiling against both contracts.
+  const register = (route: WebRoute & { auth: 'required' }): (() => void) =>
+    ctx.webServer.register(route)
+
+  ctx.effect(() => register({
     kind: 'exact',
     path: `${BASE}/status`,
+    auth,
     handler: async (req, res) => {
       if (rejected(req, res)) return
       if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
@@ -82,9 +96,10 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
     },
   }), 'dsh-search-tools: status route')
 
-  ctx.effect(() => ctx.webServer.register({
+  ctx.effect(() => register({
     kind: 'exact',
     path: `${BASE}/adapters`,
+    auth,
     handler: (req, res) => {
       if (rejected(req, res)) return
       if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
@@ -92,9 +107,10 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
     },
   }), 'dsh-search-tools: adapters route')
 
-  ctx.effect(() => ctx.webServer.register({
+  ctx.effect(() => register({
     kind: 'exact',
     path: `${BASE}/probe`,
+    auth,
     handler: async (req, res) => {
       if (rejected(req, res)) return
       if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
@@ -117,9 +133,10 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
     },
   }), 'dsh-search-tools: probe route')
 
-  ctx.effect(() => ctx.webServer.register({
+  ctx.effect(() => register({
     kind: 'exact',
     path: `${BASE}/search-preview`,
+    auth,
     handler: async (req, res) => {
       if (rejected(req, res)) return
       if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
@@ -145,9 +162,10 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
     },
   }), 'dsh-search-tools: search preview route')
 
-  ctx.effect(() => ctx.webServer.register({
+  ctx.effect(() => register({
     kind: 'exact',
     path: `${BASE}/fetch-preview`,
+    auth,
     handler: async (req, res) => {
       if (rejected(req, res)) return
       if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
@@ -178,9 +196,10 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
     },
   }), 'dsh-search-tools: fetch preview route')
 
-  ctx.effect(() => ctx.webServer.register({
+  ctx.effect(() => register({
     kind: 'exact',
     path: `${BASE}/cache/clear`,
+    auth,
     handler: (req, res) => {
       if (rejected(req, res)) return
       if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
@@ -189,9 +208,10 @@ export function registerRoutes(ctx: Context, deps: RouteDeps): void {
     },
   }), 'dsh-search-tools: cache clear route')
 
-  ctx.effect(() => ctx.webServer.register({
+  ctx.effect(() => register({
     kind: 'exact',
     path: `${BASE}/diagnostics/clear`,
+    auth,
     handler: (req, res) => {
       if (rejected(req, res)) return
       if (req.method !== 'POST') return methodNotAllowed(res, 'POST')

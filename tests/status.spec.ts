@@ -89,7 +89,7 @@ describe('status truth', () => {
       fetchAvailable: true,
       researchRegistered: true,
     }))
-    expect(status.version).toBe('0.1.9')
+    expect(status.version).toBe('0.1.10')
     expect(status.search.available).toBe(true)
     expect(status.search.registered).toBe(true)
     expect(status.search.sources).toBe(0)

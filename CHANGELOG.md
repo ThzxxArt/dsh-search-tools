@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.1.10 — 2026-11-19
+
+### Fixed
+
+- Settings routes now declare WebServer `auth: 'required'` and keep the legacy
+  `Connection.requestRejection` fence when the host still exposes it. DSH
+  `0.2.2-rc.5` removed `requestRejection`; the old call failed with
+  `TypeError` on status, adapter, probe, preview, cache, and diagnostics routes.
+- Route contract tests now cover both a current host without the legacy fence
+  and an older host that still uses it. They assert the declaration instead of
+  faking only the removed method.
+
+### Changed
+
+- DSH baseline: `^0.2.2-rc.5`; Cordis `~4.1.0`; Schemastery `~3.19.0`.
+- Node.js baseline: `>=24.9.0`; CI and release matrices run Node 24.9 and 24.
+- Host build target is Node 24. Removed the unused `@deepseek-ai/dsh-invariants`
+  dev dependency, which pinned an older Cordis copy.
+- Rebuilt the browser bundle with the DSH 0.2.2-rc.5 client packages. The
+  manual style effect remains; no module metadata is required for this
+  bundle.
+- Version metadata and default User-Agents report `0.1.10`.
+
+### Tests
+
+- 424 tests pass (10 live tests skipped); the two new route-contract tests cover
+  the modern and legacy authentication shapes. Coverage stays above the 85%
+  gate.
+
 ## 0.1.9 — 2026-10-24
 
 ### Added

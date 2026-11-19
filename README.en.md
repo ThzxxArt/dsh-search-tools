@@ -8,7 +8,7 @@
 
 Adapter-first web search and readable page fetching for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Everything is configured in the DSH Web GUI under **Settings → Search Tools**; no hand-edited YAML is required.
 
-> **Repository version: 0.1.9 (2026-10-24).** This release adds **Brave Search** and **360 Search** as opt-in Local Direct HTML engines and runs **one worker per engine**, so a slow engine cannot discard another engine's successful result. DuckDuckGo + Bing remain the defaults; parsing, deduplication, RRF fusion, diversity, and caching stay local. It needs no SearXNG, API key, Reader, browser, or aggregator. Queries leave the machine to the enabled engines, but never go through SearXNG/Reader; page JavaScript is not executed. The default search remains `searxng`, and the stable provider ids/tool schemas are unchanged. See [Local Direct search settings](#local-direct-search-settings) and the [v0.1.9 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.9.md).
+> **Repository version: 0.1.10 (2026-11-19).** This release aligns the plugin with DSH `0.2.2-rc.5`: settings routes now declare WebServer's `auth: 'required'` policy and keep the legacy Connection fence, fixing the `TypeError` on status, probe, preview, cache, and diagnostics routes after the new host removed `requestRejection`. The minimum runtime is Node.js 24.9, with Cordis 4.1 and Schemastery 3.19; search/fetch adapters, provider ids, tool schemas, and default engines are unchanged. See the [v0.1.10 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.10.md).
 
 ---
 
@@ -115,14 +115,14 @@ See [docs/architecture.md](https://github.com/ThzxxArt/dsh-search-tools/blob/mai
 
 | Item | Requirement |
 |---|---|
-| DSH | `>=0.2.1-rc.2 <0.3.0` (verified against `0.2.1-rc.2`) |
-| Node.js | `^22.19.0 || >=24.0.0` |
+| DSH | `^0.2.2-rc.5` (verified against `0.2.2-rc.5`) |
+| Node.js | `>=24.9.0` |
 | Search backend | `Local Direct` (no deployment; queries DDG/Bing) or a reachable SearXNG instance; or keep DSH's default search |
 | Fetch backend | Public `http(s)` pages; `readable-http` uses DSH SSRF protection, `wire-http` pins public addresses per hop locally, and `jina-reader` performs a pre-flight public-target guard |
 | Reader (optional) | A `r.jina.ai` API key or a reachable self-hosted Jina Reader endpoint; without it, keep `readable-http` or `wire-http` |
 | Browser | DSH Web GUI (the settings section is Web-only) |
 
-DSH itself is preview software and its interfaces can change. The plugin pins its peer range to the verified `0.2.1-rc.2` line; read the [CHANGELOG](https://github.com/ThzxxArt/dsh-search-tools/blob/main/CHANGELOG.md) before upgrading DSH.
+DSH itself is preview software and its interfaces can change. The plugin pins its peer range to the verified `0.2.2-rc.5` line; read the [CHANGELOG](https://github.com/ThzxxArt/dsh-search-tools/blob/main/CHANGELOG.md) before upgrading DSH.
 
 ## Install and upgrade
 
@@ -345,7 +345,7 @@ The shape is roughly:
           retries: 1
           cacheTtlMs: 300000
           cacheMaxEntries: 200
-          userAgent: dsh-search-tools/0.1.9 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.10 (+https://github.com/ThzxxArt/dsh-search-tools)
           proxy: ""
           includeDomains: []
           excludeDomains: []
@@ -379,7 +379,7 @@ The shape is roughly:
           maxBodyChars: 2000000
           timeoutMs: 20000
           maxRedirects: 5
-          userAgent: dsh-search-tools/0.1.9 (+https://github.com/ThzxxArt/dsh-search-tools)
+          userAgent: dsh-search-tools/0.1.10 (+https://github.com/ThzxxArt/dsh-search-tools)
           failOpen: true
         wire-http:
           enabled: true
@@ -808,9 +808,9 @@ Checks:
 | `pnpm test` | Vitest: host units, settings page/research card components, pipeline, publint policy |
 | `pnpm build` | Host, browser, and declarations |
 | `pnpm pack:check` | build + `pnpm pack --dry-run` + publint |
-| `pnpm release` | typecheck + test + pack:check |
+| `pnpm release` | typecheck + coverage + pack:check |
 
-CI runs typecheck, test, build, pack dry-run, and publint on Ubuntu/Windows × Node 22/24. Publint ignores only `FILE_INVALID_FORMAT` for `lib/client.js`; DSH loads it as a browser CJS factory, not a Node ESM entry. Every other diagnostic fails.
+CI runs typecheck, coverage, build, pack dry-run, and publint on Ubuntu/Windows × Node 24.9/24. Publint ignores only `FILE_INVALID_FORMAT` for `lib/client.js`; DSH loads it as a browser CJS factory, not a Node ESM entry. Every other diagnostic fails.
 
 ### Project layout
 
@@ -834,7 +834,7 @@ Readability runs inside the Host. `jsdom`'s `tr46` dependency calls `createRequi
 
 Before releasing:
 
-- `package.json` version is `0.1.9`;
+- `package.json` version is `0.1.10`;
 - `CHANGELOG.md` has the matching entry;
 - `pnpm release` passes;
 - the worktree is clean;
@@ -851,13 +851,13 @@ pnpm pack --pack-destination dist
 Tag and push:
 
 ```sh
-git tag -a v0.1.9 -m "dsh-search-tools v0.1.9"
+git tag -a v0.1.10 -m "dsh-search-tools v0.1.10"
 git push origin main --follow-tags
 ```
 
 Pushing a `v*` tag triggers `.github/workflows/release.yml`:
 
-1. runs the full verification matrix on Ubuntu/Windows × Node 22/24, including `check:package`;
+1. runs the full verification matrix on Ubuntu/Windows × Node 24.9/24, including `check:package`;
 2. verifies the tag matches `package.json` and the tag commit is on `main`;
 3. re-runs `pnpm release`;
 4. checks whether the version is already published and skips if so;
@@ -870,13 +870,13 @@ Manual publish (does not attach provenance; prefer the tag workflow):
 npm publish --access public
 ```
 
-After publishing, smoke-test a fresh profile: install, enable, run search tests through `local-direct` and `searxng`, run fetch tests through `readable-http`, `wire-http`, and `jina-reader`, and make one `web_research` call. See the [v0.1.9 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.9.md).
+After publishing, smoke-test a fresh profile: install, enable, run search tests through `local-direct` and `searxng`, run fetch tests through `readable-http`, `wire-http`, and `jina-reader`, and make one `web_research` call. See the [v0.1.10 release checklist](https://github.com/ThzxxArt/dsh-search-tools/blob/main/docs/release-v0.1.10.md).
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| No "Search Tools" settings section | Bundle disabled; DSH version mismatch; client load failure | Enable it on the Plugins page; confirm DSH is `>=0.2.1-rc.2 <0.3.0`; check browser console/plugin logs |
+| No "Search Tools" settings section | Bundle disabled; DSH version mismatch; client load failure | Enable it on the Plugins page; confirm DSH is `^0.2.2-rc.5`; check browser console/plugin logs |
 | Search test 401/403 | Instance needs auth; credential not saved; Basic format is not `username:password` | Choose the right auth mode, save the secret, retry; confirm `Source: env` is expected |
 | Search test 429 | Instance/engine rate limit | Slow down, switch instance or engines, raise cache TTL, or use another backend |
 | Local Direct fails entirely | Engine unreachable; 202/403/429; empty parse | Use **Test engines** to check reachability; change network/proxy; retry later; switch to SearXNG if needed |
@@ -917,7 +917,7 @@ Suggested diagnosis order:
 - **The research prompt preview is copyable.** The tool description stays English to match what the model sees; preview values follow the current draft.
 - **Takeover is a global provider switch.** It affects every `ctx.web` consumer in the DSH profile, not only this plugin.
 - **Cache is in-process memory.** It is lost on restart and not shared across processes.
-- **Narrow DSH preview compatibility.** Pinned to the `0.2.1-rc.2` line; run a regression before upgrading DSH.
+- **Narrow DSH preview compatibility.** Pinned to the `0.2.2-rc.5` line; run a regression before upgrading DSH.
 
 ## License and third-party notices
 
